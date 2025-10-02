@@ -10,8 +10,8 @@
 % Nota: os cabos estavam trocados, por isso, Qt=Ib... e Qb=It...
 
 %clear all; close all; clc;
-HOME    = '/Users/joanapinto/Desktop/LIP/';
-SCRIPTS = 'ms03m2_4scint/';
+HOME    = '/home/csoneira/WORK/LIP_stuff/';
+SCRIPTS = 'JOAO_SETUP/';
 DATA    = 'matFiles/time/';
 DATA_Q    = 'matFiles/charge/';
 path(path,[HOME SCRIPTS 'util_matPlots']);
@@ -146,8 +146,8 @@ Y(rows) = (TFl(Ind2Keep) - TBl(Ind2Keep)) /2; %[ns]
 figure;
 histogram(Q, 0:0.1:300);
 STLevel = 100; %230 com as RPC de 1mm gap
-Qmean   = nanmean(Q);   %média da 'soma das Qmax Front e Back' de todos os eventos
-Qmedian = nanmedian(Q); %mediana
+Qmean = mean(Q, 'omitnan'); % Calculate mean while ignoring NaN values; média da 'soma das Qmax Front e Back' de todos os eventos
+Qmedian = median(Q, 'omitnan'); %mediana
 ST      = length(find(Q > STLevel))/rawEvents; %percentagem de streamers
 %%%%%%%%%%%%%%%%%%
 %return
