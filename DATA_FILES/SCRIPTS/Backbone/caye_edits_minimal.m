@@ -32,7 +32,7 @@ path(path,[HOME SCRIPTS 'util_matPlots']);
 
 % Select which acquisition run to process; each branch below loads time and
 % charge information for that specific dataset.
-run = 3;
+run = 4;
 if run == 1
     load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a001_T.mat']) %run com os 4 cintiladores
     % load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a002_T.mat']); % no data info in this file
@@ -48,8 +48,12 @@ elseif run == 3
     % load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a002_T.mat']); % no data info in this file
     load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a003_T.mat'])
     load([HOME SCRIPTS DATA_Q 'dabc25127151027-dabc25160092400_a004_Q.mat'])
+elseif run == 4
+    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/unpackedFiles/dabc25269152735_a001.tdc')
 end
 
+whos
+return;
 
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
