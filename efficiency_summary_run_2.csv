@@ -1,8 +1,0 @@
-eff_percent,eff_unc_percent,tTH_used,PMT1_min,PMT1_max,PMT2_min,PMT2_max,PMT3_min,PMT3_max,PMT4_min,PMT4_max,Thick_min,Thick_max,TopThin_min,TopThin_max,BotThin_min,BotThin_max,passing_events,detected_events,case_name
-100,0,4,94,103,101,120,146,180,95,107,5,40,200,3000,NaN,NaN,2932,2932,PMT+Thick -> Top thin
-96.59,0.34,4,94,103,101,120,146,180,95,107,5,40,NaN,NaN,4600,20000,2932,2832,PMT+Thick -> Bottom thin
-99.93,0.04,4,94,103,101,120,146,180,95,107,NaN,NaN,200,3000,NaN,NaN,4274,4271,PMT -> Top thin
-94.83,0.34,4,94,103,101,120,146,180,95,107,NaN,NaN,NaN,NaN,4600,20000,4274,4053,PMT -> Bottom thin
-100,0,4,94,103,101,120,146,180,95,107,5,40,200,3000,4600,20000,2832,2832,PMT+Thick+Bottom thin -> Top thin
-96.59,0.34,4,94,103,101,120,146,180,95,107,5,40,200,3000,4600,20000,2932,2832,PMT+Thick+Top thin -> Bottom thin
-69.87,0.72,4,94,103,101,120,146,180,95,107,5,40,200,3000,4600,20000,4053,2832,PMT time+charge + Thin top/bottom -> Thick

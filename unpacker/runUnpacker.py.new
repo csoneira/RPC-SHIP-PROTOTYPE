@@ -1,0 +1,283 @@
+#!/usr/bin/env python3.11
+# -*- coding: utf-8 -*-
+"""
+#############
+@JPCS_12/2022
+#############
+unpacker of *.hld files
+calibration of fine time (TDC addons)
+conversion to final data (times (TDCs) and values of ADC bins (ADC addons))
+can unpack files from TRB3sc (e.g. in backplane with master+ADCs+TDCs) and TRB3 (with the central FPGA being a CTS or not)
+#############
+runUnpacker.py can be used in standalone mode or called e.g. by unpackAll.py
+syntax:
+./runUnpacker.py 'input path' 'output path'
+Mandatory script arguments:
+1 - input hld file or folder with list of hld files
+2 - output folder
+####
+One can redefine, via optional script arguments, the variables: extractData_raw, calibrateFTime and extractData
+syntax:
+./runUnpacker.py 'input path' 'output path' 'extractData_raw' 'calibrateFTime' 'extractData'
+with arguments 3, 4 and 5 defined as described below (extractData_raw:0/1, calibrateFTime:0/1/2, extractData=0/1)
+The number of arguments must be 2 or 5
+e.g.:
+./runUnpacker.py  /home/user/hlds_toUnpack /home/user/unpackedFiles 1 2 0
+####
+needed file:
+unpacker.py
+#############
+"""
+###############################################
+############## CHANGES HERE ONLY ##############
+###############################################
+############## unpack *.hld files
+extractData_raw     = 1
+debugMode_raw       = 0
+numberOfEvents_raw  = None
+extension_raw       = 'hld'    #used only in case a folder was provided has inputPath_raw
+#######
+#######
+#extractData_raw     -> 0/1; if =1, a *.txt file will be created for each *.hld file (=0 -> skip unpacking)
+#debugMode_raw       -> 0/1; if =1, additional info will be provided in the *.txt file (however, this file is useless for the next step of calibration/conversion)
+#numberOfEvents_raw  -> number of events to unpack; None -> to unpack all
+#extension_raw       -> extension of the files to unpack in the provided folder (used ONLY if inputPath_raw is a folder path); e.g.: 'hld'
+#inputPath_raw       -> provided via 1st script argument
+#                       path of input file OR input folder (all files (with the provided extension) in the input folder will be sorted alphabetically and unpacked)
+#outputPath_raw      -> provided via 2nd script argument; path of output folder; e.g.: '.'; if it does not exits, it will be created
+#                       the name of the output file is given automatically and ends with '.txt', e.g.: dabc19338163952.hld -> dabc19338163952.txt
+##############
+##############
+############## convert raw data to time and adc values
+calibrateFTime = 2
+calibFTimeName = 'calibrationFTime.tdc'
+#######
+extractData    = 1
+debugMode      = 0
+numberOfEvents = None
+L_fpgas        = [('central_CTS', ['c001'], ['a001', 'a002', 'a004']), ('tdc', ['a001', 'a002']), ('adc', ['a004'])]    #dabc23013170059.hld
+extension      = 'txt'    #used only in case a folder was provided has inputPath
+#######
+#######
+#calibrateFTime  -> 0/1/2; if =1, create (for each tdc FPGA) a file (e.g. dabcXXXX_c001.fTime) with all fineTime values (event/ch/edge/fineTime) and then the final calibration file (e.g. calibrationFTime.tdc)
+#                   if =2, append data to calibrationFTime.tdc instead of removing it each time this script is executed (allows increasing statistic for calibration)
+#calibFTimeName  -> name of the final calibration file (it will be used if 'extractData' is set to 1); e.g. 'calibrationFTime.tdc'
+#extractData     -> 0/1; if =1, the raw file(s) from the unpack function (dabcXXXX.txt) will be converted into tdc and adc data
+#debugMode       -> 0/1; if =1, epoch + time data words are directly written in the 'tdc' file instead of the computed time
+#numberOfEvents  -> number of events to convert; None to convert all
+#L_fpgas         -> list of FPGAs in the data stream; e.g.: [('tdc', ['c001']), ('adc', ['a001', 'a002', 'a003', 'a004'])]
+#L_fpgas         -> accepted types of fgas: 'central', 'central_CTS', 'tdc' and 'adc'; central and central_CTS -> in case of there is a TRB3 in the setup
+#L_fpgas         -> if 'central' -> the file of the central fpga will be created but nothing will be written on it (in case it have tdc chs, some code must be written)
+#L_fpgas         -> if 'central_CTS' -> the words of the central fpga will be written in its file but not converted; in case it have tdc chs, some code must be written
+#L_fpgas         -> peripheral fpgas (TRB3) must be written twice in L_fpgas: after 'central' (or 'central_CTS') and after 'tdc'/'adc' depending on the type of fpga
+#L_fpgas         -> the central fpga (TRB3) is written once only in L_fpgas; in case it have tdc chs, some code must be written
+#L_fpgas         -> expected number of letters per fpga name: 4; if this is not the case, 'lenNameCurrentPeripheralFpga' must be changed in convertToData() of unpacker.py
+#L_fpgas         -> the number of letters per fpga name must be the same for all FPGAs
+#extension       -> extension of the files to convert in the provided folder (used ONLY if inputPath is a folder path); e.g.: 'txt'
+#inputPath       -> automatically obtained from inputPath_raw and outputPath_raw
+#                   path of input file OR input folder (all files (with the provided extension) in the input folder will be converted)
+#outputPath      -> path of output folder; defined below: outputPath = outputPath_raw; don't change -> simpler and needed by unpackAll.py
+#                   the name of the output file is given automatically, e.g.: dabc19338163952.txt -> dabc19338172456_c001.tdc and dabc19338172456_c000.adc
+###############################################
+###############################################
+###############################################
+
+#######
+#######
+#examples of different setups/hlds:
+###
+#'/home/jpcs/matlab/stratos/hlds/twoPulsesSameADC'
+#L_fpgas        = [('tdc', ['c001'])]
+###
+#'dabc22328161443.hld'    #setup RPCadvance (PSI): 6 TRB3scs (CTS with 10 TDC chs; master; 4 ADCs)
+#L_fpgas        = [('tdc', ['c001']), ('adc', ['a001', 'a002', 'a003', 'a004'])]    #dabc22328161443.hld
+###
+#'dabc21327174754.hld'    #setup R3B: 1 TRB3sc (CTS with 2 TDC chs) + 1 TRB3 (~80Chs de TDC)
+#L_fpgas        = [('central', ['c001'], ['a001', 'a002', 'a003', 'a004']), ('tdc', ['a001', 'a002', 'a003', 'a004', 'c000'])]    #dabc21327174754.hld
+###
+#'dabc23013170059.hld'    #setup MST: 1 TRB3 (CTS + 3 TDCs + 1 ADC)
+#L_fpgas        = [('central_CTS', ['c001'], ['a001', 'a002', 'a003', 'a004']), ('tdc', ['a001', 'a002', 'a003']), ('adc', ['a004'])]    #dabc23013170059.hld
+#######
+#######
+
+import os, glob, sys, time
+from unpacker import unpack, convertToData, calibrateFineTime
+from collections import OrderedDict
+import numpy    as np
+
+
+if len(sys.argv) == 3:
+    inputPath_raw  = sys.argv[1]
+    outputPath_raw = sys.argv[2]
+elif len(sys.argv) == 6: #redefine from script arguments: extractData_raw, calibrateFTime and extractData
+    inputPath_raw   = sys.argv[1]
+    outputPath_raw  = sys.argv[2]
+    extractData_raw = int(sys.argv[3])
+    calibrateFTime  = int(sys.argv[4])
+    extractData     = int(sys.argv[5])
+else:
+    print("\nUsages:\n./runUnpacker.py 'input path' 'output path'\n./runUnpacker.py 'input path' 'output path' 'extractData_raw' 'calibrateFTime' 'extractData'")
+    sys.exit()
+
+if os.path.isdir(inputPath_raw):
+    inputPath = outputPath_raw
+else:
+    inputPath = outputPath_raw + '/' + inputPath_raw.split('/')[-1].split('.')[0] + '.' + extension    #e.g.: dabc23034194842 + '.' + extension
+outputPath     = outputPath_raw
+
+
+t = time.time()
+
+
+##############
+############## 1st -> *.hld to *.txt
+if extractData_raw:
+    if debugMode_raw: print('Debug mode active for unpacking! the created file cannot be used for the next step of calibration/conversion')
+    if not os.path.exists(outputPath_raw):
+        os.makedirs(outputPath_raw)
+    if os.path.isfile(inputPath_raw):    #true -> file
+        outputFileName = inputPath_raw.split('/')[-1].split('.')[0]
+        outputPath_raw = outputPath_raw + '/' + outputFileName + '.txt'
+        unpack(inputPath_raw, outputPath_raw, debugMode_raw, numberOfEvents_raw)
+    elif os.path.isdir(inputPath_raw):
+        files = sorted(glob.glob(inputPath_raw + '/*.' + extension_raw))
+        if not files:
+            print(f"No files to unpack found with this pattern: '{inputPath_raw}/*.{extension_raw}'\nAborting...")
+            sys.exit()    #don't proceed to calib...
+        for filePath in files:
+            outputFileName = filePath.split('/')[-1].split('.')[0]
+            outputPATH_raw = outputPath_raw + '/' + outputFileName + '.txt'
+            unpack(filePath, outputPATH_raw, debugMode_raw, numberOfEvents_raw)
+    else:
+        print(f"Check the inputPath. '{inputPath_raw}' does not exist")
+    print(f"elapsed time: {time.time() - t:.3f} s")
+
+
+##############
+############## 2nd -> calibrate fineTime of all chs (input: dabcXXXX.txt; creates the files dabcXXXX_fpga.fTime and then calibrationFTime.tdc)
+if calibrateFTime:
+    calibFTimePATH = outputPath + '/' + calibFTimeName
+    if calibrateFTime == 1:
+        if os.path.exists(calibFTimePATH):    #remove calibrationFTime.tdc if it exists
+            os.remove(calibFTimePATH)
+    elif calibrateFTime == 2: #calibrateFTime=2 -> append data to calibrationFTime.tdc instead of removing it
+        if os.path.exists(calibFTimePATH):    #remove all (2 lines) the lines after (including): ####### FINAL #######
+            with open(calibFTimePATH, 'r+') as f_FtimeOUT:    #read 'calibrationFTime.tdc'
+                lines = f_FtimeOUT.readlines()
+                f_FtimeOUT.seek(0)       #move file pointer to the beginning of a file
+                f_FtimeOUT.truncate()    #truncate the file
+                f_FtimeOUT.writelines(lines[:-2]) #to delete last 2 lines
+        else:
+            print(f"calibrationFTime.tdc does not exist, however calibrateFTime was set to '2'. A new calibrationFTime.tdc will be created")
+    if os.path.isfile(inputPath):    #true -> file
+        outputFileName = inputPath.split('/')[-1].split('.')[0]
+        L_outputFTimePath = []
+        for item in L_fpgas:
+            if item[0] == 'tdc':
+                L_outputFTimeFpga = item[1]    #e.g.: ['a00X', 'c001']; todas as fpgas 'tdc' têm de estar concentradas num item da lista L_fpgas
+                for item_fpga in item[1]:
+                    L_outputFTimePath.append(outputPath + '/' + outputFileName + '_' + item_fpga + '.' + 'fTime')    #e.g.: ['./dabc22328161443_a00X.fTime', './dabc22328161443_c001.fTime']
+        calibrateFineTime(inputPath, L_outputFTimePath, calibFTimePATH, L_fpgas, numberOfEvents, L_outputFTimeFpga)
+    elif os.path.isdir(inputPath):
+        files = sorted(glob.glob(inputPath + '/*.' + extension))
+        if not files:
+            print(f"No files for calibration were found with this pattern: '{inputPath}/*.{extension}'")
+            sys.exit()
+        for filePath in files:
+            outputFileName = filePath.split('/')[-1].split('.')[0]
+            L_outputFTimePath = []
+            for item in L_fpgas:
+                if item[0] == 'tdc':
+                    L_outputFTimeFpga = item[1]
+                    for item_fpga in item[1]:
+                        L_outputFTimePath.append(outputPath + '/' + outputFileName + '_' + item_fpga + '.' + 'fTime')
+            calibrateFineTime(filePath, L_outputFTimePath, calibFTimePATH, L_fpgas, numberOfEvents, L_outputFTimeFpga)
+    else:
+        print(f"Check the inputPath. '{inputPath}' does not exist")
+    with open(calibFTimePATH, 'r+') as f_FtimeOUT:    #read 'calibrationFTime.tdc' and get the absolute min and max (and diff) of all the [min, max, diff]
+        dict_AbsoluteFTime = OrderedDict()    #keys: FPGAs, vals:  {0: [102, 114, 12], 1: [17, 479, 462],...}
+        for line in f_FtimeOUT:
+            if line[0] == '#':
+                keyForNextLine = line.split('.fTime ')[0].split('_')[-1]    #e.g. ######## /home/.../dabc*_a001.fTime ####### -> a001
+            else:
+                if keyForNextLine in dict_AbsoluteFTime:
+                    for key_fpga,val_dic in dict_AbsoluteFTime.items():
+                        if key_fpga == keyForNextLine:
+                            dict_FTime = eval(line)    #keys: tdc chs, vals: [min, max, diff]
+                            for key,val in dict_FTime.items():
+                                if key in val_dic:
+                                    if val_dic[key][0]  > val[0]:
+                                        val_dic[key][0] = val[0]    #absolute minimum of the fine time for this ch (key)
+                                        val_dic[key][2] = val_dic[key][1] - val_dic[key][0]    #max -min = 5ns
+                                    if val_dic[key][1]  < val[1]:
+                                        val_dic[key][1] = val[1]    #absolute maximum of the fine time for this ch (key)
+                                        val_dic[key][2] = val_dic[key][1] - val_dic[key][0]
+                                else:
+                                    val_dic[key] = []
+                                    val_dic[key].append(val[0])
+                                    val_dic[key].append(val[1])
+                                    val_dic[key].append(val[2])
+                else:    #1st time the TDC (keyForNextLine) is seen
+                    dict_AbsoluteFTime[keyForNextLine] = eval(line)    #e.g. {0: [102, 114, 12], 1: [17, 479, 462], 2: [16, 473, 457], 3: [17, 481, 464], 4: [16, 479, 463]}
+        for key_fpga,val_dic in dict_AbsoluteFTime.items():
+            keysList = list(val_dic.keys())
+            if len(keysList) > 1:
+                tempValues = val_dic[0]
+                val_dic[0] = val_dic[keysList[1]]
+                print(f'the calibration values of ch0 (ref time) of the FPGA {key_fpga} were changed from {tempValues} to {val_dic[0]} (values taken from ch: {keysList[1]}).')
+            elif len(keysList) == 1:    #only ch0 is present
+                if val_dic[0][0] == val_dic[0][1]:    #if min = max, change values to dummy values: [15, 480, 465]
+                    tempValues = val_dic[0]
+                    val_dic[0] = [15, 480, 465]
+                    print(f"max-min of FPGA {key_fpga} is equal to zero (probably not enough stat.); to avoid a ZeroDivisionError, the calibration values "
+                          f"of ch0 of this FPGA were changed:\nfrom {tempValues} to the dummy values: {val_dic[0]}.")
+        for key_fpga,val_dic in dict_AbsoluteFTime.items():    #before saving the final dict_AbsoluteFTime, check if there are chs with min = max
+            for key_ch,val_listMaxMin in val_dic.items():
+                if val_listMaxMin[0] == val_listMaxMin[1]:    #min = max
+                    print(f"Check of the final finetime values in calibrationFTime.tdc:\nch {key_ch} (fpga: {key_fpga}) has min_bin = max_bin: {val_listMaxMin};")
+                    val_dic[key_ch] = [15, 480, 465]
+                    print(f"to avoid a ZeroDivisionError, the calibration values of this ch were changed to the dummy values: {val_dic[key_ch]}.")
+        f_FtimeOUT.write(f"######## FINAL #######\n")
+        f_FtimeOUT.write(f"{dict_AbsoluteFTime}\n")
+    print(f"elapsed time: {time.time() - t:.3f} s")
+
+
+##############
+############## 3rd -> extract final data of TDC/ADC addons (input: dabcXXXX.txt + calibrationFTime.tdc (if available); creates dabcXXXX_fpga.tdc and dabcXXXX_fpga.adc files)
+if extractData:
+    D_calibFTime = None
+    for item in L_fpgas:
+        if item[0] == 'tdc':    #if there are TDCs, check for the calib file
+            calibFTimePATH = outputPath + '/' + calibFTimeName
+            if os.path.isfile(calibFTimePATH):
+                with open(calibFTimePATH, 'r') as f_Ftime:
+                    nextLineForDic = 0
+                    for line in f_Ftime:
+                        if nextLineForDic:
+                            D_calibFTime = eval(line)
+                        if line == '######## FINAL #######\n':
+                            nextLineForDic = 1
+            else:
+                print(f'The calibration file of the fine time WAS NOT found at: {calibFTimePATH}')
+                print('The fine time WILL NOT be calibrated')
+                #D_calibFTime = None    #NOT NEEDED RIGHT?
+    if debugMode: print('Debug mode active for conversion!')
+    if not os.path.exists(outputPath):
+        os.makedirs(outputPath)
+    if os.path.isfile(inputPath):    #true -> file
+        outputFileName = inputPath.split('/')[-1].split('.')[0]
+        L_outputPath   = [outputPath + '/' + outputFileName + '_' + fpga + '.' + item[0] for item in L_fpgas for fpga in item[1]]    #['./dabc*_c001.central','./dabc*_a001.tdc',...,'./dabc*_a004.adc']
+        convertToData(inputPath, L_outputPath, L_fpgas, D_calibFTime, numberOfEvents, debugMode)
+    elif os.path.isdir(inputPath):
+        files = sorted(glob.glob(inputPath + '/*.' + extension))
+        if not files:
+            print(f"No files for conversion found with this pattern: '{inputPath}/*.{extension}'")
+            sys.exit()
+        for filePath in files:
+            outputFileName = filePath.split('/')[-1].split('.')[0]
+            L_outputPath   = [outputPath + '/' + outputFileName + '_' + fpga + '.' + item[0] for item in L_fpgas for fpga in item[1]]
+            convertToData(filePath, L_outputPath, L_fpgas, D_calibFTime, numberOfEvents, debugMode)
+    else:
+        print(f"Check the inputPath. '{inputPath}' does not exist")
+    print(f"elapsed time: {time.time() - t:.3f} s")
+
