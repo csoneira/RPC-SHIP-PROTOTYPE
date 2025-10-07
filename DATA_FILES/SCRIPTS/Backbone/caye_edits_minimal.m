@@ -22,7 +22,33 @@
 % =====================================================================
 
 % clear variables and close figures
-clear all; close all; clc;
+save_plots_dir_default = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/PDF';
+if ~exist('save_plots','var')
+    save_plots = false;
+end
+if ~exist('save_plots_dir','var') || isempty(save_plots_dir)
+    save_plots_dir = save_plots_dir_default;
+end
+
+clearvars -except save_plots save_plots_dir save_plots_dir_default;
+close all; clc;
+
+if isstring(save_plots_dir)
+    save_plots_dir = char(save_plots_dir);
+end
+
+if save_plots && (isempty(save_plots_dir) || (~ischar(save_plots_dir) && ~isstring(save_plots_dir)))
+    save_plots_dir = save_plots_dir_default;
+end
+
+clear save_plots_dir_default;
+
+restoreFigureVisibility = [];
+if save_plots
+    originalFigureVisibility = get(0, 'DefaultFigureVisible');
+    restoreFigureVisibility = onCleanup(@() set(0, 'DefaultFigureVisible', originalFigureVisibility));
+    set(0, 'DefaultFigureVisible', 'off');
+end
 
 HOME    = '/home/csoneira/WORK/LIP_stuff/';
 SCRIPTS = 'JOAO_SETUP/';
@@ -49,11 +75,12 @@ elseif run == 3
     load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a003_T.mat'])
     load([HOME SCRIPTS DATA_Q 'dabc25127151027-dabc25160092400_a004_Q.mat'])
 elseif run == 4
-    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/unpackedFiles/dabc25269152735_a001.tdc')
+    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/time/dabc25268104307-dabc25276125059_a001_T.mat')
+    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/time/dabc25268104307-dabc25276125059_a002_T.mat')
+    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/charge/dabc25268104307-dabc25276125059_a004_Q.mat')
 end
 
 whos
-return;
 
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
@@ -98,11 +125,19 @@ Tcint_mean_top = (Tl_cint(:,3) + Tl_cint(:,4))/2;
 % RPC WIDE STRIP Timing and Charge Derivations
 % -----------------------------------------------------------------------------
 
-%leading times front [ns]; channels [32,28] -> 5 wide front strips
-TFl = [l31 l32 l30 l28 l29];    %tempos leadings  front [ns]; chs [32,28] -> 5 strips gordas front
+% Try this, if it does not work, then store the channels from 24 to 28, and print a warning
+% that the channel order is not as expected. So it was changed to the 24-28 order.
 
-%trailing times front [ns]
-TFt = [t31 t32 t30 t28 t29];    %tempos trailings front [ns]
+try
+    TFl = [l31 l32 l30 l28 l29];    % tempos leadings front [ns]; chs [32,28] -> 5 strips gordas front
+    TFt = [t31 t32 t30 t28 t29];    % tempos trailings front [ns]
+catch
+    warning('Variables l31/l32/l30 not found; using alternative channel order 24–28.');
+    TFl = [l28 l27 l26 l25 l24];
+    TFt = [t28 t27 t26 t25 t24];
+end
+
+
 
 %leading times back [ns]; channels [1,5] -> 5 wide back strips
 TBl = [l2 l1 l3 l5 l4];         %tempos leadings  back  [ns]; chs [1,5] -> 5 strips gordas back
@@ -235,15 +270,15 @@ figure;
 for strip = 1:5
     % Left column: uncalibrated
     subplot(5,2,strip*2-1);
-    histf(QF(:,strip),-2:0.1:150); hold on;
-    histf(QB(:,strip),-2:0.1:150); xlim([-2 150]);
+    histogram(QF(:,strip),-2:0.1:150); hold on;
+    histogram(QB(:,strip),-2:0.1:150); xlim([-2 150]);
     legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
     ylabel('# of events');
     xlabel('Q [ns]');
     % Right column: calibrated
     subplot(5,2,strip*2);
-    histf(QF_p(:,strip), -2:0.1:right_lim_q_wide); hold on;
-    histf(QB_p(:,strip), -2:0.1:right_lim_q_wide);
+    histogram(QF_p(:,strip), -2:0.1:right_lim_q_wide); hold on;
+    histogram(QB_p(:,strip), -2:0.1:right_lim_q_wide);
     xlim([-2 right_lim_q_wide]);
     legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
     ylabel('# of events');
@@ -598,6 +633,9 @@ elseif run == 2
     top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
     top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
 elseif run == 3
+    top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
+    top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
+else
     top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
     top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
 end
@@ -1210,3 +1248,56 @@ fprintf('\n=====================================================\n');
 fprintf('Efficiency summary saved to: %s\n', outputFilePath);
 fprintf('=====================================================\n\n');
 
+if save_plots
+    try
+        if ~exist(save_plots_dir, 'dir')
+            mkdir(save_plots_dir);
+        end
+        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir);
+        if figCount > 0 && ~isempty(pdfPath)
+            fprintf('Saved %d figure(s) to %s\n', figCount, pdfPath);
+        else
+            fprintf('No figures generated to save.\n');
+        end
+    catch saveErr
+        warning('Failed to save figures: %s', saveErr.message);
+    end
+end
+
+%% ------------------------------------------------------------------------
+% Local functions
+%% ------------------------------------------------------------------------
+function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir)
+%SAVE_ALL_FIGURES_TO_PDF Export all open figures into a single rasterized PDF.
+    figs = findall(0, 'Type', 'figure');
+    figCount = numel(figs);
+    pdfPath = '';
+
+    if figCount == 0
+        return;
+    end
+
+    [~, sortIdx] = sort([figs.Number]);
+    figs = figs(sortIdx);
+
+    timestamp = datestr(now, 'yyyymmdd_HHMMSS');
+    pdfPath = fullfile(targetDir, sprintf('caye_plots_%s.pdf', timestamp));
+
+    if exist(pdfPath, 'file')
+        delete(pdfPath);
+    end
+
+    opts = {'ContentType','image','Resolution',300};
+    firstPage = true;
+
+    for k = 1:figCount
+        fig = figs(k);
+        if firstPage
+            exportgraphics(fig, pdfPath, opts{:});
+            firstPage = false;
+        else
+            exportgraphics(fig, pdfPath, opts{:}, 'Append', true);
+        end
+        close(fig);
+    end
+end

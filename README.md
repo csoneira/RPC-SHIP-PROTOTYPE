@@ -21,3 +21,6 @@ The data branch:
 
     bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/guide_to_unpack.sh
 
+3. **Data analysis.** The unpacked data is analyzed using the following script, which calls `matlab -batch "run('DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m')"` with the environment. It puts the analyzed data in `/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/analyzed_dabcYYDDDHHMMSS-dabcYYDDDHHMMSS_YYYY-MM-DD_HHhMMmSSs.csv` being the date and time of the analysis.
+
+    bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/guide_to_analyze.sh
