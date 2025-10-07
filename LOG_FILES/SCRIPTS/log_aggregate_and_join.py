@@ -263,8 +263,12 @@ def process_csv(file_path: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
     df.set_index("Time", inplace=True)
-    numeric_columns = df.select_dtypes(include=["number"]).columns
-    df = df[numeric_columns].sort_index()
+
+    for column in df.columns:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    df = df.sort_index()
+
     if not df.index.is_unique:
         df = df.groupby(level=0).mean()
     return df
@@ -317,7 +321,7 @@ def main(argv: List[str]) -> int:
     clean_logs_directory = DATA_ROOT / "CLEAN"
     unprocessed_logs_directory = DATA_ROOT / "UNPROCESSED"
     accumulated_directory = DATA_ROOT / "ACCUMULATED"
-    final_output_path = accumulated_directory / "big_log_lab_data.csv"
+    final_output_path = DATA_ROOT / "big_log_lab_data.csv"
     status_csv_path = STATUS_DIR / "log_aggregate_and_join.csv"
 
     ensure_directories(
