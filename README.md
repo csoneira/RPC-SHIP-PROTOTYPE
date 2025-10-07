@@ -8,4 +8,6 @@ The log branch:
     bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/LOG_FILES/SCRIPTS/log_bring_and_clear.sh
 
 The data branch:
-1. The data is brought in 
+1. The data is brought in hld format with:
+
+    asdasddas

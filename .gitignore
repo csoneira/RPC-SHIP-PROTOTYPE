@@ -37,5 +37,5 @@
 *.swp
 *.pyc
 *.pyi
-/venv/
-/JUNK/
+venv/
+JUNK/
