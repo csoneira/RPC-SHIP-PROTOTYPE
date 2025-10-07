@@ -17,6 +17,10 @@
 % Nota: os cabos estavam trocados, por isso, Qt=Ib... e Qb=It...
 % Note: the cables were swapped, therefore Qt=Ib... and Qb=It...
 
+% l: leading edge times
+% t: trailing edge times
+% Q = t - l
+
 %clear all; close all; clc;
 % Configure base folders that contain the scripts and MAT files to analyse.
 % =====================================================================
@@ -30,7 +34,7 @@ path(path,[HOME SCRIPTS 'util_matPlots']);
 
 % Select which acquisition run to process; each branch below loads time and
 % charge information for that specific dataset.
-run = 3;
+run = 1;
 if run == 1
     load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a001_T.mat']) %run com os 4 cintiladores
     %run with all 4 scintillators
@@ -52,6 +56,13 @@ end
 % =====================================================================
 % Scintillator Timing and Charge Derivations
 % =====================================================================
+
+% System layout:
+
+% PMT 1 --- PMT 2
+% ----- RPC -----
+% PMT 3 --- PMT 4
+
 % Build matrices with leading/trailing edge times for each scintillator PMT
 % and derive simple charge proxies and mean times per side.
 Tl_cint = [l11 l12 l9 l10];    %tempos leadings  [ns]
@@ -63,10 +74,11 @@ Qcint          = [Tt_cint(:,1) - Tl_cint(:,1) Tt_cint(:,2) - Tl_cint(:,2) Tt_cin
 Qcint_sum_bot  = (Qcint(:,1) + Qcint(:,2)); %soma das cargas dos 2 PMTs bottom; usado no caso da slewing correction
 %sum of the charges from the 2 bottom PMTs; used for the slewing correction
 Qcint_sum_top  = (Qcint(:,3) + Qcint(:,4)); %soma das cargas top
-%sum of the top charges
+%sum of the top times to get incident time
 Tcint_mean_bot = (Tl_cint(:,1) + Tl_cint(:,2))/2;
 Tcint_mean_top = (Tl_cint(:,3) + Tl_cint(:,4))/2;
 %nan(size(EventPerFile))
+
 % Gather RPC leading/trailing edge times for the five "fat" strips on the
 % front and back readouts, then compute their charge-equivalent widths.
 TFl = [l31 l32 l30 l28 l29];    %tempos leadings  front [ns]; chs [32,28] -> 5 strips gordas front
@@ -116,6 +128,10 @@ eff_bottom = 100*(1-(size(I,1)/events));
 I=find(ChargePerEvent_t <2000);
 eff_top    = 100*(1-(size(I,1)/events));
 
+% Print these efficiencies
+fprintf('Efficiency bottom (all events): %2.2f%%\n', eff_bottom);
+fprintf('Efficiency top (all events): %2.2f%%\n', eff_top);
+
 % ---------------------------------------------------------------------
 % PMT Coincidence-Based Efficiency Filtering
 % ---------------------------------------------------------------------
@@ -130,6 +146,89 @@ restrictionsForPMTs = abs(Tl_cint(:,1)-Tl_cint(:,2)) <tTH & ...
                       abs(Tl_cint(:,2)-Tl_cint(:,3)) <tTH & ...
                       abs(Tl_cint(:,2)-Tl_cint(:,4)) <tTH & ...
                       abs(Tl_cint(:,3)-Tl_cint(:,4)) <tTH;
+
+% Plot scatter plots of Tl_cint i vs Tl_cint j for all PMT pairs to verify the
+% coincidence cut. In the same figure the 6 pairs
+figure;
+subplot(3,2,1); plot(Tl_cint(:,1), Tl_cint(:,2),'.'); xlabel('Tl_cint1'); ylabel('Tl_cint2'); title('Time lead PMT1 vs PMT2');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
+subplot(3,2,2); plot(Tl_cint(:,1), Tl_cint(:,3),'.'); xlabel('Tl_cint1'); ylabel('Tl_cint3'); title('Time lead PMT1 vs PMT3');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
+subplot(3,2,3); plot(Tl_cint(:,1), Tl_cint(:,4),'.'); xlabel('Tl_cint1'); ylabel('Tl_cint4'); title('Time lead PMT1 vs PMT4');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
+subplot(3,2,4); plot(Tl_cint(:,2), Tl_cint(:,3),'.'); xlabel('Tl_cint2'); ylabel('Tl_cint3'); title('Time lead PMT2 vs PMT3');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
+subplot(3,2,5); plot(Tl_cint(:,2), Tl_cint(:,4),'.'); xlabel('Tl_cint2'); ylabel('Tl_cint4'); title('Time lead PMT2 vs PMT4');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
+subplot(3,2,6); plot(Tl_cint(:,3), Tl_cint(:,4),'.'); xlabel('Tl_cint3'); ylabel('Tl_cint4'); title('Time lead PMT3 vs PMT4');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
+sgtitle(sprintf('PMT time coincidences'));
+
+
+figure;
+subplot(2,2,1); plot(Tl_cint(:,1), Tt_cint(:,1),'.'); xlabel('Tl_cint1'); ylabel('Tt_cint1'); title('Time lead vs trail PMT1');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
+subplot(2,2,2); plot(Tl_cint(:,2), Tt_cint(:,2),'.'); xlabel('Tl_cint2'); ylabel('Tt_cint2'); title('Time lead vs trail PMT2');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
+subplot(2,2,3); plot(Tl_cint(:,3), Tt_cint(:,3),'.'); xlabel('Tl_cint3'); ylabel('Tt_cint3'); title('Time lead vs trail PMT3');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
+subplot(2,2,4); plot(Tl_cint(:,4), Tt_cint(:,4),'.'); xlabel('Tl_cint4'); ylabel('Tt_cint4'); title('Time lead vs trail PMT4');
+xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
+sgtitle(sprintf('PMT time lead vs trail'));
+
+% Now plot the charge correlations for the same PMT pairs to verify that
+figure;
+
+subplot(3,2,1);
+plot(Tt_cint(:,1) - Tl_cint(:,1), Tt_cint(:,2) - Tl_cint(:,2), '.');
+xlabel('Tt\_cint1 - Tl\_cint1');
+ylabel('Tt\_cint2 - Tl\_cint2');
+title('Charge PMT1 vs PMT2');
+xlim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+ylim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+subplot(3,2,2);
+plot(Tt_cint(:,1) - Tl_cint(:,1), Tt_cint(:,3) - Tl_cint(:,3), '.');
+xlabel('Tt\_cint1 - Tl\_cint1');
+ylabel('Tt\_cint3 - Tl\_cint3');
+title('Charge PMT1 vs PMT3');
+xlim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+ylim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+subplot(3,2,3);
+plot(Tt_cint(:,1) - Tl_cint(:,1), Tt_cint(:,4) - Tl_cint(:,4), '.');
+xlabel('Tt\_cint1 - Tl\_cint1');
+ylabel('Tt\_cint4 - Tl\_cint4');
+title('Charge PMT1 vs PMT4');
+xlim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+ylim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+subplot(3,2,4);
+plot(Tt_cint(:,2) - Tl_cint(:,2), Tt_cint(:,3) - Tl_cint(:,3), '.');
+xlabel('Tt\_cint2 - Tl\_cint2');
+ylabel('Tt\_cint3 - Tl\_cint3');
+title('Charge PMT2 vs PMT3');
+xlim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+ylim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+subplot(3,2,5);
+plot(Tt_cint(:,2) - Tl_cint(:,2), Tt_cint(:,4) - Tl_cint(:,4), '.');
+xlabel('Tt\_cint2 - Tl\_cint2');
+ylabel('Tt\_cint4 - Tl\_cint4');
+title('Charge PMT2 vs PMT4');
+xlim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+ylim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+subplot(3,2,6);
+plot(Tt_cint(:,3) - Tl_cint(:,3), Tt_cint(:,4) - Tl_cint(:,4), '.');
+xlabel('Tt\_cint3 - Tl\_cint3');
+ylabel('Tt\_cint4 - Tl\_cint4');
+title('Charge PMT3 vs PMT4');
+xlim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+ylim([min(min(Tt_cint - Tl_cint)) max(max(Tt_cint - Tl_cint))]);
+
+% I want the aspect ratio of x and y axes to be equal, i mean, force it to be a square. It's not 1:1 yet
+sgtitle(sprintf('PMT charge coincidences'));
+axis equal;
+
+return;
+
+
 indicesGoodEvents=find(restrictionsForPMTs);
 numberGoodEvents = length(indicesGoodEvents);
 ChargePerEvent_b_goodEventsOnly= ChargePerEvent_b(indicesGoodEvents);
@@ -142,6 +241,7 @@ figure; histogram(ChargePerEvent_b_goodEventsOnly, 0:200:5E4); ylabel('# of even
 figure; histogram(ChargePerEvent_t_goodEventsOnly, 0:200:5E4); ylabel('# of events'); xlabel('Q (top)'); title(sprintf('Q spectrum (sum of Q per event); Eff_{top} = %2.2f%%', eff_top_goodEventsOnly));
 %%}
 
+return;
 
 %%
 % ---------------------------------------------------------------------

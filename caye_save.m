@@ -31,7 +31,7 @@ path(path,[HOME SCRIPTS 'util_matPlots']);
 
 % Select which acquisition run to process; each branch below loads time and
 % charge information for that specific dataset.
-run = 3;
+run = 1;
 if run == 1
     load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a001_T.mat']) %run com os 4 cintiladores
     %run with all 4 scintillators
@@ -49,6 +49,8 @@ elseif run == 3;
     load([HOME SCRIPTS DATA_Q 'dabc25127151027-dabc25160092400_a004_Q.mat'])
 end
 
+% print the variables in the workspace
+whos
 
 
 % ---------------------------------------------------------------------
@@ -126,12 +128,11 @@ Qb = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt
 
 clearvars Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt
 
-% Charge sum over all narrow strips per event
-Q_thin_top_event = sum(Qt, 2); % total charge in the 5 narrow strips on the top side per event
-Q_thin_bot_event = sum(Qb, 2); % total charge in the 5 narrow strips on the bottom side per event
-
 % Total number of triggered events available in the loaded files.
 events=size(EventPerFile,1);
+
+whos
+
 
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
@@ -262,31 +263,25 @@ end
 % Event-Level Maximum Charge Aggregation
 
 % calculation of maximum charges and RAW position as a function of Qmax
+
 [QFmax,XFmax] = max(QF_p,[],2);    %XFmax -> strip of Qmax
 [QBmax,XBmax] = max(QB_p,[],2);
 
 % Keep only events where the strip with maximum charge matches on both faces
+% and use those indices to compute representative timing/charge observables.
+
 Ind2Cut   = find(~isnan(QF_p) & ~isnan(QB_p) & XFmax == XBmax);
 [row,col] = ind2sub(size(TFl),Ind2Cut); %row=evento com Qmax na mesma strip; col=strip não interessa pois fica-se com a strip com Qmax
+
+%row = event with Qmax in the same strip; col = strip not needed because we keep the strip with Qmax
 rows      = unique(row); %events sorted and without repetitions
 Ind2Keep  = sub2ind(size(TFl),rows,XFmax(rows)); %indices of the Qmax values, provided QFmax and QBmax are on the same strip
-
 
 T = nan(rawEvents,1); Q = nan(rawEvents,1); X = nan(rawEvents,1); Y = nan(rawEvents,1);
 T(rows) = (TFl(Ind2Keep) + TBl(Ind2Keep)) / 2; %[ns]
 Q(rows) = (QF_p(Ind2Keep) + QB_p(Ind2Keep)) /2;    %[ns] sum of Qmax front and back -> contains NaNs if an event fails the Ind2Keep condition
 X(rows) = XFmax(rows);  %strip number where Qmax is found (1 to 5)
 Y(rows) = (TFl(Ind2Keep) - TBl(Ind2Keep)) / 2; %[ns]
-
-% Ensure Q is [rawEvents x 1] for mask compatibility
-if length(Q) < rawEvents
-    Q_full = nan(rawEvents,1);
-    Q_full(rows) = Q(rows);
-    Q = Q_full;
-end
-
-% Charge sum over all wide strips per event
-Q_thick_event = Q;
 
 figure;
 subplot(2,2,1); histogram(Q, 0:0.1:300); xlabel('Q [ns]'); ylabel('# of events'); title(sprintf('Q total in sum of THICK STRIPS (run %d)', run));
@@ -513,7 +508,7 @@ figure;
 plot(q_strip_threshold_values, eff_bottom_values, '-o', 'DisplayName', 'Bottom');
 hold on;
 plot(q_strip_threshold_values, eff_top_values, '-o', 'DisplayName', 'Top');
-xlabel('Q in sum of narrow strips per event threshold');
+xlabel('Q Threshold');
 ylabel('Efficiency [%]');
 title(sprintf('Efficiency vs Q Threshold (run %d)', run));
 
@@ -636,243 +631,234 @@ numberSeenEvents    = sum(restrictionsForPMTs & restrictionsForRPC); % require b
 
 Eff = numberSeenEvents * 100 / numberGoodEvents; %numberGoodEvents or rawEvents
 
-fprintf('Efficiency with PMT and RPC restrictions: %.2f%% (run %d)\n', Eff, run);
+% print efficiency
+fprintf('Number of seen events (PMT coincidence + PMT charge + RPC charge): %d out of %d (%.2f%%)\n', numberSeenEvents, numberGoodEvents, Eff);
+
+
+
+%%
+
+% ---------------------------------------------------------------------
+% Events Seen by PMTs but Missed by the RPC
+% ---------------------------------------------------------------------
+
+% events not seen by the RPC
+
+% Visualise charge recorded on thin strips for PMT-tagged events where the
+% RPC showed no activity (helps to tune thresholds).
+indices_not_seen = find(restrictionsForPMTs & ~restrictionsForRPC);
+Qb_not_seen = ChargePerEvent_b(indices_not_seen);
+Qt_not_seen = ChargePerEvent_t(indices_not_seen);
+
+figure;
+histogram(Qb_not_seen, 0:200:5E4); hold on;
+histogram(Qt_not_seen, 0:200:5E4);
+xlabel('Qb ');
+ylabel('# of events');
+title(sprintf('Espetro de carga nas strips finas (baixo) para eventos não vistos pela RPC (run %d)', run));
+legend('Qb not seen by RPC', 'Qt not seen by RPC');
 
 %%
 
 
-% I have some vectors with the same length, one vector per each detector
-% - PMT 1 --> Qcint(:,1), Tl_cint(:,1)
-% - PMT 2 --> Qcint(:,2), Tl_cint(:,2)
-% - PMT 3 --> Qcint(:,3), Tl_cint(:,3)
-% - PMT 4 --> Qcint(:,4), Tl_cint(:,4)
-% - Thick RPC (sum of Qmax front/back) --> Q_thick_event
-% - Thin RPC TOP (event sums) --> Q_thin_top_event
-% - Thin RPC BOTTOM (event sums) --> Q_thin_bot_event
+
+% I want you to calculate the efficiency 
 
 
-% Replace NaNs with 0 before mask calculations in all vectors
-Q_pmt_1 = Qcint(:,1); Q_pmt_1(isnan(Q_pmt_1)) = -20;
-Q_pmt_2 = Qcint(:,2); Q_pmt_2(isnan(Q_pmt_2)) = -20;
-Q_pmt_3 = Qcint(:,3); Q_pmt_3(isnan(Q_pmt_3)) = -20;
-Q_pmt_4 = Qcint(:,4); Q_pmt_4(isnan(Q_pmt_4)) = -20;
-Q_thick = Q_thick_event; Q_thick(isnan(Q_thick)) = -20;
-Q_thin_top = Q_thin_top_event; Q_thin_top(isnan(Q_thin_top)) = -20;
-Q_thin_bot = Q_thin_bot_event; Q_thin_bot(isnan(Q_thin_bot)) = -20;
+
+
+%%
 
 % ---------------------------------------------------------------------
-% EFFICIENCY (coherent + consistent masks)
+% Time Resolution Studies
 % ---------------------------------------------------------------------
 
-tTH = 4; % time threshold [ns]
+% Select the central region of each PMT charge distribution to focus on good
+% signals before computing timing resolution.
 
-% PMTs (Qcint per tube)
-pmt_1_charge_threshold_min = 94;  pmt_1_charge_threshold_max = 103;  % ADCbins
-pmt_2_charge_threshold_min = 101; pmt_2_charge_threshold_max = 120;  % ADCbins
-pmt_3_charge_threshold_min = 146; pmt_3_charge_threshold_max = 180;  % ADCbins
-pmt_4_charge_threshold_min = 95;  pmt_4_charge_threshold_max = 107;  % ADCbins
+%HISTOGRAM OF Qcint FOR EACH PMT AND EVENT SELECTION FOR TIME RESOLUTION - keep only the central peak in the charge matrices
+X_T_min = [94 101  146 95];
+X_T_max = [103 120 180 107];
 
-% Thick RPC (sum of Qmax front/back)
-thick_strip_charge_threshold_min = 5;    % ADCbins
-thick_strip_charge_threshold_max = 40;   % ADCbins
-
-% Thin RPC (event sums)
-if run == 1
-    top_narrow_strip_charge_threshold_min = 2600;  % ADCbins/event
-    top_narrow_strip_charge_threshold_max = 15000; % ADCbins/event
-elseif run == 2
-    top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
-    top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
-elseif run == 3
-    top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
-    top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
+first = 1; last = 4;
+figure
+for pmt=first:last
+    subplot(2,2,pmt);
+    histogram(Qcint(:,pmt),75:1:275); hold on;
+    temp = Qcint(:,pmt); temp(find( Qcint(:,pmt) > X_T_max(pmt) )) = nan; Qcint(:,pmt) = temp;
+    temp = Qcint(:,pmt); temp(find( Qcint(:,pmt) < X_T_min(pmt) )) = nan; Qcint(:,pmt) = temp;
+    histogram(Qcint(:,pmt),-2:1:300); legend(sprintf('Q - PMT%d', pmt), sprintf('Q - PMT%d selection', pmt), 'Location', 'northeast')
+    xlim([70 280]); %ylim([0 1500]);
 end
+sgtitle(sprintf('PMT charge spectra and selection (run %d)', run));
 
-bot_narrow_strip_charge_threshold_min = 4600;  % ADCbins/event
-bot_narrow_strip_charge_threshold_max = 20000; % ADCbins/event
+%return
 
-% Assumes you already defined:
-% Q_pmt_1..4, Q_thick, Q_thin_top, Q_thin_bot (NaNs->0 already done above)
-% and the threshold variables:
-% pmt_1_charge_threshold_min/max, ... , pmt_4_charge_threshold_min/max,
-% thick_strip_charge_threshold_min/max,
-% top_narrow_strip_charge_threshold_min/max,
-% bot_narrow_strip_charge_threshold_min/max
+%%
 
-% Package data + limits
-detNames = { ...
-    'PMT 1 (Qcint(:,1))', ...
-    'PMT 2 (Qcint(:,2))', ...
-    'PMT 3 (Qcint(:,3))', ...
-    'PMT 4 (Qcint(:,4))', ...
-    'Thick RPC (Q_{thick\_event})', ...
-    'Thin TOP (Q_{thin\_top\_event})', ...
-    'Thin BOTTOM (Q_{thin\_bot\_event})'};
+% ------------------------------------------------------------------
+% ------------------------------------------------------------------
+% Data Cleaning Prior to Slewing Corrections
+% ------------------------------------------------------------------
+% ------------------------------------------------------------------
 
-detData  = {Q_pmt_1, Q_pmt_2, Q_pmt_3, Q_pmt_4, Q_thick, Q_thin_top, Q_thin_bot};
+% Remove any event with missing values so that polynomial fits and slewing
+% corrections downstream have fully populated rows.
 
-minVals  = [ ...
-    pmt_1_charge_threshold_min, ...
-    pmt_2_charge_threshold_min, ...
-    pmt_3_charge_threshold_min, ...
-    pmt_4_charge_threshold_min, ...
-    thick_strip_charge_threshold_min, ...
-    top_narrow_strip_charge_threshold_min, ...
-    bot_narrow_strip_charge_threshold_min ];
+% remove events with at least one NaN; by using Qcint we enforce times in all 4 PMTs, same as 'restrictionsForPMTs' in the efficiency, Q refers to the RPC side
 
-maxVals  = [ ...
-    pmt_1_charge_threshold_max, ...
-    pmt_2_charge_threshold_max, ...
-    pmt_3_charge_threshold_max, ...
-    pmt_4_charge_threshold_max, ...
-    thick_strip_charge_threshold_max, ...
-    top_narrow_strip_charge_threshold_max, ...
-    bot_narrow_strip_charge_threshold_max ];
+% using the slewing correction, polyfit cannot contain NaNs
 
-% Plot layout: 3x3 (7 used)
-figure('Name','Charge Histograms with In-Range Overlays');
-tiledlayout(3,3,'TileSpacing','compact','Padding','compact');
+I_toRemoveLines = any(isnan(Qcint),2) | any(isnan(Q), 2); %row=1 if the event has at least one column with a nan
+Qcint(I_toRemoveLines,:)          = [];
+Tcint_mean_bot(I_toRemoveLines,:) = [];
+Tcint_mean_top(I_toRemoveLines,:) = [];
+Qcint_sum_bot(I_toRemoveLines,:)  = [];
+Qcint_sum_top(I_toRemoveLines,:)  = [];
+Q(I_toRemoveLines,:)              = [];
+T(I_toRemoveLines,:)              = [];
+X(I_toRemoveLines,:)              = []; %para os plots 2D mais abaixo
+Y(I_toRemoveLines,:)              = []; %para os plots 2D mais abaixo
+QB_p(I_toRemoveLines,:)           = []; %se usarmos o EventDisplayer mais abaixo
+QF_p(I_toRemoveLines,:)           = []; %se usarmos o EventDisplayer mais abaixo
+TFl(I_toRemoveLines,:)            = []; %se usarmos o EventDisplayer mais abaixo
+TBl(I_toRemoveLines,:)            = []; %se usarmos o EventDisplayer mais abaixo
+Tl_cint(I_toRemoveLines,:)        = []; %se usarmos o EventDisplayer mais abaixo
 
-nBins = 150;  % adjust if you want finer/coarser binning
+%%
 
-for k = 1:numel(detNames)
-    x = detData{k};
-    x = x(isfinite(x)); % keep finite values only
-    
-    if isempty(x)
-        nexttile;
-        axis off;
-        title(detNames{k}, 'Interpreter','none');
-        text(0.5,0.5,'No data','HorizontalAlignment','center');
-        continue;
-    end
-    
-    % Bin edges based on full data range for consistent overlay
-    xmin = min(x);
-    xmax = max(x);
-    if xmin == xmax
-        xmax = xmin + 1; % avoid zero-width range
-    end
-    edges = linspace(xmin, xmax, nBins+1);
+% ------------------------------------------------------------------
+% Raw Time-Difference Analysis (No Slewing Correction)
+% ------------------------------------------------------------------
 
-    % In-range selection
-    inMin = minVals(k);
-    inMax = maxVals(k);
-    maskIn = (x >= inMin) & (x <= inMax);
-    xin = x(maskIn);
+% Compute the raw timing difference between scintillators and the RPC before
+% any slewing correction, then fit the distribution with a Gaussian model.
 
-    nexttile;
-    hold on;
-    % Full histogram (background)
-    hAll = histogram(x, 'BinEdges', edges, 'DisplayStyle','bar', 'EdgeAlpha', 0.4, 'FaceAlpha', 0.35);
-    % In-range overlay (foreground)
-    if ~isempty(xin)
-        hIn  = histogram(xin, 'BinEdges', edges, 'DisplayStyle','bar', 'EdgeAlpha', 0.9, 'FaceAlpha', 0.8);
-    else
-        hIn = [];
-    end
-    xlabel('ADC bins'); ylabel('Counts');
-    title(sprintf('%s', detNames{k}), 'Interpreter','tex');
-
-    % Vertical lines for the limits
-    yL = ylim;
-    plot([inMin inMin], yL, '--', 'LineWidth', 1);
-    plot([inMax inMax], yL, '--', 'LineWidth', 1);
-    ylim(yL); % keep same after lines
-
-    % Legend (handle empty in-range gracefully)
-    if isempty(hIn)
-        legend(hAll, {'All events'}, 'Location','best');
-    else
-        legend([hAll hIn], {'All events', sprintf('In range [%g, %g]', inMin, inMax)}, 'Location','best');
-    end
-    box on; hold off;
-end
-
-% Optional: add a super title
-sgtitle('Charge distributions (full) with thresholded subset overlaid');
+% RESOLUÇÃO TEMPORAL SEM SLEWING CORRECTION -> tempo_cintiladores - tempo_RPC ou tempo_cintiladores_bottom - tempo_cintiladores_top
+% TIME RESOLUTION WITHOUT SLEWING CORRECTION -> scintillator time minus RPC time or bottom minus top scintillator time
+tempo1 = Tcint_mean_top;    %Tcint_mean_bot ou Tcint_mean_top
+tempo2 = T;                 %T para a RPC; para os cint: Tcint_mean_bot ou Tcint_mean_top
+Tdiff  = [tempo1 - tempo2]; %[ns];
+figure; histogram(Tdiff, 0:0.05:20);xlabel('Tdiff [ns]'); ylabel('# of events'); title(sprintf('TcintBottom - Trpc (run %d)', run));
 
 
-% Calculate efficiency using different types of masks.
 
-% The first essential is that four PMTs have positive charge
-pmt_exists_Mask = (Q_pmt_1 > 0) & (Q_pmt_2 > 0) & (Q_pmt_3 > 0) & (Q_pmt_4 > 0);
-pmt_range_Mask  = (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
-                      (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
-                      (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
-                      (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
+% if necessary impose boundaries on Tdiff so the fit succeeds with bestFit.m:
+% Tdiff(find((Tdiff < 12.5) | (Tdiff > 14.5))) = nan; %sigma 1 bot
+% sets Tdiff to NaN outside 12.5-14.5 ns for sigma 1 on the bottom
+Tdiff(find((Tdiff < 11) | (Tdiff > 12.1))) = nan; %sigma 2
+% Tdiff(find((Tdiff < -2.7) | (Tdiff > -1.2))) = nan; %sigma 3
+% sets Tdiff to NaN outside -2.7 to -1.2 ns for sigma 3
+% Tdiff(find((Tdiff < 1.2) | (Tdiff > 2.7))) = nan;
+% sets Tdiff to NaN outside 1.2 to 2.7 ns
+% figure; histogram(Tdiff);
+% plot the histogram of Tdiff
 
-% Now define masks for each detector based on the min/max thresholds, explicitly
-thick_exists_Mask = Q_thick > 0;
-thick_range_Mask = (Q_thick >= thick_strip_charge_threshold_min) & (Q_thick <= thick_strip_charge_threshold_max);
+%search the best gaussian fit of the distribution:
+binningRule = 1;    %1 -> use RICE rule; 2 -> use SCOTT rule; 3 -> use STURGES rule
+distToFit = Tdiff;
+[x_min,x_max,chi_sq, number_bins] = bestFit(distToFit, 2.0, 1.2, binningRule);    %e.g.: bestFit(distToFit, 2, 0.8, 1); (dist, extSigmaBound, intSigmaBound, binningRule)
+%chi_sq não é usado mas permite comparar com chisq obtido mais abaixo com hfitg_altJPS; chi_sq e chisq têm de ser iguais
+%chi_sq is not used but allows comparison with the chisq obtained below with hfitg_altJPS; chi_sq and chisq must match
+%x_min=0.5; x_max=1.5; number_bins=45; %forçar valores em vez de bestFit
+%x_min=0.5; x_max=1.5; number_bins=45; %force values instead of using bestFit
+%plot the gaussian fit:
 
-thinTop_exists_Mask = Q_thin_top > 0;
-thinTop_range_Mask = (Q_thin_top >= top_narrow_strip_charge_threshold_min) & (Q_thin_top <= top_narrow_strip_charge_threshold_max);
+distToFit_limited = distToFit;
+distToFit_limited(find(distToFit > x_max)) = nan;    %don't use 0 or it will appear in the histogram!
+distToFit_limited(find(distToFit < x_min)) = nan;
+events_limited = nnz(~isnan(distToFit_limited));    %number of nonzero (here non NANs) elements
+x_bin=abs(x_max-x_min)/number_bins;
+figure; histogram(distToFit_limited, x_min:x_bin:x_max, 'FaceAlpha',0.7, 'FaceColor','0.00,0.45,0.74'); hold on;
+[ny,nx] = histf(distToFit_limited, x_min:x_bin:x_max);
+[pars,chisq] = hfitg_altJPS(nx,ny,2); hold on;
+histogram(distToFit, x_min-x_bin*number_bins:x_bin:x_max+x_bin*number_bins, 'FaceAlpha',0.3, 'FaceColor','0.00,0.45,0.74');
+ndf=length(find (ny > 0)); ndf=ndf-3;    %3 -> miu, sigma e max do hist; ndf é o nº de pontos usado para o fit logo neste caso é o nº de bins
+message = sprintf('n = %d\n\\mu =  %.3f ns\n\\sigma = %.3f ns\n\\chi²/ndf = %.1f/%d', events_limited, pars(1), abs(pars(2)), chisq, ndf); %modulo do sigma pois hfitg pode resultar num valor neg -> ver mais abaixo explicação
+%absolute value of sigma because hfitg can give a negative result -> see explanation below
+yl = ylim; % Get limits of y axis so we can find a nice height for the text labels.
+text(pars(1)+abs(pars(2)), 0.8 * yl(2), message, 'Color', 'r', 'FontSize', 12); %pode obter-se sigmas negativos com hfitg mas o módulo está correto; vê-se tb sigmas negativos mesmo centrando a dist primeiro)
+%hfitg may yield negative sigmas but the absolute value is correct; negative sigmas appear even after centering the distribution first
+xlabel('Tdiff [ns]','FontSize',14,'Color','k'); ylabel('# of events','FontSize',14,'Color','k'); title(sprintf('TcintBottom - Trpc; gaussian fit (borders: %.3f -> %.3f) (run %d)', x_min, x_max, run));
+xlim([x_min-x_bin*number_bins x_max+x_bin*number_bins]);
+%FWHM=2.355*pars(2)/sqrt(2)    %for T=T1-T2
 
-thinBot_exists_Mask = Q_thin_bot > 0;
-thinBot_range_Mask = (Q_thin_bot >= bot_narrow_strip_charge_threshold_min) & (Q_thin_bot <= bot_narrow_strip_charge_threshold_max);
+%return
 
+% ------------------------------------------------------------------
+% ------------------------------------------------------------------
+% Slewing-Corrected Time Resolution
+% ------------------------------------------------------------------
+% ------------------------------------------------------------------
 
-% Now combine masks in different ways to see the effect on efficiency for different detectors
-% For example, I want the efficiency of thin top when pmt exists
-
-
-% Efficiency of thin top -------------------------------------------
-% Existence masks
-% I want the efficiency of thin top when pmt exists
-
-% I want the efficiency of thin top when pmt exists and thick exists
-
-% I want the efficiency of thin top when pmt exists and thin exists
-
-% I want the efficiency of thin top when pmt exists and thick exists and thin bot exists
-
-% Range masks
-% I want the efficiency of thin top when pmt is in range
-
-% I want the efficiency of thin top when pmt is in range and thick is in range
-
-% I want the efficiency of thin top when pmt is in range and thin is in range
-
-% I want the efficiency of thin top when pmt is in range and thick is in range and thin bot is in range
-
-
-% Efficiency of thin bot -------------------------------------------
-% Existence masks
-% I want the efficiency of thin bot when pmt exists
-
-% I want the efficiency of thin bot when pmt exists and thick exists
-
-% I want the efficiency of thin bot when pmt exists and thin exists
-
-% I want the efficiency of thin bot when pmt exists and thick exists and thin top exists
-
-% Range masks
-% I want the efficiency of thin bot when pmt is in range
-
-% I want the efficiency of thin bot when pmt is in range and thick is in range
-
-% I want the efficiency of thin bot when pmt is in range and thin is in range
-
-% I want the efficiency of thin bot when pmt is in range and thick is in range and thin top is in range
+% Apply a two-stage slewing correction (first with PMT charges, then with RPC
+% charge) and evaluate the improved timing resolution.
+%RESOLUÇÃO TEMPORAL COM SLEWING CORRECTION -> tempo_cintiladores - tempo_RPC ou tempo_cintiladores_bottom - tempo_cintiladores_top
+%TIME RESOLUTION WITH SLEWING CORRECTION -> scintillator time minus RPC time or bottom minus top scintillator time
+tempo1 = Tcint_mean_top;    %Tcint_mean_bot ou Tcint_mean_top
+%Tcint_mean_bot or Tcint_mean_top
+tempo2 = T;                 %T para a RPC; para os cint: Tcint_mean_bot ou Tcint_mean_top
+%T for the RPC; for the scintillators: Tcint_mean_bot or Tcint_mean_top
+Tdiff  = [tempo1 - tempo2]; %[ns];
+carga1 = Qcint_sum_top;     %Qcint_sum_bot ou Qcint_sum_top
+%Qcint_sum_bot or Qcint_sum_top
+carga2 = Q;                 %Q para a RPC; para os cint: Qcint_sum_bot ou Qcint_sum_top
+%Q for the RPC; for the scintillators: Qcint_sum_bot or Qcint_sum_top
+%figure; histogram(Tdiff);
 
 
-% Efficiency of thick -------------------------------------------
-% Existence masks
-% I want the efficiency of thick when pmt exists
+%se for necessário impor boundaries a Tdiff para o fit ser bem sucedido com bestFit.m:
+%if it is necessary to impose boundaries on Tdiff for the bestFit.m fit to succeed:
 
-% I want the efficiency of thick when pmt exists and thin top exists
+%Tdiff(find((Tdiff < 12.5) | (Tdiff > 14.5))) = nan; %sigma 1
+%sets Tdiff to NaN outside 12.5-14.5 ns for sigma 1
+Tdiff(find((Tdiff < 11) | (Tdiff > 12.1))) = nan; %sigma 2
+%Tdiff(find((Tdiff < -2.7) | (Tdiff > -1.2))) = nan; %sigma 3
+%sets Tdiff to NaN outside -2.7 to -1.2 ns for sigma 3
+%Tdiff(find((Tdiff < 1.2) | (Tdiff > 2.7))) = nan;
+%sets Tdiff to NaN outside 1.2 to 2.7 ns
+%com a slewing corr, as matrizes em polyfit (script FitAndPlot.m) não podem ter nans:
+%with the slewing correction, the matrices used in polyfit (script FitAndPlot.m) cannot have NaNs
+I_toRemoveLines = any(isnan(Tdiff),2); %row=1 if the event has at least one column with a nan
+Tdiff(I_toRemoveLines,:)  = [];
+carga1(I_toRemoveLines,:) = [];
+carga2(I_toRemoveLines,:) = [];
+%figure; histogram(Tdiff);
+%%}
+%%%%%%%%%%%%%%%%%%
+%Time vs. Qbottom:
+figure; plot(carga1, Tdiff, '.'); xlim([0 max(carga1)+50]); ylabel('Time [ns]'); xlabel('Charge [ns]'); title('Time (Tcint\_mean\_bot-T\_rpc) vs. Q (Qcint\_sum\_bot)');
+%fit1:
+Tfited_bottom = FitAndPlot(carga1, Tdiff, 2, 1);    %FitAndPlot arguments: Q, T, polynomialDegree, showPlots(0/1); adapted from stratos
+%Time_corrected1 vs. Qbottom:
+figure; plot(carga2, Tfited_bottom, '.'); xlim([0 max(carga2)+50]); ylabel('Time fited_bottom [ns]'); xlabel('Charge [ns]'); title('Time fited\_bottom vs. Qtop (mean(Qt3,Qt4))');
+%fit2:
+Tfited_topAndBottom = FitAndPlot(carga2, Tfited_bottom, 2, 1);    %FitAndPlot arguments: Q, T, polynomialDegree, showPlots(0/1); adapted from stratos
+%%%%%%%%%%%%%%%%%%
+%search the best gaussian fit to the corrected distribution:
+binningRule = 3;    %1 -> use RICE rule; 2 -> use SCOTT rule; 3 -> use STURGES rule
+distToFit = Tfited_topAndBottom;
+[x_min,x_max,chi_sq, number_bins] = bestFit(distToFit, 2.0, 1.2, binningRule);    %e.g.: bestFit(distToFit, 2, 0.8, 1); (dist, extSigmaBound, intSigmaBound, binningRule)
+%plot the gaussian fit:
+distToFit_limited = distToFit;
+distToFit_limited(find(distToFit > x_max)) = nan;    %don't use 0 or it will appear in the histogram!
+distToFit_limited(find(distToFit < x_min)) = nan;
+events_limited = nnz(~isnan(distToFit_limited));    %number of nonzero (here non NANs) elements
+x_bin=abs(x_max-x_min)/number_bins;
+figure; histogram(distToFit_limited, x_min:x_bin:x_max, 'FaceAlpha',0.7, 'FaceColor','0.00,0.45,0.74'); hold on;
+[ny,nx] = histf(distToFit_limited, x_min:x_bin:x_max);
+[pars,chisq] = hfitg_altJPS(nx,ny,2); hold on;
+histogram(distToFit, x_min-x_bin*number_bins:x_bin:x_max+x_bin*number_bins, 'FaceAlpha',0.3, 'FaceColor','0.00,0.45,0.74');
+ndf=length(find (ny > 0)); ndf=ndf-3;    %3 -> miu, sigma e max do hist; ndf é o nº de pontos usado para o fit logo neste caso é o nº de bins
+%3 -> mean, sigma and histogram maximum; ndf is the number of points used for the fit, therefore here it equals the number of bins
+message = sprintf('n = %d\n\\mu =  %.3f ns\n\\sigma = %.3f ns\n\\chi²/ndf = %.1f/%d', events_limited, pars(1), abs(pars(2)), chisq, ndf); %modulo do sigma pois hfitg pode resultar num valor neg -> ver mais abaixo explicação
+%absolute value of sigma because hfitg can return a negative value -> see explanation below
+yl = ylim; % Get limits of y axis so we can find a nice height for the text labels.
+text(pars(1)+abs(pars(2)), 0.8 * yl(2), message, 'Color', 'r', 'FontSize', 12); %pode obter-se sigmas negativos com hfitg mas o módulo está correto; vê-se tb sigmas negativos mesmo centrando a dist primeiro)
+%hfitg may yield negative sigmas but the absolute value is correct; negative sigmas appear even after centering the distribution first
+xlabel('Tdiff [ns]','FontSize',14,'Color','k'); ylabel('# of events','FontSize',14,'Color','k'); title(sprintf('TcintBottom - Trpc w/ slewing corr. (borders: %.3f -> %.3f)', x_min, x_max));
+xlim([x_min-x_bin*number_bins x_max+x_bin*number_bins]);
+%FWHM=2.355*pars(2)/sqrt(2)    %for T=T1-T2
+%%}
 
-% I want the efficiency of thick when pmt exists and thin bot exists
-
-% I want the efficiency of thick when pmt exists and thin top and thin bot exist
-
-% Range masks
-% I want the efficiency of thick when pmt is in range
-
-% I want the efficiency of thick when pmt is in range and thin top is in range
-
-% I want the efficiency of thick when pmt is in range and thin bot is in range
-
-% I want the efficiency of thick when pmt is in range and thin bot is in range and thin top is in range
-
+%return
