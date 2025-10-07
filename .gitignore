@@ -1,3 +1,4 @@
+*.csv
 *.dat
 *.hld
 *.raw
@@ -39,3 +40,7 @@
 *.pyi
 venv/
 JUNK/
+
+# Large data files (exceed GitHub limits)
+LOG_FILES/DATA/ACCUMULATED/*.csv
+LOG_FILES/DATA/ACCUMULATED/*.dat
