@@ -15,6 +15,13 @@ if [[ -z "$next_hld" ]]; then
     exit 0
 fi
 
+# % Say that this warning is normal in the screen:
+# Number of words found in event X: Y (for the central_CTS FPGA: c001), 
+# while the expected is Y (provided by the 1st word of the event)
+# aborting...
+# Este es el origen del cambio en el unpacker. Una FPGA del TRB3 no funciona
+# y João ha modificado el unpacker para que funcione, pero dejando este warning — todo ok.
+
 filename=$(basename "$next_hld")
 echo "Moving $filename to unpack queue"
 mv "$next_hld" "$HLD_UNPACK_DIR/$filename"

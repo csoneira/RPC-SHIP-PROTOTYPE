@@ -47,70 +47,63 @@ class FileSchema:
     columns: List[str]
 
 
+# Pre cleaning, example lines:
+# mingo 2025-08-17T00:00:03 80 1F 12 59 F5 21 0.140 0.132 5.440 5.410 0.000 1.250 5.422 1.008 5.420 1.000 1 1 0 0 1 1 1 
+# joaos 2025-06-29T00:00:01 80 1F 12 5A 12 DA 0.002 0.000 0.000 0.000 0.000 0.366 0.000 0.000 0.000 0.000 0 0 0 0 0 0 1 
+# Post cleaning, example lines:
+# mingo 
+# joaos     
+# Columns in the mingo scripts:
+# ["Date", "Hour", "Unused1", "Unused2", "Unused3", "Unused4", "Unused5", "Unused6",
+#    "CurrentNeg", "CurrentPos", "HVneg", "HVpos", "Unused7", "Unused8", "Unused9",
+#    "Unused10", "Unused11", "Unused12", "Unused13", "Unused14", "Unused15"]
+# Columns in the joaos scripts:
+# The same, literally.
+
 FILE_SCHEMAS: List[FileSchema] = [
     FileSchema(
         prefix="hv4_",
         output="hv4_aggregated.csv",
         label="hv4",
-        columns=[
-            "Date",
-            "Hour",
-            "unknown_header_word0",
-            "unknown_header_word1",
-            "unknown_header_word2",
-            "unknown_header_word3",
-            "unknown_header_word4",
-            "unknown_header_word5",
-            "unknown_current_ch_a",
-            "unknown_current_ch_b",
-            "unknown_voltage_ch_a",
-            "unknown_voltage_ch_b",
-            "unknown_current_error_ch_a",
-            "unknown_current_error_ch_b",
-            "unknown_voltage_setpoint_ch_a",
-            "unknown_voltage_setpoint_ch_b",
-            "unknown_voltage_reference",
-            "unknown_gain_factor",
-            "unknown_status_flag1",
-            "unknown_status_flag2",
-            "unknown_status_flag3",
-            "unknown_status_flag4",
-            "unknown_status_flag5",
-            "unknown_status_flag6",
-            "unknown_status_flag7",
-        ],
+        columns=["Date", "Hour", "Unused1", "Unused2", "Unused3", "Unused4", "Unused5", "Unused6",
+                    "CurrentNeg", "CurrentPos", "HVneg", "HVpos", "Unused7", "Unused8", "Unused9",
+                    "Unused10", "Unused11", "Unused12", "Unused13", "Unused14", "Unused15"],
     ),
+
+
+    # Pre cleaning, example lines:
+    # mingo 2025-08-17T00:00:03 80 1F 12 59 F5 21 0.140 0.132 5.440 5.410 0.000 1.250 5.422 1.008 5.420 1.000 1 1 0 0 1 1 1 
+    # joaos 2025-06-29T00:00:01 80 1F 12 5A 12 DA 0.002 0.000 0.000 0.000 0.000 0.366 0.000 0.000 0.000 0.000 0 0 0 0 0 0 1 
+    # Post cleaning, example lines:
+    # mingo 
+    # joaos     
+    # Columns in the mingo scripts:
+    # ["Date", "Hour", "Unused1", "Unused2", "Unused3", "Unused4", "Unused5", "Unused6",
+    #    "CurrentNeg", "CurrentPos", "HVneg", "HVpos", "Unused7", "Unused8", "Unused9",
+    #    "Unused10", "Unused11", "Unused12", "Unused13", "Unused14", "Unused15"]
+    # Columns in the joaos scripts:
+    # The same, literally.
+
     FileSchema(
         prefix="hv5_",
         output="hv5_aggregated.csv",
         label="hv5",
-        columns=[
-            "Date",
-            "Hour",
-            "unknown_header_word0",
-            "unknown_header_word1",
-            "unknown_header_word2",
-            "unknown_header_word3",
-            "unknown_header_word4",
-            "unknown_header_word5",
-            "unknown_current_readback_1",
-            "unknown_current_readback_2",
-            "unknown_current_readback_3",
-            "unknown_current_readback_4",
-            "unknown_current_readback_5",
-            "unknown_current_readback_6",
-            "unknown_voltage_readback_1",
-            "unknown_voltage_readback_2",
-            "unknown_voltage_setpoint_1",
-            "unknown_voltage_setpoint_2",
-            "unknown_status_flag1",
-            "unknown_status_flag2",
-            "unknown_status_flag3",
-            "unknown_status_flag4",
-            "unknown_status_flag5",
-            "unknown_status_flag6",
-        ],
+        columns=["Date", "Hour", "Unused1", "Unused2", "Unused3", "Unused4", "Unused5", "Unused6",
+                    "CurrentNeg", "CurrentPos", "HVneg", "HVpos", "Unused7", "Unused8", "Unused9",
+                    "Unused10", "Unused11", "Unused12", "Unused13", "Unused14", "Unused15"],
     ),
+    # Pre cleaning, example lines:
+    # mingo 2024-09-06T00:00:52; 21.1 17.7 17.7 66.3 81.5 65.3 68.9 11.2 7.4 10.5 7.8
+    # joaos 2025-10-02T00:00:35; 0.3 0.3 0.3 0.3 0.4 0.0 0.0 0.0 198.7 0.1 0.4 0.4 0.0 0.0 0.0 0.0 0.3 0.3 0.4 0.3 0.5 -40558880.1 9792302.6 7564219.9 0.0 0.0 0.0
+    # Post cleaning, example lines:
+    
+    # Columns in the mingo scripts:
+    # ["Date", "Hour", "Asserted", "Edge", "Accepted", "Multiplexer1", "M2", "M3", "M4", "CM1", "CM2", "CM3", "CM4"]
+    # Columns in the joaos scripts:
+    # ["Date", "Hour", "Asserted", "Edge", "Accepted", 
+    # "Multiplexer1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "M11", "M12", 
+    # "CM1", "CM2", "CM3", "CM4", "CM5", "CM6", "CM7", "CM8", "CM9", "CM10", "CM11", "CM12"]
+
     FileSchema(
         prefix="rates_",
         output="rates_aggregated.csv",
@@ -118,9 +111,44 @@ FILE_SCHEMAS: List[FileSchema] = [
         columns=[
             "Date",
             "Hour",
-        ]
-        + [f"unknown_rate_counter{i:02d}" for i in range(1, 28)],
+            "Asserted",
+            "Edge",
+            "Accepted",
+            "Multiplexer1",
+            "M2",
+            "M3",
+            "M4",
+            "M5",
+            "M6",
+            "M7",
+            "M8",
+            "M9",
+            "M10",
+            "M11",
+            "M12",
+            "CM1",
+            "CM2",
+            "CM3",
+            "CM4",
+            "CM5", "CM6",
+            "CM7", "CM8",
+            "CM9", "CM10",
+            "CM11", "CM12",
+        ],
     ),
+
+
+    # Pre cleaning, example lines:
+    # mingo 2025-10-08T00:00:05; nan nan nan nan 26.3 31.7 945.6
+    # joaos 2025-10-08T00:00:04; nan nan 23.5 51.1 1010.4
+    # Post cleaning, example lines:
+    # mingo 
+    # joaos 
+    # Columns in the mingo scripts:
+    # ["Date", "Hour", "Unused1", "Unused2", "Unused3", "Unused4", "Temperature_ext", "RH_ext", "Pressure_ext"]
+    # Columns in the joaos scripts:
+    # ["Date", "Hour", "Unused1", "Unused2", "Temperature_ext", "RH_ext", "Pressure_ext"]
+
     FileSchema(
         prefix="sensors_bus0_",
         output="sensors_bus0_aggregated.csv",
@@ -128,11 +156,11 @@ FILE_SCHEMAS: List[FileSchema] = [
         columns=[
             "Date",
             "Hour",
-            "unknown_bus0_field1",
-            "unknown_bus0_field2",
-            "temperature_c",
-            "humidity_percent",
-            "pressure_hpa",
+            "Unused1",
+            "Unused2",
+            "Temperature_ext",
+            "RH_ext",
+            "Pressure_ext",
         ],
     ),
 ]
@@ -228,6 +256,13 @@ def process_files(schema: FileSchema, output_path: Path, source_dir: Path) -> bo
             if column == "Time":
                 continue
             df[column] = df[column].apply(_normalize_value)
+        
+        # Drop the "Unused" columns right away
+        cols_to_drop = [col for col in df.columns 
+                        if col.lower().startswith(('Unused'))]
+        if cols_to_drop:
+            df.drop(columns=cols_to_drop, inplace=True)
+            print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
 
         dataframes.append(df)
 
@@ -235,6 +270,14 @@ def process_files(schema: FileSchema, output_path: Path, source_dir: Path) -> bo
         return False
 
     combined_df = pd.concat(dataframes, ignore_index=True)
+    
+    # Drop columns that start with "Unused"
+    cols_to_drop = [col for col in combined_df.columns 
+                    if col.lower().startswith(('Unused'))]
+    if cols_to_drop:
+        combined_df.drop(columns=cols_to_drop, inplace=True)
+        print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
+    
     output_path.parent.mkdir(parents=True, exist_ok=True)
     combined_df.to_csv(output_path, index=False)
     print(f"Aggregated CSV saved: {output_path}")
@@ -252,6 +295,12 @@ def process_csv(file_path: Path) -> pd.DataFrame:
     except Exception as exc:
         print(f"Could not read {file_path}: {exc}")
         return pd.DataFrame()
+
+    # Drop columns that start with "Unused"
+    cols_to_drop = [col for col in df.columns 
+                    if col.lower().startswith(('Unused'))]
+    if cols_to_drop:
+        df.drop(columns=cols_to_drop, inplace=True)
 
     if "Time" not in df.columns:
         print(f"Column 'Time' missing in {file_path}; skipping.")

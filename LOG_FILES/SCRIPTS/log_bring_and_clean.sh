@@ -81,10 +81,10 @@ echo 'Received data from remote computer'
 mkdir -p "$OUTPUT_DIR"
 
 declare -A COLUMN_COUNTS
-COLUMN_COUNTS["hv4_"]=24
-COLUMN_COUNTS["hv5_"]=23
-COLUMN_COUNTS["rates_"]=29
-COLUMN_COUNTS["sensors_bus0_"]=7
+COLUMN_COUNTS["hv4_"]=22
+COLUMN_COUNTS["hv5_"]=22
+COLUMN_COUNTS["rates_"]=8
+COLUMN_COUNTS["sensors_bus0_"]=8
 
 extract_log_date() {
     local name="$1"
@@ -110,7 +110,9 @@ process_file() {
         return
     fi
 
-    if [[ -n "${PROCESSED_FILES[$filename]:-}" ]]; then
+    local already_recorded="${PROCESSED_FILES[$filename]:-}"
+
+    if [[ -n "$already_recorded" && -f "$OUTPUT_DIR/$filename" ]]; then
         return
     fi
 
@@ -128,8 +130,9 @@ process_file() {
         #processed_mtime_save=$(stat -c %Y "$output_file")
         
         if [[ $source_mtime -le $processed_mtime ]]; then
-            #echo "File $filename is already processed and up-to-date. Skipping."
-            record_log_entry "$filename" "$log_date"
+            if [[ -z "$already_recorded" ]]; then
+                record_log_entry "$filename" "$log_date"
+            fi
             return
         fi
     fi
