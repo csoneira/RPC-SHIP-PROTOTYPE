@@ -50,6 +50,11 @@ if save_plots
     set(0, 'DefaultFigureVisible', 'off');
 end
 
+summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES';
+if ~exist(summary_output_dir, 'dir')
+    mkdir(summary_output_dir);
+end
+
 HOME    = '/home/csoneira/WORK/LIP_stuff/';
 SCRIPTS = 'JOAO_SETUP/';
 DATA    = 'matFiles/time/';
@@ -132,7 +137,7 @@ try
     TFl = [l31 l32 l30 l28 l29];    % tempos leadings front [ns]; chs [32,28] -> 5 strips gordas front
     TFt = [t31 t32 t30 t28 t29];    % tempos trailings front [ns]
 catch
-    warning('Variables l31/l32/l30 not found; using alternative channel order 24–28.');
+    warning('Variables l31/l32/l30/l28/l29 not found; using alternative channel order 24–28.');
     TFl = [l28 l27 l26 l25 l24];
     TFt = [t28 t27 t26 t25 t24];
 end
@@ -1247,6 +1252,21 @@ writetable(T, outputFilePath);
 fprintf('\n=====================================================\n');
 fprintf('Efficiency summary saved to: %s\n', outputFilePath);
 fprintf('=====================================================\n\n');
+
+detector_labels = {'Thin RPC Top'; 'Thin RPC Bottom'; 'Thick RPC'};
+streamer_percentages = [percentage_streamer_thin_top; percentage_streamer_thin_bot; percentage_streamer_thick];
+efficiency_pmt_exists = [eff_thinTop_pmtEx; eff_thinBot_pmtEx; eff_thick_pmtEx];
+efficiency_pmt_range = [eff_thinTop_pmtRange; eff_thinBot_pmtRange; eff_thick_pmtRange];
+total_lines = repmat(rawEvents, numel(detector_labels), 1);
+
+summaryTable = table(detector_labels, streamer_percentages, efficiency_pmt_exists, efficiency_pmt_range, total_lines, ...
+    'VariableNames', {'Detector', 'Streamer_Percent', 'Efficiency_PMT_Exists', 'Efficiency_PMT_InRange', 'Total_Lines'});
+
+summaryFileName = sprintf('rpc_summary_run_%d.csv', run);
+summaryFilePath = fullfile(summary_output_dir, summaryFileName);
+writetable(summaryTable, summaryFilePath);
+
+fprintf('RPC summary saved to: %s\n', summaryFilePath);
 
 if save_plots
     try

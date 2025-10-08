@@ -12,7 +12,7 @@
 #!/bin/bash
 
 SRC="joao:/home/rpcuser/hlds/*.hld"
-DEST="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/unpacker/hlds_toUnpack"
+DEST="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES"
 CSV="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/file_database.csv"
 
 # Optional start date filter (format: YYYY-MM-DD)
@@ -225,6 +225,5 @@ echo "Files copied: $copied_count"
 echo "Files skipped (already exist): $skipped_count"
 echo "Files failed: $failed_count"
 echo "=========================================="
-
 
 

@@ -7,6 +7,15 @@ Setting up the environment:
 
     bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/setup_environment.sh
 
+Python environment quick instructions
+- Automated setup: `bash setup_environment.sh`
+- Environment location: `/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/venv/`
+- Activation: `source venv/bin/activate`
+- Deactivation: `deactivate`
+- One-shot run without activation: `venv/bin/python <script>`
+- Required packages: numpy, pandas, matplotlib, scipy, pyyaml
+- Notes: Python 3.12.3 in use; `runUnpacker.py` uses `python3` shebang
+
 The log branch:
 1. Bring the log files from the joao computer. This script brings the files and calls to `/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/LOG_FILES/SCRIPTS/log_aggregate_and_join.py`.
 
