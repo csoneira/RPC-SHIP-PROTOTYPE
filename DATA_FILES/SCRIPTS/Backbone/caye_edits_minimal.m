@@ -30,15 +30,25 @@ if ~exist('save_plots_dir','var') || isempty(save_plots_dir)
     save_plots_dir = save_plots_dir_default;
 end
 
-clearvars -except save_plots save_plots_dir save_plots_dir_default;
+clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir;
 close all; clc;
+
+HOME    = '/home/csoneira/WORK/LIP_stuff/';
+SCRIPTS = 'JOAO_SETUP/';
+DATA    = 'matFiles/time/';
+DATA_Q    = 'matFiles/charge/';
+path(path,[HOME SCRIPTS 'util_matPlots']);
 
 if isstring(save_plots_dir)
     save_plots_dir = char(save_plots_dir);
 end
 
+% Debug: Print the save_plots_dir to verify its value
+fprintf('Using save_plots_dir: %s\n', save_plots_dir);
+
+% Ensure save_plots_dir is valid and not overwritten unnecessarily
 if save_plots && (isempty(save_plots_dir) || (~ischar(save_plots_dir) && ~isstring(save_plots_dir)))
-    save_plots_dir = save_plots_dir_default;
+    error('Invalid save_plots_dir: %s', save_plots_dir);
 end
 
 clear save_plots_dir_default;
@@ -50,42 +60,204 @@ if save_plots
     set(0, 'DefaultFigureVisible', 'off');
 end
 
-summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES';
+summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/';
 if ~exist(summary_output_dir, 'dir')
     mkdir(summary_output_dir);
 end
 
-HOME    = '/home/csoneira/WORK/LIP_stuff/';
-SCRIPTS = 'JOAO_SETUP/';
-DATA    = 'matFiles/time/';
-DATA_Q    = 'matFiles/charge/';
-path(path,[HOME SCRIPTS 'util_matPlots']);
+path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/util_matPlots');
 
-% Select which acquisition run to process; each branch below loads time and
-% charge information for that specific dataset.
-run = 4;
-if run == 1
-    load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a001_T.mat']) %run com os 4 cintiladores
-    % load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a002_T.mat']); % no data info in this file
-    load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a003_T.mat']) 
-    load([HOME SCRIPTS DATA_Q 'dabc25120133744-dabc25126121423_a004_Q.mat'])
-elseif run == 2
-    load([HOME SCRIPTS DATA 'dabc25127151027-dabc25147011139_a001_T.mat']) % run com HV de cima desligada
-    % load([HOME SCRIPTS DATA 'dabc25127151027-dabc25147011139_a002_T.mat']); % no data info in this file
-    load([HOME SCRIPTS DATA 'dabc25127151027-dabc25147011139_a003_T.mat']);
-    load([HOME SCRIPTS DATA_Q 'dabc25127151027-dabc25147011139_a004_Q.mat']);
-elseif run == 3
-    load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a001_T.mat']) % run com HV de cima desligada
-    % load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a002_T.mat']); % no data info in this file
-    load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a003_T.mat'])
-    load([HOME SCRIPTS DATA_Q 'dabc25127151027-dabc25160092400_a004_Q.mat'])
-elseif run == 4
-    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/time/dabc25268104307-dabc25276125059_a001_T.mat')
-    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/time/dabc25268104307-dabc25276125059_a002_T.mat')
-    load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/charge/dabc25268104307-dabc25276125059_a004_Q.mat')
+project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
+mst_saves_root = fullfile(project_root, 'MST_saves');
+unpacked_root = fullfile(project_root, 'DATA_FILES', 'DATA', 'UNPACKED', 'PROCESSING');
+
+if ~exist('input_dir','var') || isempty(input_dir)
+    if ~isfolder(mst_saves_root)
+        error('The directory %s does not exist. Provide input_dir or ensure MST_saves is available.', mst_saves_root);
+    end
+
+    dir_info = dir(mst_saves_root);
+    dir_info = dir_info([dir_info.isdir]);
+    dir_info = dir_info(~ismember({dir_info.name}, {'.','..'}));
+    if isempty(dir_info)
+        error('No subdirectories found in %s. Provide input_dir or populate MST_saves.', mst_saves_root);
+    end
+
+    [~, oldest_idx] = min([dir_info.datenum]);
+    input_dir = dir_info(oldest_idx).name;
+    fprintf('Automatically selected oldest MST_saves directory: %s\n', input_dir);
+elseif isstring(input_dir)
+    input_dir = char(input_dir);
 end
 
+data_dir_candidates = {fullfile(unpacked_root, input_dir), fullfile(mst_saves_root, input_dir)};
+existing_dirs = data_dir_candidates(cellfun(@isfolder, data_dir_candidates));
+if isempty(existing_dirs)
+    error('Data directory "%s" not found in "%s" or "%s".', input_dir, unpacked_root, mst_saves_root);
+end
+data_dir = existing_dirs{1};
+
+time_dir = fullfile(data_dir, 'time');
+charge_dir = fullfile(data_dir, 'charge');
+
+if ~isfolder(time_dir)
+    error('Time directory not found: %s', time_dir);
+end
+if ~isfolder(charge_dir)
+    error('Charge directory not found: %s', charge_dir);
+end
+
+underscore_idx = strfind(input_dir, '_');
+if isempty(underscore_idx)
+    name_prefix = input_dir;
+else
+    name_prefix = input_dir(1:underscore_idx(1)-1);
+end
+
+dash_idx = strfind(name_prefix, '-');
+if isempty(dash_idx)
+    dataset_basename = name_prefix;
+else
+    dataset_basename = name_prefix(1:dash_idx(1)-1);
+end
+
+% Extract datetime from the basename and convert to 'yyyy-mm-dd_HH.MM.SS'
+datetime_str = regexp(dataset_basename, '\d{11}', 'match', 'once'); % Extract the YYYYDOYHHMMSS part
+if isempty(datetime_str)
+    error('Failed to extract datetime from basename: %s', dataset_basename);
+end
+
+% Parse correctly (calendar year, day-of-year, hour, minute, second)
+file_datetime = datetime(datetime_str, 'InputFormat', 'yyyyDDDHHmmss');
+
+% For readability in filenames
+formatted_datetime = datestr(file_datetime, 'yyyy-mm-dd_HH.MM.SS');
+fprintf("The time of the dataset is: %s\n", formatted_datetime);
+
+execution_datetime = datestr(now, 'yyyy_mm_dd-HH.MM.SS');
+pdfFileName = sprintf('caye_plots_%s_exec_%s.pdf', formatted_datetime, execution_datetime);
+pdfPath = fullfile(save_plots_dir, pdfFileName);
+fprintf("PDF will be saved to: %s\n", pdfPath);
+
+% Dynamically detect time MAT files in the directory
+time_files = dir(fullfile(time_dir, sprintf('%s*_T.mat', dataset_basename)));
+
+if isempty(time_files)
+    error('No time MAT files found matching "%s*_T.mat" in %s', dataset_basename, time_dir);
+end
+
+% Load each time file
+for i = 1:length(time_files)
+    time_file_path = fullfile(time_dir, time_files(i).name);
+    fprintf('Loading time file: %s\n', time_file_path);
+    load(time_file_path);
+end
+
+charge_listing = dir(fullfile(charge_dir, sprintf('%s*_a*_Q.mat', dataset_basename)));
+if isempty(charge_listing)
+    error('No charge MAT files found matching "%s_a*_Q.mat" in %s', dataset_basename, charge_dir);
+end
+charge_files = sort({charge_listing.name});
+for idx = 1:numel(charge_files)
+    charge_path = fullfile(charge_dir, charge_files{idx});
+    fprintf('Loading charge data: %s\n', charge_path);
+    load(charge_path);
+end
+
+
+% Select run number and percentile thresholds for charge cuts
+run = 0;
+percentile_pmt = 25;
+percentile_narrow = 5;
+percentile_thick = 5;
+percentiles = true;
+% -----------------------------------------------------------
+
+
 whos
+
+% -------- NaN scrubber: replace NaNs with 0 across all float variables -----
+ws = 'base';                     % workspace to operate on
+vars = evalin(ws, 'whos');       % list all variables
+
+replaced_names  = {};
+replaced_counts = [];
+skipped_names   = {};
+skipped_types   = {};
+
+for k = 1:numel(vars)
+    name = vars(k).name;
+    cls  = vars(k).class;
+
+    % Fetch value safely from the target workspace
+    val = evalin(ws, name);
+
+    % Only float classes can actually store NaN
+    if isfloat(val)   % covers double, single (and complex/sparse variants)
+        % isnan works elementwise; for complex, true if real or imag is NaN
+        mask = isnan(val);
+        nans = nnz(mask);
+
+        if nans > 0
+            val(mask) = 0;       % zero-out NaNs
+            assignin(ws, name, val);
+        end
+
+        fprintf('NaNs in %-25s : %d\n', name, nans);
+        replaced_names{end+1}  = name; %#ok<AGROW>
+        replaced_counts(end+1) = nans; %#ok<AGROW>
+
+    else
+        % Non-float types either cannot hold NaN or use different missing markers
+        % (e.g., datetime/duration use NaT). We skip them.
+        skipped_names{end+1} = name;  %#ok<AGROW>
+        skipped_types{end+1} = cls;   %#ok<AGROW>
+    end
+end
+
+% ------------- Summary -------------
+total_nans = sum(replaced_counts);
+fprintf('\n=====================================================\n');
+fprintf('NaN replacement summary\n');
+fprintf('  Variables processed (float): %d\n', numel(replaced_names));
+fprintf('  Total NaNs replaced:         %d\n', total_nans);
+fprintf('  Variables skipped:           %d\n', numel(skipped_names));
+fprintf('=====================================================\n');
+
+% Optional: list a few skipped variables & their classes
+if ~isempty(skipped_names)
+    max_show = min(10, numel(skipped_names));
+    fprintf('Skipped (first %d shown):\n', max_show);
+    for i = 1:max_show
+        fprintf('  %-25s  [%s]\n', skipped_names{i}, skipped_types{i});
+    end
+end
+
+
+
+% Joana datafiles
+% run = 4;
+% if run == 1
+%     load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a001_T.mat']) %run com os 4 cintiladores
+%     % load([HOME SCRIPTS DATA 'dabc25133744-dabc25126121423_a002_T.mat']); % no data info in this file
+%     load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a003_T.mat']) 
+%     load([HOME SCRIPTS DATA_Q 'dabc25120133744-dabc25126121423_a004_Q.mat'])
+% elseif run == 2
+%     load([HOME SCRIPTS DATA 'dabc25127151027-dabc25147011139_a001_T.mat']) % run com HV de cima desligada
+%     % load([HOME SCRIPTS DATA 'dabc25127151027-dabc25147011139_a002_T.mat']); % no data info in this file
+%     load([HOME SCRIPTS DATA 'dabc25127151027-dabc25147011139_a003_T.mat']);
+%     load([HOME SCRIPTS DATA_Q 'dabc25127151027-dabc25147011139_a004_Q.mat']);
+% elseif run == 3
+%     load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a001_T.mat']) % run com HV de cima desligada
+%     % load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a002_T.mat']); % no data info in this file
+%     load([HOME SCRIPTS DATA 'dabc25127151027-dabc25160092400_a003_T.mat'])
+%     load([HOME SCRIPTS DATA_Q 'dabc25127151027-dabc25160092400_a004_Q.mat'])
+% elseif run == 4
+%     load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/time/dabc25268104307-dabc25276125059_a001_T.mat')
+%     load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/time/dabc25268104307-dabc25276125059_a002_T.mat')
+%     load('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/MST_saves/dabc25268104307-dabc25279081551_2025-10-07_17h32m05s/charge/dabc25268104307-dabc25276125059_a004_Q.mat')
+% end
+
 
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
@@ -106,11 +278,14 @@ whos
 % Build matrices with leading/trailing edge times for each scintillator PMT
 % and derive simple charge proxies and mean times per side.
 
-%tempos leadings  [ns] - leading times [ns]
-Tl_cint = [l11 l12 l9 l10];    
+try
+    Tl_cint = [l11 l12 l9 l10]; %tempos leadings  [ns] - leading times [ns]
+    Tt_cint = [t11 t12 t9 t10]; %tempos trailings [ns] - trailing times [ns]
+catch
+    warning('Variables 9/10/11/12 not found; THIS EXITS THE CODE.');
+    return;
+end
 
-%tempos trailings [ns] - trailing times [ns]
-Tt_cint = [t11 t12 t9 t10];
 
 %channels 1 and 2 -> bottom PMTs - ch1 e ch2 -> PMTs bottom
 Qcint          = [Tt_cint(:,1) - Tl_cint(:,1) Tt_cint(:,2) - Tl_cint(:,2) Tt_cint(:,3) - Tl_cint(:,3) Tt_cint(:,4) - Tl_cint(:,4)]; 
@@ -142,13 +317,8 @@ catch
     TFt = [t28 t27 t26 t25 t24];
 end
 
-
-
-%leading times back [ns]; channels [1,5] -> 5 wide back strips
-TBl = [l2 l1 l3 l5 l4];         %tempos leadings  back  [ns]; chs [1,5] -> 5 strips gordas back
-
-%trailing times back [ns]
-TBt = [t2 t1 t3 t5 t4];         %tempos trailings back  [ns]
+TBl = [l2 l1 l3 l5 l4]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
+TBt = [t2 t1 t3 t5 t4]; %trailing times back [ns]
 
 clearvars l32 l31 l30 l29 l28 t32 t31 t30 t29 t28 l1 l2 l3 l4 l5 t1 t2 t3 t4 t5 l11 l12 l9 l10 t11 t12 t9 t10 
 
@@ -165,17 +335,28 @@ rawEvents = size(TFl,1);
 
 % Convert charge arrays from cell traces to double matrices (after cable swap).
 % nota: os cabos estavam trocados, por isso, Qt=Ib e Qb=It; note: the cables were swapped, so Qt=Ib and Qb=It
-Qt = cast([Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb],"double");
-Qb = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt],"double");
 
+v = cast([Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb],"double");
+w = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt],"double");
+
+% if run == 1 || run == 2 || run == 3
+%     Qt = v;
+%     Qb = w;
+% elseif run == 0
+%     Qt = w; % top narrow strips charge proxy
+%     Qb = v; % bottom narrow strips charge proxy
+% end
+
+Qt = v; % top narrow strips charge proxy
+Qb = w; % bottom narrow strips charge proxy
+
+clearvars v w
 clearvars Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt
 
 % Charge sum over all narrow strips per event
 Q_thin_top_event = sum(Qt, 2); % total charge in the 5 narrow strips on the top side per event
 Q_thin_bot_event = sum(Qb, 2); % total charge in the 5 narrow strips on the bottom side per event
 
-% Total number of triggered events available in the loaded files.
-events=size(EventPerFile,1);
 
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
@@ -191,31 +372,31 @@ events=size(EventPerFile,1);
 % coincidence cut. In the same figure the 6 pairs
 
 figure;
-subplot(2,2,1); plot(Tl_cint(:,1), Tt_cint(:,1),'.'); xlabel('Tl_cint1'); ylabel('Tt_cint1'); title(sprintf('Time lead vs trail PMT1 (run %d)', run));
+subplot(2,2,1); plot(Tl_cint(:,1), Tt_cint(:,1),'.'); xlabel('Tl_cint1'); ylabel('Tt_cint1'); title(sprintf('Time lead vs trail PMT1 (run %s)', run));
 xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
-subplot(2,2,2); plot(Tl_cint(:,2), Tt_cint(:,2),'.'); xlabel('Tl_cint2'); ylabel('Tt_cint2'); title(sprintf('Time lead vs trail PMT2 (run %d)', run));
+subplot(2,2,2); plot(Tl_cint(:,2), Tt_cint(:,2),'.'); xlabel('Tl_cint2'); ylabel('Tt_cint2'); title(sprintf('Time lead vs trail PMT2 (run %s)', run));
 xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
-subplot(2,2,3); plot(Tl_cint(:,3), Tt_cint(:,3),'.'); xlabel('Tl_cint3'); ylabel('Tt_cint3'); title(sprintf('Time lead vs trail PMT3 (run %d)', run));
+subplot(2,2,3); plot(Tl_cint(:,3), Tt_cint(:,3),'.'); xlabel('Tl_cint3'); ylabel('Tt_cint3'); title(sprintf('Time lead vs trail PMT3 (run %s)', run));
 xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
-subplot(2,2,4); plot(Tl_cint(:,4), Tt_cint(:,4),'.'); xlabel('Tl_cint4'); ylabel('Tt_cint4'); title(sprintf('Time lead vs trail PMT4 (run %d)', run));
+subplot(2,2,4); plot(Tl_cint(:,4), Tt_cint(:,4),'.'); xlabel('Tl_cint4'); ylabel('Tt_cint4'); title(sprintf('Time lead vs trail PMT4 (run %s)', run));
 xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tt_cint)) max(max(Tt_cint))]);
-sgtitle(sprintf('PMT time lead vs trail (run %d)', run));
+sgtitle(sprintf('PMT time lead vs trail (run %s)', run));
 
 % Now plot the charge correlations for the same PMT pairs to verify that
 figure;
-subplot(1,2,1); plot(Qcint(:,1), Qcint(:,2), '.'); xlabel('Qcint1'); ylabel('Qcint2'); title(sprintf('Charge PMT1 vs PMT2 (run %d)', run));
+subplot(1,2,1); plot(Qcint(:,1), Qcint(:,2), '.'); xlabel('Qcint1'); ylabel('Qcint2'); title(sprintf('Charge PMT1 vs PMT2 (run %s)', run));
 xlim([min(min(Qcint)) max(max(Qcint))]); ylim([min(min(Qcint)) max(max(Qcint))]);
-subplot(1,2,2); plot(Qcint(:,3), Qcint(:,4), '.'); xlabel('Qcint3'); ylabel('Qcint4'); title(sprintf('Charge PMT3 vs PMT4 (run %d)', run));
+subplot(1,2,2); plot(Qcint(:,3), Qcint(:,4), '.'); xlabel('Qcint3'); ylabel('Qcint4'); title(sprintf('Charge PMT3 vs PMT4 (run %s)', run));
 xlim([min(min(Qcint)) max(max(Qcint))]); ylim([min(min(Qcint)) max(max(Qcint))]);
-sgtitle(sprintf('PMT charge correlations (run %d)', run));
+sgtitle(sprintf('PMT charge correlations (run %s)', run));
 
 % Finally, plot the Tl_cint i vs Tl_cint j scatter plots for all PMT pairs to verify the
 figure;
-subplot(1,2,1); plot(Tl_cint(:,1), Tl_cint(:,2),'.'); xlabel('Tl_cint1'); ylabel('Tl_cint2'); title(sprintf('Time lead PMT1 vs PMT2 (run %d)', run));
+subplot(1,2,1); plot(Tl_cint(:,1), Tl_cint(:,2),'.'); xlabel('Tl_cint1'); ylabel('Tl_cint2'); title(sprintf('Time lead PMT1 vs PMT2 (run %s)', run));
 xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
-subplot(1,2,2); plot(Tl_cint(:,3), Tl_cint(:,4),'.'); xlabel('Tl_cint3'); ylabel('Tl_cint4'); title(sprintf('Time lead PMT3 vs PMT4 (run %d)', run));
+subplot(1,2,2); plot(Tl_cint(:,3), Tl_cint(:,4),'.'); xlabel('Tl_cint3'); ylabel('Tl_cint4'); title(sprintf('Time lead PMT3 vs PMT4 (run %s)', run));
 xlim([min(min(Tl_cint)) max(max(Tl_cint))]); ylim([min(min(Tl_cint)) max(max(Tl_cint))]);
-sgtitle(sprintf('PMT time coincidences (run %d)', run));
+sgtitle(sprintf('PMT time coincidences (run %s)', run));
 
 
 % -----------------------------------------------------------------------------
@@ -227,28 +408,28 @@ sgtitle(sprintf('PMT time coincidences (run %d)', run));
 
 % Similar scatter subplot plots for the wide strips to verify no obvious problems.
 figure;
-subplot(2,5,1); plot(TFl(:,1), TBl(:,1),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip1 (run %d)', run));
+subplot(2,5,1); plot(TFl(:,1), TBl(:,1),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip1 (run %s)', run));
 xlim([min(min(TFl)) max(max(TFl))]); ylim([min(min(TBl)) max(max(TBl))]);
-subplot(2,5,2); plot(TFl(:,2), TBl(:,2),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip2 (run %d)', run));
+subplot(2,5,2); plot(TFl(:,2), TBl(:,2),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip2 (run %s)', run));
 xlim([min(min(TFl)) max(max(TFl))]); ylim([min(min(TBl)) max(max(TBl))]);
-subplot(2,5,3); plot(TFl(:,3), TBl(:,3),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip3 (run %d)', run));
+subplot(2,5,3); plot(TFl(:,3), TBl(:,3),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip3 (run %s)', run));
 xlim([min(min(TFl)) max(max(TFl))]); ylim([min(min(TBl)) max(max(TBl))]);
-subplot(2,5,4); plot(TFl(:,4), TBl(:,4),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip4 (run %d)', run));
+subplot(2,5,4); plot(TFl(:,4), TBl(:,4),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip4 (run %s)', run));
 xlim([min(min(TFl)) max(max(TFl))]); ylim([min(min(TBl)) max(max(TBl))]);
-subplot(2,5,5); plot(TFl(:,5), TBl(:,5),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip5 (run %d)', run));
+subplot(2,5,5); plot(TFl(:,5), TBl(:,5),'.'); xlabel('TFl'); ylabel('TBl'); title(sprintf('Time lead Front vs back strip5 (run %s)', run));
 xlim([min(min(TFl)) max(max(TFl))]); ylim([min(min(TBl)) max(max(TBl))]);
 
-subplot(2,5,6); plot(QF(:,1), QB(:,1),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip1 (run %d)', run));
+subplot(2,5,6); plot(QF(:,1), QB(:,1),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip1 (run %s)', run));
 xlim([min(min(QF)) max(max(QF))]); ylim([min(min(QB)) max(max(QB))]);
-subplot(2,5,7); plot(QF(:,2), QB(:,2),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip2 (run %d)', run));
+subplot(2,5,7); plot(QF(:,2), QB(:,2),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip2 (run %s)', run));
 xlim([min(min(QF)) max(max(QF))]); ylim([min(min(QB)) max(max(QB))]);
-subplot(2,5,8); plot(QF(:,3), QB(:,3),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip3 (run %d)', run));
+subplot(2,5,8); plot(QF(:,3), QB(:,3),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip3 (run %s)', run));
 xlim([min(min(QF)) max(max(QF))]); ylim([min(min(QB)) max(max(QB))]);
-subplot(2,5,9); plot(QF(:,4), QB(:,4),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip4 (run %d)', run));
+subplot(2,5,9); plot(QF(:,4), QB(:,4),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip4 (run %s)', run));
 xlim([min(min(QF)) max(max(QF))]); ylim([min(min(QB)) max(max(QB))]);
-subplot(2,5,10); plot(QF(:,5), QB(:,5),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip5 (run %d)', run));
+subplot(2,5,10); plot(QF(:,5), QB(:,5),'.'); xlabel('QF'); ylabel('QB'); title(sprintf('Charge Front vs back strip5 (run %s)', run));
 xlim([min(min(QF)) max(max(QF))]); ylim([min(min(QB)) max(max(QB))]);
-sgtitle(sprintf('Thick strip time and charge front vs back (run %d)', run));
+sgtitle(sprintf('Thick strip time and charge front vs back (run %s)', run));
 
 
 % Wide Strip Charge Spectra and Offset Calibration
@@ -269,6 +450,21 @@ QF_p = QF - QF_offsets;
 
 clearvars QB_offsets QF_offsets
 
+% Charge sum over all wide strips per event
+
+QB_p_pos = QB_p; QB_p_pos(QB_p<0) = 0; %set negative charges to 0
+QF_p_pos = QF_p; QF_p_pos(QF_p<0) = 0; %set negative charges to 0
+
+Q_B = sum(QB_p_pos, 2); % total charge in the 5 wide strips on the back side per event
+Q_F = sum(QF_p_pos, 2); % total charge in the 5 wide strips on the front side per event
+
+% Q_thick_strip = ( QF_p + QB_p ) / 2; % total charge in the 5 wide strips per event
+% Q_thick_event = sum(Q_thick_strip, 2); % total charge in the 5 wide strips per event
+
+% % Check size, along with text to verify it is [rawEvents x 1]
+% fprintf('Size of Q_thick_event:\n');
+% size(Q_thick_event)
+
 right_lim_q_wide = 100; %adjust as needed
 
 figure;
@@ -288,7 +484,7 @@ for strip = 1:5
     legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
     ylabel('# of events');
     xlabel('Q [ns]');
-    sgtitle(sprintf('Wide strip charge spectra and calibration (run %d)', run));
+    sgtitle(sprintf('Wide strip charge spectra and calibration (run %s)', run));
 end
 
 
@@ -311,28 +507,21 @@ Q(rows) = (QF_p(Ind2Keep) + QB_p(Ind2Keep)) /2;    %[ns] sum of Qmax front and b
 X(rows) = XFmax(rows);  %strip number where Qmax is found (1 to 5)
 Y(rows) = (TFl(Ind2Keep) - TBl(Ind2Keep)) / 2; %[ns]
 
-% Ensure Q is [rawEvents x 1] for mask compatibility
-if length(Q) < rawEvents
-    Q_full = nan(rawEvents,1);
-    Q_full(rows) = Q(rows);
-    Q = Q_full;
-end
-
-% Charge sum over all wide strips per event
-Q_thick_event = Q;
+% % Ensure Q is [rawEvents x 1] for mask compatibility
+% if length(Q) < rawEvents
+%     Q_full = nan(rawEvents,1);
+%     Q_full(rows) = Q(rows);
+%     Q = Q_full;
+% end
 
 figure;
-subplot(2,2,1); histogram(Q, 0:0.1:300); xlabel('Q [ns]'); ylabel('# of events'); title(sprintf('Q total in sum of THICK STRIPS (run %d)', run));
-subplot(2,2,2); histogram(X, 1:0.5:5.5); xlabel('X (strip with Qmax)'); ylabel('# of events'); title(sprintf('X position (strip with Qmax) (run %d)', run));
-subplot(2,2,3); histogram(T, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title(sprintf('T (mean of Tfl and Tbl) (run %d)', run));
-subplot(2,2,4); histogram(Y, -2:0.1:2); xlabel('Y [ns]'); ylabel('# of events'); title(sprintf('Y (Tfl-Tbl)/2 (run %d)', run));
-sgtitle(sprintf('THICK STRIP OBSERVABLES (run %d)', run));
+subplot(2,2,1); histogram(Q, 0:0.1:200); xlabel('Q [ns]'); ylabel('# of events'); title(sprintf('Q total in sum of THICK STRIPS (run %s)', run));
+subplot(2,2,2); histogram(X, 1:0.5:5.5); xlabel('X (strip with Qmax)'); ylabel('# of events'); title(sprintf('X position (strip with Qmax) (run %s)', run));
+subplot(2,2,3); histogram(T, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title(sprintf('T (mean of Tfl and Tbl) (run %s)', run));
+subplot(2,2,4); histogram(Y, -2:0.1:2); xlabel('Y [ns]'); ylabel('# of events'); title(sprintf('Y (Tfl-Tbl)/2 (run %s)', run));
+sgtitle(sprintf('THICK STRIP OBSERVABLES (run %s)', run));
 
-STLevel = 100; % 230 with the 1 mm gap RPCs; streamer threshold
-Qmean = mean(Q, 'omitnan'); % mean of the 'sum of Qmax front and back' over all events
-Qmedian = median(Q, 'omitnan'); %median
-ST      = length(find(Q > STLevel))/rawEvents; %percentage of streamers
-
+Q_thick_event = Q; %redefine Q_thick_event to be the Q from the strip with maximum charge
 
 % -----------------------------------------------------------------------------
 % RPC charges for the five narrow strips, which do not carry timing info.
@@ -344,55 +533,55 @@ ST      = length(find(Q > STLevel))/rawEvents; %percentage of streamers
 % real HV difference between both sides.
 
 figure;
-subplot(4,6,1); plot(Qt(:,1), Qb(:,1),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip I (run %d)', run));
+subplot(4,6,1); plot(Qt(:,1), Qb(:,1),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip I (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,2); plot(Qt(:,2), Qb(:,2),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip II (run %d)', run));
+subplot(4,6,2); plot(Qt(:,2), Qb(:,2),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip II (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,3); plot(Qt(:,3), Qb(:,3),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip III (run %d)', run));
+subplot(4,6,3); plot(Qt(:,3), Qb(:,3),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip III (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,4); plot(Qt(:,4), Qb(:,4),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip IV (run %d)', run));
+subplot(4,6,4); plot(Qt(:,4), Qb(:,4),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip IV (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,5); plot(Qt(:,5), Qb(:,5),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip V (run %d)', run));
+subplot(4,6,5); plot(Qt(:,5), Qb(:,5),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip V (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,6); plot(Qt(:,6), Qb(:,6),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip VI (run %d)', run));
+subplot(4,6,6); plot(Qt(:,6), Qb(:,6),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip VI (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,7); plot(Qt(:,7), Qb(:,7),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip VII (run %d)', run));
+subplot(4,6,7); plot(Qt(:,7), Qb(:,7),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip VII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,8); plot(Qt(:,8), Qb(:,8),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip VIII (run %d)', run));
+subplot(4,6,8); plot(Qt(:,8), Qb(:,8),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip VIII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,9); plot(Qt(:,9), Qb(:,9),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip IX (run %d)', run));
+subplot(4,6,9); plot(Qt(:,9), Qb(:,9),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip IX (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,10); plot(Qt(:,10), Qb(:,10),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip X (run %d)', run));
+subplot(4,6,10); plot(Qt(:,10), Qb(:,10),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip X (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,11); plot(Qt(:,11), Qb(:,11),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XI (run %d)', run));
+subplot(4,6,11); plot(Qt(:,11), Qb(:,11),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XI (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,12); plot(Qt(:,12), Qb(:,12),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XII (run %d)', run));
+subplot(4,6,12); plot(Qt(:,12), Qb(:,12),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,13); plot(Qt(:,13), Qb(:,13),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XIII (run %d)', run));
+subplot(4,6,13); plot(Qt(:,13), Qb(:,13),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XIII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,14); plot(Qt(:,14), Qb(:,14),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XIV (run %d)', run));
+subplot(4,6,14); plot(Qt(:,14), Qb(:,14),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XIV (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,15); plot(Qt(:,15), Qb(:,15),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XV (run %d)', run));
+subplot(4,6,15); plot(Qt(:,15), Qb(:,15),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XV (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,16); plot(Qt(:,16), Qb(:,16),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XVI (run %d)', run));
+subplot(4,6,16); plot(Qt(:,16), Qb(:,16),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XVI (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,17); plot(Qt(:,17), Qb(:,17),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XVII (run %d)', run));
+subplot(4,6,17); plot(Qt(:,17), Qb(:,17),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XVII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,18); plot(Qt(:,18), Qb(:,18),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XVIII (run %d)', run));
+subplot(4,6,18); plot(Qt(:,18), Qb(:,18),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XVIII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,19); plot(Qt(:,19), Qb(:,19),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XIX (run %d)', run));
+subplot(4,6,19); plot(Qt(:,19), Qb(:,19),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XIX (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,20); plot(Qt(:,20), Qb(:,20),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XX (run %d)', run));
+subplot(4,6,20); plot(Qt(:,20), Qb(:,20),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XX (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,21); plot(Qt(:,21), Qb(:,21),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXI (run %d)', run));
+subplot(4,6,21); plot(Qt(:,21), Qb(:,21),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXI (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,22); plot(Qt(:,22), Qb(:,22),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXII (run %d)', run));
+subplot(4,6,22); plot(Qt(:,22), Qb(:,22),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,23); plot(Qt(:,23), Qb(:,23),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXIII (run %d)', run));
+subplot(4,6,23); plot(Qt(:,23), Qb(:,23),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXIII (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-subplot(4,6,24); plot(Qt(:,24), Qb(:,24),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXIV (run %d)', run));
+subplot(4,6,24); plot(Qt(:,24), Qb(:,24),'.'); xlabel('Qt'); ylabel('Qb'); title(sprintf('Charge top vs bottom NARROW strip XXIV (run %s)', run));
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
-sgtitle(sprintf('Narrow strip charge top vs bottom (run %d)', run));
+sgtitle(sprintf('Narrow strip charge top vs bottom (run %s)', run));
 
 
 % Sum charge over all thin strips (bottom/top)
@@ -409,15 +598,15 @@ q95_t = quantile(ChargePerEvent_t, 0.95);
 q95 = max(q95_b, q95_t);
 
 figure;
-subplot(1,3,1); histogram(ChargePerEvent_b, 0:200:5E4); ylabel('# of events'); xlabel('Q (bottom)'); title(sprintf('Q BOTTOM spectrum (sum of Q per event) (run %d)', run));
+subplot(1,3,1); histogram(ChargePerEvent_b, 0:200:5E4); ylabel('# of events'); xlabel('Q (bottom)'); title(sprintf('Q BOTTOM spectrum (sum of Q per event) (run %s)', run));
 xlim([q005 q95]);
-subplot(1,3,2); histogram(ChargePerEvent_t, 0:200:5E4); ylabel('# of events'); xlabel('Q (top)'); title(sprintf('Q TOP spectrum (sum of Q per event) (run %d)', run));
+subplot(1,3,2); histogram(ChargePerEvent_t, 0:200:5E4); ylabel('# of events'); xlabel('Q (top)'); title(sprintf('Q TOP spectrum (sum of Q per event) (run %s)', run));
 xlim([q005 q95]);
 % scatter plot
-subplot(1,3,3); plot(ChargePerEvent_b, ChargePerEvent_t,'.'); xlabel('Q (bottom)'); ylabel('Q (top)'); title(sprintf('Q bottom vs Q top (run %d)', run));
+subplot(1,3,3); plot(ChargePerEvent_b, ChargePerEvent_t,'.'); xlabel('Q (bottom)'); ylabel('Q (top)'); title(sprintf('Q bottom vs Q top (run %s)', run));
 xlim([q005 q95]); ylim([q005 q95])
 % Title for the entire figure
-sgtitle(sprintf('Charge of the event (run %d)', run));
+sgtitle(sprintf('Charge of the event (run %s)', run));
 
 
 
@@ -450,9 +639,9 @@ eff_top_values = zeros(size(q_threshold_values));
 for i = 1:length(q_threshold_values)
     q_threshold = q_threshold_values(i);
     I_b = find(ChargePerEvent_b < q_threshold);
-    eff_bottom_values(i) = 100*(1-(size(I_b,1)/events));
+    eff_bottom_values(i) = 100*(1-(size(I_b,1)/rawEvents));
     I_t = find(ChargePerEvent_t < q_threshold);
-    eff_top_values(i) = 100*(1-(size(I_t,1)/events));
+    eff_top_values(i) = 100*(1-(size(I_t,1)/rawEvents));
 end
 figure;
 plot(q_threshold_values, eff_bottom_values, '-o', 'DisplayName', 'Bottom');
@@ -460,7 +649,7 @@ hold on;
 plot(q_threshold_values, eff_top_values, '-o', 'DisplayName', 'Top');
 xlabel('Q Threshold');
 ylabel('Efficiency [%]');
-title(sprintf('Efficiency vs Q Threshold (run %d)', run));
+title(sprintf('Efficiency vs Q Threshold (run %s)', run));
 legend show;
 
 %%
@@ -475,11 +664,11 @@ percent_good_events = zeros(size(tTH_values));
 for i = 1:length(tTH_values)
     tTH = tTH_values(i);
     restrictionsForPMTs_test = abs(Tl_cint(:,1)-Tl_cint(:,2)) < tTH & ...
-                          abs(Tl_cint(:,1)-Tl_cint(:,3)) < tTH & ...
-                          abs(Tl_cint(:,1)-Tl_cint(:,4)) < tTH & ...
-                          abs(Tl_cint(:,2)-Tl_cint(:,3)) < tTH & ...
-                          abs(Tl_cint(:,2)-Tl_cint(:,4)) < tTH & ...
-                          abs(Tl_cint(:,3)-Tl_cint(:,4)) < tTH;
+                                abs(Tl_cint(:,1)-Tl_cint(:,3)) < tTH & ...
+                                abs(Tl_cint(:,1)-Tl_cint(:,4)) < tTH & ...
+                                abs(Tl_cint(:,2)-Tl_cint(:,3)) < tTH & ...
+                                abs(Tl_cint(:,2)-Tl_cint(:,4)) < tTH & ...
+                                abs(Tl_cint(:,3)-Tl_cint(:,4)) < tTH;
     indicesGoodEvents_test = find(restrictionsForPMTs_test);
     numberGoodEvents_test = length(indicesGoodEvents_test);
     percent_good_events(i) = 100 * numberGoodEvents_test / rawEvents;
@@ -488,7 +677,7 @@ figure;
 plot(tTH_values, percent_good_events, '-o');
 xlabel('tTH [ns]');
 ylabel('% of good events');
-title(sprintf('Good events vs tTH (run %d)', run));
+title(sprintf('Good events vs tTH (run %s)', run));
 
 %%
 
@@ -520,8 +709,8 @@ eff_bottom_goodEventsOnly = 100*(numberSeenEvents/numberGoodEvents);
 numberSeenEvents=length(find(ChargePerEvent_t_goodEventsOnly > 1400));
 eff_top_goodEventsOnly    = 100*(numberSeenEvents/numberGoodEvents);
 figure;
-subplot(2,1,1); histogram(ChargePerEvent_b_goodEventsOnly, 0:200:5E4); ylabel('# of events'); xlabel('Q (bottom)'); title(sprintf('Q spectrum (sum of Q per event); Eff_{bot} = %2.2f%% (run %d)', eff_bottom_goodEventsOnly, run));
-subplot(2,1,2); histogram(ChargePerEvent_t_goodEventsOnly, 0:200:5E4); ylabel('# of events'); xlabel('Q (top)'); title(sprintf('Q spectrum (sum of Q per event); Eff_{top} = %2.2f%% (run %d)', eff_top_goodEventsOnly, run));
+subplot(2,1,1); histogram(ChargePerEvent_b_goodEventsOnly, 0:200:5E4); ylabel('# of events'); xlabel('Q (bottom)'); title(sprintf('Q spectrum (sum of Q per event); Eff_{bot} = %2.2f%% (run %s)', eff_bottom_goodEventsOnly, run));
+subplot(2,1,2); histogram(ChargePerEvent_t_goodEventsOnly, 0:200:5E4); ylabel('# of events'); xlabel('Q (top)'); title(sprintf('Q spectrum (sum of Q per event); Eff_{top} = %2.2f%% (run %s)', eff_top_goodEventsOnly, run));
 xlim([q005 q95]);
 
 %%
@@ -533,9 +722,9 @@ eff_top_values = zeros(size(q_strip_threshold_values));
 for i = 1:length(q_strip_threshold_values)
     q_threshold = q_strip_threshold_values(i);
     I_b = find(ChargePerEvent_b_goodEventsOnly < q_threshold);
-    eff_bottom_values(i) = 100*(1-(size(I_b,1)/events));
+    eff_bottom_values(i) = 100*(1-(size(I_b,1)/rawEvents));
     I_t = find(ChargePerEvent_t_goodEventsOnly < q_threshold);
-    eff_top_values(i) = 100*(1-(size(I_t,1)/events));
+    eff_top_values(i) = 100*(1-(size(I_t,1)/rawEvents));
 end
 figure;
 plot(q_strip_threshold_values, eff_bottom_values, '-o', 'DisplayName', 'Bottom'); hold on;
@@ -543,7 +732,7 @@ plot(q_strip_threshold_values, eff_top_values, '-o', 'DisplayName', 'Top');
 xlabel('Q in sum of narrow strips per event threshold');
 ylabel('Efficiency [%]');
 legend show;
-title(sprintf('Efficiency vs Q Threshold (run %d)', run));
+title(sprintf('Efficiency vs Q Threshold (run %s)', run));
 
 %%
 
@@ -563,13 +752,13 @@ title(sprintf('Efficiency vs Q Threshold (run %d)', run));
 % - Thin RPC BOTTOM (event sums) --> Q_thin_bot_event
 
 % Replace NaNs with 0 before mask calculations in all vectors
-Q_pmt_1 = Qcint(:,1); Q_pmt_1(isnan(Q_pmt_1)) = -20;
-Q_pmt_2 = Qcint(:,2); Q_pmt_2(isnan(Q_pmt_2)) = -20;
-Q_pmt_3 = Qcint(:,3); Q_pmt_3(isnan(Q_pmt_3)) = -20;
-Q_pmt_4 = Qcint(:,4); Q_pmt_4(isnan(Q_pmt_4)) = -20;
-Q_thick = Q_thick_event; Q_thick(isnan(Q_thick)) = -20;
-Q_thin_top = Q_thin_top_event; Q_thin_top(isnan(Q_thin_top)) = -20;
-Q_thin_bot = Q_thin_bot_event; Q_thin_bot(isnan(Q_thin_bot)) = -20;
+Q_pmt_1 = Qcint(:,1);
+Q_pmt_2 = Qcint(:,2);
+Q_pmt_3 = Qcint(:,3);
+Q_pmt_4 = Qcint(:,4);
+Q_thick = Q_thick_event;
+Q_thin_top = Q_thin_top_event;
+Q_thin_bot = Q_thin_bot_event;
 
 
 %%
@@ -589,27 +778,32 @@ percentage_streamer_thin_top = 100 * num_streamers_thin_top / rawEvents;
 num_streamers_thin_bot = length(find(Q_thin_bot > Q_thin_bot_streamer_threshold));
 percentage_streamer_thin_bot = 100 * num_streamers_thin_bot / rawEvents;
 
-fprintf('Percentage of streamers (Q > threshold) in Thick RPC: %.2f%%\n', percentage_streamer_thick);
 fprintf('Percentage of streamers (Q > threshold) in Thin RPC TOP: %.2f%%\n', percentage_streamer_thin_top);
+fprintf('Percentage of streamers (Q > threshold) in Thick RPC: %.2f%%\n', percentage_streamer_thick);
 fprintf('Percentage of streamers (Q > threshold) in Thin RPC BOTTOM: %.2f%%\n', percentage_streamer_thin_bot);
+
+% Take only positive charges for the plots in a new vector that does not replace the original
+Q_thick_plot = Q_thick(Q_thick > 0);
+Q_thin_top_plot = Q_thin_top(Q_thin_top > 0);
+Q_thin_bot_plot = Q_thin_bot(Q_thin_bot > 0);
 
 % the streamer % in the histogram title with no decimals
 figure;
-subplot(2,3,1); histogram(Q_thick, 0:1:300); set(gca, 'YScale', 'log'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thick RPC Q, streamer <%d%%> (run %d)', round(percentage_streamer_thick), run));
+subplot(2,3,1); histogram(Q_thick_plot, 0:1:200); set(gca, 'YScale', 'log'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thick RPC Q, streamer <%d%%> (run %s)', round(percentage_streamer_thick), run));
 hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
-subplot(2,3,2); histogram(Q_thin_top, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC TOP Q, streamer <%d%%> (run %d)', round(percentage_streamer_thin_top), run));
+subplot(2,3,2); histogram(Q_thin_top_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC TOP Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_top), run));
 hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
-subplot(2,3,3); histogram(Q_thin_bot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC BOTTOM Q, streamer <%d%%> (run %d)', round(percentage_streamer_thin_bot), run));
+subplot(2,3,3); histogram(Q_thin_bot_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC BOTTOM Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_bot), run));
 hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
 
-subplot(2,3,4); histogram(Q_thick, 0:2:300, 'Normalization', 'cdf'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title(sprintf('Thick RPC Q CDF (run %d)', run));
+subplot(2,3,4); histogram(Q_thick_plot, 0:2:200, 'Normalization', 'cdf'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title(sprintf('Thick RPC Q CDF (run %s)', run));
 hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
-subplot(2,3,5); histogram(Q_thin_top, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title(sprintf('Thin RPC TOP Q CDF (run %d)', run));
+subplot(2,3,5); histogram(Q_thin_top_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title(sprintf('Thin RPC TOP Q CDF (run %s)', run));
 hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
-subplot(2,3,6); histogram(Q_thin_bot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title(sprintf('Thin RPC BOTTOM Q CDF (run %d)', run));
+subplot(2,3,6); histogram(Q_thin_bot_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title(sprintf('Thin RPC BOTTOM Q CDF (run %s)', run));
 hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
 
-sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (run %d)', run));
+sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (run %s)', run));
 
 
 %%
@@ -620,48 +814,82 @@ sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (run %d)', run)
 
 tTH = 4; % time threshold [ns]
 
-% PMTs (Qcint per tube)
-pmt_1_charge_threshold_min = 94;  pmt_1_charge_threshold_max = 103;  % ADCbins
-pmt_2_charge_threshold_min = 101; pmt_2_charge_threshold_max = 120;  % ADCbins
-pmt_3_charge_threshold_min = 146; pmt_3_charge_threshold_max = 180;  % ADCbins
-pmt_4_charge_threshold_min = 95;  pmt_4_charge_threshold_max = 107;  % ADCbins
+% PMTs (Qcint per tube), if run == 1 or 2 or 3
+if run == 1 || run == 2 || run == 3
+    pmt_1_charge_threshold_min = 94;  pmt_1_charge_threshold_max = 103;  % ADCbins
+    pmt_2_charge_threshold_min = 101; pmt_2_charge_threshold_max = 120;  % ADCbins
+    pmt_3_charge_threshold_min = 146; pmt_3_charge_threshold_max = 180;  % ADCbins
+    pmt_4_charge_threshold_min = 95;  pmt_4_charge_threshold_max = 107;  % ADCbins
+elseif run == 0
+    % Calculate thresholds for run 0 based on histogram percentiles of 20 and 80
+    fprintf("Calculating PMT charge thresholds for run 0 based on 20th and 80th percentiles.\n");
+    pmt_1_charge_threshold_min = prctile(Q_pmt_1(Q_pmt_1>0), percentile_pmt); % ADCbins
+    pmt_1_charge_threshold_max = prctile(Q_pmt_1(Q_pmt_1>0), 100 - percentile_pmt); % ADCbins
+    pmt_2_charge_threshold_min = prctile(Q_pmt_2(Q_pmt_2>0), percentile_pmt); % ADCbins
+    pmt_2_charge_threshold_max = prctile(Q_pmt_2(Q_pmt_2>0), 100 - percentile_pmt); % ADCbins
+    pmt_3_charge_threshold_min = prctile(Q_pmt_3(Q_pmt_3>0), percentile_pmt); % ADCbins
+    pmt_3_charge_threshold_max = prctile(Q_pmt_3(Q_pmt_3>0), 100 - percentile_pmt); % ADCbins
+    pmt_4_charge_threshold_min = prctile(Q_pmt_4(Q_pmt_4>0), percentile_pmt); % ADCbins
+    pmt_4_charge_threshold_max = prctile(Q_pmt_4(Q_pmt_4>0), 100 - percentile_pmt); % ADCbins
+else
+    error('Unknown run number. Please set thresholds manually.');
+end
 
 % Thick RPC (sum of Qmax front/back)
-thick_strip_charge_threshold_min = 5;    % ADCbins
-thick_strip_charge_threshold_max = 40;   % ADCbins
+if percentiles
+    fprintf("Calculating Thick RPC charge thresholds for run 0 based on %dth and %dth percentiles.\n", percentile_thick, 100 - percentile_thick);
+    thick_strip_charge_threshold_min = prctile(Q_thick(Q_thick>0), percentile_thick);  % ADCbins
+    thick_strip_charge_threshold_max = prctile(Q_thick(Q_thick>0), 100 - percentile_thick);  % ADCbins
+else
+    thick_strip_charge_threshold_min = 5;    % ADCbins
+    thick_strip_charge_threshold_max = 40;   % ADCbins
+end
+
 
 % Thin RPC (event sums)
 if run == 1
     top_narrow_strip_charge_threshold_min = 2600;  % ADCbins/event
     top_narrow_strip_charge_threshold_max = 15000; % ADCbins/event
+    bot_narrow_strip_charge_threshold_min = 4600;  % ADCbins/event
+    bot_narrow_strip_charge_threshold_max = 15000; % ADCbins/event
 elseif run == 2
     top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
     top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
+    bot_narrow_strip_charge_threshold_min = 4600;  % ADCbins/event
+bot_narrow_strip_charge_threshold_max = 15000; % ADCbins/event
 elseif run == 3
     top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
     top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
+    bot_narrow_strip_charge_threshold_min = 4600;  % ADCbins/event
+    bot_narrow_strip_charge_threshold_max = 15000; % ADCbins/event
 else
-    top_narrow_strip_charge_threshold_min = 200;   % ADCbins/event
-    top_narrow_strip_charge_threshold_max = 3000;  % ADCbins/event
+    % Use percentiles
+    fprintf("Calculating Thin RPC charge thresholds for run 0 based on %dth and %dth percentiles.\n", percentile_narrow, 100 - percentile_narrow);
+    top_narrow_strip_charge_threshold_min = prctile(Q_thin_top(Q_thin_top>0), percentile_narrow);  % ADCbins/event
+    top_narrow_strip_charge_threshold_max = prctile(Q_thin_top(Q_thin_top>0), 100 - percentile_narrow);  % ADCbins/event
+    bot_narrow_strip_charge_threshold_min = prctile(Q_thin_bot(Q_thin_bot>0), percentile_narrow);  % ADCbins/event
+    bot_narrow_strip_charge_threshold_max = prctile(Q_thin_bot(Q_thin_bot>0), 100 - percentile_narrow);  % ADCbins/event
 end
 
-bot_narrow_strip_charge_threshold_min = 4600;  % ADCbins/event
-bot_narrow_strip_charge_threshold_max = 20000; % ADCbins/event
+
 
 % Calculate efficiency using different types of masks.
 
 % The first essential is that four PMTs have positive charge
+Q_pmt_top = Q_pmt_3 + Q_pmt_4;
+Q_pmt_bot = Q_pmt_1 + Q_pmt_2;
+
 pmt_exists_Mask = (Q_pmt_1 > 0) & (Q_pmt_2 > 0) & (Q_pmt_3 > 0) & (Q_pmt_4 > 0);
 pmt_range_Mask  = (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
                       (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
                       (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
                       (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
-pmt_time_Mask = abs(Tl_cint(:,1)-Tl_cint(:,2)) <tTH & ...
-                      abs(Tl_cint(:,1)-Tl_cint(:,3)) <tTH & ...
-                      abs(Tl_cint(:,1)-Tl_cint(:,4)) <tTH & ...
-                      abs(Tl_cint(:,2)-Tl_cint(:,3)) <tTH & ...
-                      abs(Tl_cint(:,2)-Tl_cint(:,4)) <tTH & ...
-                      abs(Tl_cint(:,3)-Tl_cint(:,4)) <tTH;
+% pmt_time_Mask = abs(Tl_cint(:,1)-Tl_cint(:,2)) <tTH & ...
+%                 abs(Tl_cint(:,1)-Tl_cint(:,3)) <tTH & ...
+%                 abs(Tl_cint(:,1)-Tl_cint(:,4)) <tTH & ...
+%                 abs(Tl_cint(:,2)-Tl_cint(:,3)) <tTH & ...
+%                 abs(Tl_cint(:,2)-Tl_cint(:,4)) <tTH & ...
+%                 abs(Tl_cint(:,3)-Tl_cint(:,4)) <tTH;
                       
 
 % Assumes you already defined:
@@ -767,528 +995,213 @@ sgtitle('Charge distributions (full) with thresholded subset overlaid');
 
 
 % Now define masks for each detector based on the min/max thresholds, explicitly
-thick_exists_Mask = Q_thick > 0;
+pmt_top_exists_Mask = Q_pmt_top ~= 0;
+pmt_top_range_Mask = (Q_pmt_top > prctile(Q_pmt_top, 25)) & (Q_pmt_top < prctile(Q_pmt_top, 75));
+
+pmt_bot_exists_Mask = Q_pmt_bot ~= 0;
+pmt_bot_range_Mask = (Q_pmt_bot > prctile(Q_pmt_bot, 25)) & (Q_pmt_bot < prctile(Q_pmt_bot, 75));
+
+thick_exists_Mask = Q_thick ~= 0;
 thick_range_Mask = (Q_thick >= thick_strip_charge_threshold_min) & (Q_thick <= thick_strip_charge_threshold_max);
 
-thinTop_exists_Mask = Q_thin_top > 0;
+thinTop_exists_Mask = Q_thin_top ~= 0;
 thinTop_range_Mask = (Q_thin_top >= top_narrow_strip_charge_threshold_min) & (Q_thin_top <= top_narrow_strip_charge_threshold_max);
 
-thinBot_exists_Mask = Q_thin_bot > 0;
+thinBot_exists_Mask = Q_thin_bot ~= 0;
 thinBot_range_Mask = (Q_thin_bot >= bot_narrow_strip_charge_threshold_min) & (Q_thin_bot <= bot_narrow_strip_charge_threshold_max);
 
+
+pmt_time_Mask = abs(Tl_cint(:,1)-Tl_cint(:,2)) < tTH & ...
+                abs(Tl_cint(:,1)-Tl_cint(:,3)) < tTH & ...
+                abs(Tl_cint(:,1)-Tl_cint(:,4)) < tTH & ...
+                abs(Tl_cint(:,2)-Tl_cint(:,3)) < tTH & ...
+                abs(Tl_cint(:,2)-Tl_cint(:,4)) < tTH & ...
+                abs(Tl_cint(:,3)-Tl_cint(:,4)) < tTH;
+
+
+% Define some summary numbers
+Q_pmt_top_event_count = sum(pmt_top_exists_Mask);
+Q_thin_top_event_count = sum(thinTop_exists_Mask);
+Q_thick_event_count = sum(thick_exists_Mask);
+Q_thin_bot_event_count = sum(thinBot_exists_Mask);
+Q_pmt_bot_event_count = sum(pmt_bot_exists_Mask);
+
+percentage_streamer_pmt_top = 0; % Not defined
+% percentage_streamer_thin_top % Already calculated above
+% percentage_streamer_thick % Already calculated above
+% percentage_streamer_thin_bot % Already calculated above
+percentage_streamer_pmt_bot = 0; % Not defined
 
 
 % Now combine masks in different ways to see the effect on efficiency for different detectors
 % For example, I want the efficiency of thin top when pmt exists
 
 
+% Efficiency of pmt top -------------------------------------------
+Q_pmt_top_eff_exists = 100; Q_pmt_top_eff_range = 100;
+
+
+% Add the time coioncidence in the PMTs
+exists_passing_condition = pmt_top_exists_Mask & pmt_bot_exists_Mask & pmt_time_Mask;
+range_passing_condition  = pmt_top_range_Mask & pmt_bot_range_Mask & pmt_time_Mask;
+
+
+
 % Efficiency of thin top -------------------------------------------
-% Existence masks
-% I want the efficiency of thin top when pmt exists
+% Existence masks. I want the efficiency of thin top when pmt exists
+Q_thin_top_eff_exists = sum(thinTop_exists_Mask & exists_passing_condition) / ...
+                        sum(exists_passing_condition) * 100;
 
-% I want the efficiency of thin top when pmt exists and thick exists
-
-% I want the efficiency of thin top when pmt exists and thin exists
-
-% I want the efficiency of thin top when pmt exists and thick exists and thin bot exists
-
-% Range masks
-% I want the efficiency of thin top when pmt is in range
-
-% I want the efficiency of thin top when pmt is in range and thick is in range
-
-% I want the efficiency of thin top when pmt is in range and thin is in range
-
-% I want the efficiency of thin top when pmt is in range and thick is in range and thin bot is in range
-
-
-% Efficiency of thin bot -------------------------------------------
-% Existence masks
-% I want the efficiency of thin bot when pmt exists
-
-% I want the efficiency of thin bot when pmt exists and thick exists
-
-% I want the efficiency of thin bot when pmt exists and thin exists
-
-% I want the efficiency of thin bot when pmt exists and thick exists and thin top exists
-
-% Range masks
-% I want the efficiency of thin bot when pmt is in range
-
-% I want the efficiency of thin bot when pmt is in range and thick is in range
-
-% I want the efficiency of thin bot when pmt is in range and thin is in range
-
-% I want the efficiency of thin bot when pmt is in range and thick is in range and thin top is in range
+% Range masks. I want the efficiency of thin top when pmt is in range
+Q_thin_top_eff_range = sum(thinTop_range_Mask & range_passing_condition) / ...
+                        sum(range_passing_condition) * 100;
 
 
 % Efficiency of thick -------------------------------------------
-% Existence masks
-% I want the efficiency of thick when pmt exists
+% Existence masks. I want the efficiency of thick when pmt exists
+Q_thick_eff_exists = sum(thick_exists_Mask & exists_passing_condition) / ...
+                        sum(exists_passing_condition) * 100;
 
-% I want the efficiency of thick when pmt exists and thin top exists
+% Range masks. I want the efficiency of thick when pmt is in range
+Q_thick_eff_range = sum(thick_range_Mask & range_passing_condition) / ...
+                    sum(range_passing_condition) * 100;
 
-% I want the efficiency of thick when pmt exists and thin bot exists
 
-% I want the efficiency of thick when pmt exists and thin top and thin bot exist
+% Efficiency of thin bot -------------------------------------------
+% Existence masks. I want the efficiency of thin bot when pmt exists
+Q_thin_bot_eff_exists = sum(thinBot_exists_Mask & exists_passing_condition) / ...
+                        sum(exists_passing_condition) * 100;
 
-% Range masks
-% I want the efficiency of thick when pmt is in range
+% Range masks. I want the efficiency of thin bot when pmt is in range
+Q_thin_bot_eff_range = sum(thinBot_range_Mask & range_passing_condition) / ...
+                        sum(range_passing_condition) * 100;
 
-% I want the efficiency of thick when pmt is in range and thin top is in range
+% Efficiency of pmt bot -------------------------------------------
+Q_pmt_bot_eff_exists = 100; Q_pmt_bot_eff_range = 100;
 
-% I want the efficiency of thick when pmt is in range and thin bot is in range
 
-% I want the efficiency of thick when pmt is in range and thin bot is in range and thin top is in range
-
-%%
-
-% =====================================================================
-% EFFICIENCY CALCULATIONS
-% =====================================================================
-
-fprintf('\n========================================\n');
-fprintf('EFFICIENCY CALCULATIONS - Run %d\n', run);
-fprintf('========================================\n\n');
-
-% Helper function to calculate efficiency
-calcEff = @(detector_mask, condition_mask) ...
-    100 * sum(detector_mask & condition_mask) / sum(condition_mask);
-
-% -------------------------------------------------------------------------
-% THIN TOP EFFICIENCY
-% -------------------------------------------------------------------------
-fprintf('--- THIN TOP EFFICIENCY ---\n\n');
-
-% Existence masks
-fprintf('With EXISTENCE masks:\n');
-mask_cond = pmt_exists_Mask;
-eff_thinTop_pmtEx = calcEff(thinTop_exists_Mask, mask_cond);
-fprintf('  Thin Top when PMT exists: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtEx, sum(thinTop_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thick_exists_Mask;
-eff_thinTop_pmtEx_thickEx = calcEff(thinTop_exists_Mask, mask_cond);
-fprintf('  Thin Top when PMT exists AND Thick exists: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtEx_thickEx, sum(thinTop_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thinBot_exists_Mask;
-eff_thinTop_pmtEx_thinBotEx = calcEff(thinTop_exists_Mask, mask_cond);
-fprintf('  Thin Top when PMT exists AND Thin Bot exists: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtEx_thinBotEx, sum(thinTop_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thick_exists_Mask & thinBot_exists_Mask;
-eff_thinTop_pmtEx_thickEx_thinBotEx = calcEff(thinTop_exists_Mask, mask_cond);
-fprintf('  Thin Top when PMT exists AND Thick exists AND Thin Bot exists: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtEx_thickEx_thinBotEx, sum(thinTop_exists_Mask & mask_cond), sum(mask_cond));
-
-% Range masks
-fprintf('\nWith RANGE masks:\n');
-mask_cond = pmt_range_Mask;
-eff_thinTop_pmtRange = calcEff(thinTop_range_Mask, mask_cond);
-fprintf('  Thin Top when PMT in range: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtRange, sum(thinTop_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thick_range_Mask;
-eff_thinTop_pmtRange_thickRange = calcEff(thinTop_range_Mask, mask_cond);
-fprintf('  Thin Top when PMT in range AND Thick in range: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtRange_thickRange, sum(thinTop_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thinBot_range_Mask;
-eff_thinTop_pmtRange_thinBotRange = calcEff(thinTop_range_Mask, mask_cond);
-fprintf('  Thin Top when PMT in range AND Thin Bot in range: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtRange_thinBotRange, sum(thinTop_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thick_range_Mask & thinBot_range_Mask;
-eff_thinTop_pmtRange_thickRange_thinBotRange = calcEff(thinTop_range_Mask, mask_cond);
-fprintf('  Thin Top when PMT in range AND Thick in range AND Thin Bot in range: %.2f%% (%d/%d)\n', ...
-    eff_thinTop_pmtRange_thickRange_thinBotRange, sum(thinTop_range_Mask & mask_cond), sum(mask_cond));
-
-% -------------------------------------------------------------------------
-% THIN BOT EFFICIENCY
-% -------------------------------------------------------------------------
-fprintf('\n--- THIN BOT EFFICIENCY ---\n\n');
-
-% Existence masks
-fprintf('With EXISTENCE masks:\n');
-mask_cond = pmt_exists_Mask;
-eff_thinBot_pmtEx = calcEff(thinBot_exists_Mask, mask_cond);
-fprintf('  Thin Bot when PMT exists: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtEx, sum(thinBot_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thick_exists_Mask;
-eff_thinBot_pmtEx_thickEx = calcEff(thinBot_exists_Mask, mask_cond);
-fprintf('  Thin Bot when PMT exists AND Thick exists: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtEx_thickEx, sum(thinBot_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thinTop_exists_Mask;
-eff_thinBot_pmtEx_thinTopEx = calcEff(thinBot_exists_Mask, mask_cond);
-fprintf('  Thin Bot when PMT exists AND Thin Top exists: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtEx_thinTopEx, sum(thinBot_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thick_exists_Mask & thinTop_exists_Mask;
-eff_thinBot_pmtEx_thickEx_thinTopEx = calcEff(thinBot_exists_Mask, mask_cond);
-fprintf('  Thin Bot when PMT exists AND Thick exists AND Thin Top exists: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtEx_thickEx_thinTopEx, sum(thinBot_exists_Mask & mask_cond), sum(mask_cond));
-
-% Range masks
-fprintf('\nWith RANGE masks:\n');
-mask_cond = pmt_range_Mask;
-eff_thinBot_pmtRange = calcEff(thinBot_range_Mask, mask_cond);
-fprintf('  Thin Bot when PMT in range: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtRange, sum(thinBot_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thick_range_Mask;
-eff_thinBot_pmtRange_thickRange = calcEff(thinBot_range_Mask, mask_cond);
-fprintf('  Thin Bot when PMT in range AND Thick in range: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtRange_thickRange, sum(thinBot_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thinTop_range_Mask;
-eff_thinBot_pmtRange_thinTopRange = calcEff(thinBot_range_Mask, mask_cond);
-fprintf('  Thin Bot when PMT in range AND Thin Top in range: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtRange_thinTopRange, sum(thinBot_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thick_range_Mask & thinTop_range_Mask;
-eff_thinBot_pmtRange_thickRange_thinTopRange = calcEff(thinBot_range_Mask, mask_cond);
-fprintf('  Thin Bot when PMT in range AND Thick in range AND Thin Top in range: %.2f%% (%d/%d)\n', ...
-    eff_thinBot_pmtRange_thickRange_thinTopRange, sum(thinBot_range_Mask & mask_cond), sum(mask_cond));
-
-% -------------------------------------------------------------------------
-% THICK EFFICIENCY
-% -------------------------------------------------------------------------
-fprintf('\n--- THICK EFFICIENCY ---\n\n');
-
-% Existence masks
-fprintf('With EXISTENCE masks:\n');
-mask_cond = pmt_exists_Mask;
-eff_thick_pmtEx = calcEff(thick_exists_Mask, mask_cond);
-fprintf('  Thick when PMT exists: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtEx, sum(thick_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thinTop_exists_Mask;
-eff_thick_pmtEx_thinTopEx = calcEff(thick_exists_Mask, mask_cond);
-fprintf('  Thick when PMT exists AND Thin Top exists: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtEx_thinTopEx, sum(thick_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thinBot_exists_Mask;
-eff_thick_pmtEx_thinBotEx = calcEff(thick_exists_Mask, mask_cond);
-fprintf('  Thick when PMT exists AND Thin Bot exists: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtEx_thinBotEx, sum(thick_exists_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_exists_Mask & thinTop_exists_Mask & thinBot_exists_Mask;
-eff_thick_pmtEx_thinTopEx_thinBotEx = calcEff(thick_exists_Mask, mask_cond);
-fprintf('  Thick when PMT exists AND Thin Top exists AND Thin Bot exists: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtEx_thinTopEx_thinBotEx, sum(thick_exists_Mask & mask_cond), sum(mask_cond));
-
-% Range masks
-fprintf('\nWith RANGE masks:\n');
-mask_cond = pmt_range_Mask;
-eff_thick_pmtRange = calcEff(thick_range_Mask, mask_cond);
-fprintf('  Thick when PMT in range: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtRange, sum(thick_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thinTop_range_Mask;
-eff_thick_pmtRange_thinTopRange = calcEff(thick_range_Mask, mask_cond);
-fprintf('  Thick when PMT in range AND Thin Top in range: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtRange_thinTopRange, sum(thick_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thinBot_range_Mask;
-eff_thick_pmtRange_thinBotRange = calcEff(thick_range_Mask, mask_cond);
-fprintf('  Thick when PMT in range AND Thin Bot in range: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtRange_thinBotRange, sum(thick_range_Mask & mask_cond), sum(mask_cond));
-
-mask_cond = pmt_range_Mask & thinTop_range_Mask & thinBot_range_Mask;
-eff_thick_pmtRange_thinTopRange_thinBotRange = calcEff(thick_range_Mask, mask_cond);
-fprintf('  Thick when PMT in range AND Thin Top in range AND Thin Bot in range: %.2f%% (%d/%d)\n', ...
-    eff_thick_pmtRange_thinTopRange_thinBotRange, sum(thick_range_Mask & mask_cond), sum(mask_cond));
-
-fprintf('\n========================================\n');
-fprintf('END OF EFFICIENCY CALCULATIONS\n');
-fprintf('========================================\n\n');
-
-% -------------------------------------------------------------------------
-% SUMMARY TABLE (optional - create a structured summary)
-% -------------------------------------------------------------------------
-
-% Create a summary table for easy viewing
-detectorNames = {'Thin Top', 'Thin Bot', 'Thick'};
-
-% Existence mask results
-existenceResults = [...
-    eff_thinTop_pmtEx, eff_thinTop_pmtEx_thickEx, eff_thinTop_pmtEx_thinBotEx, eff_thinTop_pmtEx_thickEx_thinBotEx; ...
-    eff_thinBot_pmtEx, eff_thinBot_pmtEx_thickEx, eff_thinBot_pmtEx_thinTopEx, eff_thinBot_pmtEx_thickEx_thinTopEx; ...
-    eff_thick_pmtEx, eff_thick_pmtEx_thinTopEx, eff_thick_pmtEx_thinBotEx, eff_thick_pmtEx_thinTopEx_thinBotEx];
-
-% Range mask results
-rangeResults = [...
-    eff_thinTop_pmtRange, eff_thinTop_pmtRange_thickRange, eff_thinTop_pmtRange_thinBotRange, eff_thinTop_pmtRange_thickRange_thinBotRange; ...
-    eff_thinBot_pmtRange, eff_thinBot_pmtRange_thickRange, eff_thinBot_pmtRange_thinTopRange, eff_thinBot_pmtRange_thickRange_thinTopRange; ...
-    eff_thick_pmtRange, eff_thick_pmtRange_thinTopRange, eff_thick_pmtRange_thinBotRange, eff_thick_pmtRange_thinTopRange_thinBotRange];
-
-conditionLabels = {'PMT only', 'PMT + Det1', 'PMT + Det2', 'PMT + Det1 + Det2'};
-
-% Print existence table
-fprintf('\n--- EXISTENCE MASK EFFICIENCY SUMMARY (%) ---\n');
-fprintf('%-12s', 'Detector');
-for i = 1:length(conditionLabels)
-    fprintf(' | %-20s', conditionLabels{i});
-end
-fprintf('\n');
-fprintf('%s\n', repmat('-', 1, 100));
-for i = 1:length(detectorNames)
-    fprintf('%-12s', detectorNames{i});
-    for j = 1:size(existenceResults, 2)
-        fprintf(' | %20.2f', existenceResults(i,j));
-    end
-    fprintf('\n');
-end
-
-% Print range table
-fprintf('\n--- RANGE MASK EFFICIENCY SUMMARY (%) ---\n');
-fprintf('%-12s', 'Detector');
-for i = 1:length(conditionLabels)
-    fprintf(' | %-20s', conditionLabels{i});
-end
-fprintf('\n');
-fprintf('%s\n', repmat('-', 1, 100));
-for i = 1:length(detectorNames)
-    fprintf('%-12s', detectorNames{i});
-    for j = 1:size(rangeResults, 2)
-        fprintf(' | %20.2f', rangeResults(i,j));
-    end
-    fprintf('\n');
-end
-fprintf('\n');
 
 %%
 
-% =====================================================================
-% SAVE EFFICIENCY RESULTS TO CSV
-% =====================================================================
 
-% Prepare CSV data with all efficiency calculations
-csvData = {};
-rowIdx = 1;
+% Prepare the table data for CSV export, also display in terminal.
+% i want the csv to be a table where the rows are: PMT top, THIN_TOP,
+% THICK, THIN_BOT, PMT bot and the columns are DETECTOR, EVENT_NUMBER (which is
+% the length of the vector of events that are >0), STREAMER_PERCENTAGE and EFF;
+% ---------- Helpers ----------
+toScalar = @(x,name) local_toScalarNumeric(x,name);   % reduce vectors to a scalar
+clip01   = @(x) max(0, min(100, x));                  % optional: clamp to [0,100]
 
-% Helper function to add a row
-addRow = @(detector, maskType, condition, detected, passed, efficiency) ...
-    {detector, maskType, condition, detected, passed, efficiency};
+% ---------- Ensure masks are logical (prevents >100% from inflated sums) ----------
+% If you already have logicals, this is a no-op.
+% (Uncomment if needed)
+% pmt_top_exists_Mask  = pmt_top_exists_Mask  ~= 0;
+% thinTop_exists_Mask  = thinTop_exists_Mask  ~= 0;
+% thick_exists_Mask    = thick_exists_Mask    ~= 0;
+% thinBot_exists_Mask  = thinBot_exists_Mask  ~= 0;
+% pmt_bot_exists_Mask  = pmt_bot_exists_Mask  ~= 0;
 
-% -------------------------------------------------------------------------
-% THIN TOP Efficiencies
-% -------------------------------------------------------------------------
+% ---------- Build rows with guaranteed scalar numerics ----------
+row1 = { 'PMT Top', ...
+    toScalar(Q_pmt_top_event_count, 'Q_pmt_top_event_count'), ...
+    toScalar(percentage_streamer_pmt_top, 'percentage_streamer_pmt_top'), ...
+    toScalar(Q_pmt_top_eff_exists, 'Q_pmt_top_eff_exists'), ...
+    toScalar(Q_pmt_top_eff_range,  'Q_pmt_top_eff_range') };
 
-% Existence masks
-mask_cond = pmt_exists_Mask;
-detected = sum(thinTop_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Existence', 'PMT exists', detected, passed, eff_thinTop_pmtEx);
-rowIdx = rowIdx + 1;
+row2 = { 'Thin TOP', ...
+    toScalar(Q_thin_top_event_count, 'Q_thin_top_event_count'), ...
+    toScalar(percentage_streamer_thin_top, 'percentage_streamer_thin_top'), ...
+    toScalar(Q_thin_top_eff_exists, 'Q_thin_top_eff_exists'), ...
+    toScalar(Q_thin_top_eff_range,  'Q_thin_top_eff_range') };
 
-mask_cond = pmt_exists_Mask & thick_exists_Mask;
-detected = sum(thinTop_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Existence', 'PMT exists AND Thick exists', detected, passed, eff_thinTop_pmtEx_thickEx);
-rowIdx = rowIdx + 1;
+row3 = { 'Thick', ...
+    toScalar(Q_thick_event_count, 'Q_thick_event_count'), ...
+    toScalar(percentage_streamer_thick, 'percentage_streamer_thick'), ...
+    toScalar(Q_thick_eff_exists, 'Q_thick_eff_exists'), ...
+    toScalar(Q_thick_eff_range,  'Q_thick_eff_range') };
 
-mask_cond = pmt_exists_Mask & thinBot_exists_Mask;
-detected = sum(thinTop_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Existence', 'PMT exists AND Thin Bot exists', detected, passed, eff_thinTop_pmtEx_thinBotEx);
-rowIdx = rowIdx + 1;
+row4 = { 'Thin BOTTOM', ...
+    toScalar(Q_thin_bot_event_count, 'Q_thin_bot_event_count'), ...
+    toScalar(percentage_streamer_thin_bot, 'percentage_streamer_thin_bot'), ...
+    toScalar(Q_thin_bot_eff_exists, 'Q_thin_bot_eff_exists'), ...
+    toScalar(Q_thin_bot_eff_range,  'Q_thin_bot_eff_range') };
 
-mask_cond = pmt_exists_Mask & thick_exists_Mask & thinBot_exists_Mask;
-detected = sum(thinTop_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Existence', 'PMT exists AND Thick exists AND Thin Bot exists', detected, passed, eff_thinTop_pmtEx_thickEx_thinBotEx);
-rowIdx = rowIdx + 1;
+row5 = { 'PMT Bottom', ...
+    toScalar(Q_pmt_bot_event_count, 'Q_pmt_bot_event_count'), ...
+    toScalar(percentage_streamer_pmt_bot, 'percentage_streamer_pmt_bot'), ...
+    toScalar(Q_pmt_bot_eff_exists, 'Q_pmt_bot_eff_exists'), ...
+    toScalar(Q_pmt_bot_eff_range,  'Q_pmt_bot_eff_range') };
 
-% Range masks
-mask_cond = pmt_range_Mask;
-detected = sum(thinTop_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Range', 'PMT in range', detected, passed, eff_thinTop_pmtRange);
-rowIdx = rowIdx + 1;
+rows = [row1; row2; row3; row4; row5];
 
-mask_cond = pmt_range_Mask & thick_range_Mask;
-detected = sum(thinTop_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Range', 'PMT in range AND Thick in range', detected, passed, eff_thinTop_pmtRange_thickRange);
-rowIdx = rowIdx + 1;
+% Optional: round and/or clamp to [0,100]
+for i = 1:size(rows,1)
+    rows{i,3} = round(rows{i,3}, 2);        % streamer
+    rows{i,4} = round(rows{i,4});           % eff exists
+    rows{i,5} = round(rows{i,5});           % eff range
+    % rows{i,3} = clip01(rows{i,3});        % uncomment to clamp
+    % rows{i,4} = clip01(rows{i,4});
+    % rows{i,5} = clip01(rows{i,5});
+end
 
-mask_cond = pmt_range_Mask & thinBot_range_Mask;
-detected = sum(thinTop_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Range', 'PMT in range AND Thin Bot in range', detected, passed, eff_thinTop_pmtRange_thinBotRange);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_range_Mask & thick_range_Mask & thinBot_range_Mask;
-detected = sum(thinTop_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Top', 'Range', 'PMT in range AND Thick in range AND Thin Bot in range', detected, passed, eff_thinTop_pmtRange_thickRange_thinBotRange);
-rowIdx = rowIdx + 1;
-
-% -------------------------------------------------------------------------
-% THIN BOT Efficiencies
-% -------------------------------------------------------------------------
-
-% Existence masks
-mask_cond = pmt_exists_Mask;
-detected = sum(thinBot_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Existence', 'PMT exists', detected, passed, eff_thinBot_pmtEx);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_exists_Mask & thick_exists_Mask;
-detected = sum(thinBot_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Existence', 'PMT exists AND Thick exists', detected, passed, eff_thinBot_pmtEx_thickEx);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_exists_Mask & thinTop_exists_Mask;
-detected = sum(thinBot_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Existence', 'PMT exists AND Thin Top exists', detected, passed, eff_thinBot_pmtEx_thinTopEx);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_exists_Mask & thick_exists_Mask & thinTop_exists_Mask;
-detected = sum(thinBot_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Existence', 'PMT exists AND Thick exists AND Thin Top exists', detected, passed, eff_thinBot_pmtEx_thickEx_thinTopEx);
-rowIdx = rowIdx + 1;
-
-% Range masks
-mask_cond = pmt_range_Mask;
-detected = sum(thinBot_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Range', 'PMT in range', detected, passed, eff_thinBot_pmtRange);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_range_Mask & thick_range_Mask;
-detected = sum(thinBot_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Range', 'PMT in range AND Thick in range', detected, passed, eff_thinBot_pmtRange_thickRange);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_range_Mask & thinTop_range_Mask;
-detected = sum(thinBot_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Range', 'PMT in range AND Thin Top in range', detected, passed, eff_thinBot_pmtRange_thinTopRange);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_range_Mask & thick_range_Mask & thinTop_range_Mask;
-detected = sum(thinBot_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thin Bot', 'Range', 'PMT in range AND Thick in range AND Thin Top in range', detected, passed, eff_thinBot_pmtRange_thickRange_thinTopRange);
-rowIdx = rowIdx + 1;
-
-% -------------------------------------------------------------------------
-% THICK Efficiencies
-% -------------------------------------------------------------------------
-
-% Existence masks
-mask_cond = pmt_exists_Mask;
-detected = sum(thick_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Existence', 'PMT exists', detected, passed, eff_thick_pmtEx);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_exists_Mask & thinTop_exists_Mask;
-detected = sum(thick_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Existence', 'PMT exists AND Thin Top exists', detected, passed, eff_thick_pmtEx_thinTopEx);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_exists_Mask & thinBot_exists_Mask;
-detected = sum(thick_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Existence', 'PMT exists AND Thin Bot exists', detected, passed, eff_thick_pmtEx_thinBotEx);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_exists_Mask & thinTop_exists_Mask & thinBot_exists_Mask;
-detected = sum(thick_exists_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Existence', 'PMT exists AND Thin Top exists AND Thin Bot exists', detected, passed, eff_thick_pmtEx_thinTopEx_thinBotEx);
-rowIdx = rowIdx + 1;
-
-% Range masks
-mask_cond = pmt_range_Mask;
-detected = sum(thick_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Range', 'PMT in range', detected, passed, eff_thick_pmtRange);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_range_Mask & thinTop_range_Mask;
-detected = sum(thick_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Range', 'PMT in range AND Thin Top in range', detected, passed, eff_thick_pmtRange_thinTopRange);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_range_Mask & thinBot_range_Mask;
-detected = sum(thick_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Range', 'PMT in range AND Thin Bot in range', detected, passed, eff_thick_pmtRange_thinBotRange);
-rowIdx = rowIdx + 1;
-
-mask_cond = pmt_range_Mask & thinTop_range_Mask & thinBot_range_Mask;
-detected = sum(thick_range_Mask & mask_cond);
-passed = sum(mask_cond);
-csvData(rowIdx,:) = addRow('Thick', 'Range', 'PMT in range AND Thin Top in range AND Thin Bot in range', detected, passed, eff_thick_pmtRange_thinTopRange_thinBotRange);
-rowIdx = rowIdx + 1;
-
-% -------------------------------------------------------------------------
-% Write to CSV file
-% -------------------------------------------------------------------------
-
-outputFileName = sprintf('efficiency_summary_run_%d.csv', run);
-outputFilePath = [HOME SCRIPTS outputFileName];
-
-% Create table with proper column names
-T = cell2table(csvData, 'VariableNames', {'Detector', 'MaskType', 'Condition', 'Detected', 'Passed', 'Efficiency_Percent'});
-
-% Write table to CSV
-writetable(T, outputFilePath);
-
+% ---------- Pretty print ----------
 fprintf('\n=====================================================\n');
-fprintf('Efficiency summary saved to: %s\n', outputFilePath);
+fprintf('Efficiency Summary (Date %s):\n', char(formatted_datetime));
+fprintf('=====================================================\n');
+fprintf('%-12s | %-12s | %-14s | %-23s | %-20s\n', ...
+    'Detector','Events > 0','Streamer (%)','Eff (Exists Mask) (%)','Eff (Range Mask) (%)');
+fprintf('---------------------------------------------------------------------------------------\n');
+for i = 1:size(rows,1)
+    fprintf('%-12s | %-12d | %-14.2f | %-23.2f | %-20.2f\n', ...
+        rows{i,1}, rows{i,2}, rows{i,3}, rows{i,4}, rows{i,5});
+end
 fprintf('=====================================================\n\n');
 
-detector_labels = {'Thin RPC Top'; 'Thin RPC Bottom'; 'Thick RPC'};
-streamer_percentages = [percentage_streamer_thin_top; percentage_streamer_thin_bot; percentage_streamer_thick];
-efficiency_pmt_exists = [eff_thinTop_pmtEx; eff_thinBot_pmtEx; eff_thick_pmtEx];
-efficiency_pmt_range = [eff_thinTop_pmtRange; eff_thinBot_pmtRange; eff_thick_pmtRange];
-total_lines = repmat(rawEvents, numel(detector_labels), 1);
+% ---------- CSV / table output (csvData exists now) ----------
+csvData = rows;  % <— define it so later code can use it
+effTable = cell2table(csvData, 'VariableNames', ...
+    {'Detector','Events','Streamer_Percentage','Eff_Exists','Eff_Range'});
 
-summaryTable = table(detector_labels, streamer_percentages, efficiency_pmt_exists, efficiency_pmt_range, total_lines, ...
-    'VariableNames', {'Detector', 'Streamer_Percent', 'Efficiency_PMT_Exists', 'Efficiency_PMT_InRange', 'Total_Lines'});
+outCsv = fullfile(summary_output_dir, ...
+    sprintf('efficiency_summary_%s.csv', char(formatted_datetime)));
+writetable(effTable, outCsv);
 
-summaryFileName = sprintf('rpc_summary_run_%d.csv', run);
-summaryFilePath = fullfile(summary_output_dir, summaryFileName);
-writetable(summaryTable, summaryFilePath);
-
-fprintf('RPC summary saved to: %s\n', summaryFilePath);
-
-if save_plots
-    try
-        if ~exist(save_plots_dir, 'dir')
-            mkdir(save_plots_dir);
-        end
-        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir);
-        if figCount > 0 && ~isempty(pdfPath)
-            fprintf('Saved %d figure(s) to %s\n', figCount, pdfPath);
+% ---------- Local function ----------
+function s = local_toScalarNumeric(x, name)
+    % Coerce to a scalar double for printing/writing.
+    if isscalar(x)
+        if isnumeric(x) || islogical(x)
+            s = double(x);
         else
-            fprintf('No figures generated to save.\n');
+            error('Field %s must be numeric/logical scalar; got %s.', name, class(x));
         end
-    catch saveErr
-        warning('Failed to save figures: %s', saveErr.message);
+        return;
+    end
+    if isnumeric(x) || islogical(x)
+        s = mean(double(x(:)), 'omitnan');   % choose mean/sum/median/first as you prefer
+        warning('Value for %s was not scalar; reduced via mean(omitnan).', name);
+    else
+        error('Field %s must be numeric/logical; got %s.', name, class(x));
     end
 end
 
-%% ------------------------------------------------------------------------
-% Local functions
-%% ------------------------------------------------------------------------
-function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir)
-%SAVE_ALL_FIGURES_TO_PDF Export all open figures into a single rasterized PDF.
+
+
+
+% -------------------------------------------------------------------------
+% -------------------------------------------------------------------------
+% -------------------------------------------------------------------------
+% -------------------------------------------------------------------------
+% -------------------------------------------------------------------------
+
+
+
+function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
+%   Export all open figures into a single rasterized PDF.
+%   [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
+%   saves all open MATLAB figures to a single PDF named pdfFileName,
+%   stored inside targetDir.
+
     figs = findall(0, 'Type', 'figure');
     figCount = numel(figs);
     pdfPath = '';
@@ -1297,19 +1210,28 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir)
         return;
     end
 
+    % Ensure targetDir exists
+    if ~exist(targetDir, 'dir')
+        mkdir(targetDir);
+    end
+
+    % Build full file path
+    pdfPath = fullfile(targetDir, pdfFileName);
+
+    % Sort figures by creation order
     [~, sortIdx] = sort([figs.Number]);
     figs = figs(sortIdx);
 
-    timestamp = datestr(now, 'yyyymmdd_HHMMSS');
-    pdfPath = fullfile(targetDir, sprintf('caye_plots_%s.pdf', timestamp));
-
+    % Delete existing PDF if present
     if exist(pdfPath, 'file')
         delete(pdfPath);
     end
 
+    % Export options
     opts = {'ContentType','image','Resolution',300};
     firstPage = true;
 
+    % Loop over figures and append to PDF
     for k = 1:figCount
         fig = figs(k);
         if firstPage
@@ -1319,5 +1241,28 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir)
             exportgraphics(fig, pdfPath, opts{:}, 'Append', true);
         end
         close(fig);
+    end
+end
+
+
+% Print for verification
+fprintf('Save plots directory: %s\n', save_plots_dir);
+fprintf('PDF file name: %s\n', pdfFileName);
+
+if save_plots
+    try
+        if ~exist(save_plots_dir, 'dir')
+            mkdir(save_plots_dir);
+        end
+
+        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName);
+
+        if figCount > 0 && ~isempty(pdfPath)
+            fprintf('Saved %d figure(s) to %s\n', figCount, pdfPath);
+        else
+            fprintf('No figures generated to save.\n');
+        end
+    catch saveErr
+        warning('Failed to save figures: %s', saveErr.message);
     end
 end

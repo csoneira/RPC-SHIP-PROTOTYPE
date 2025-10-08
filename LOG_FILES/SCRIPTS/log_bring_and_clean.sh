@@ -84,7 +84,7 @@ declare -A COLUMN_COUNTS
 COLUMN_COUNTS["hv4_"]=22
 COLUMN_COUNTS["hv5_"]=22
 COLUMN_COUNTS["rates_"]=8
-COLUMN_COUNTS["sensors_bus0_"]=8
+COLUMN_COUNTS["sensors_bus0_"]=6
 
 extract_log_date() {
     local name="$1"

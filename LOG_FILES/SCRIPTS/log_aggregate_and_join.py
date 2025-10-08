@@ -259,7 +259,7 @@ def process_files(schema: FileSchema, output_path: Path, source_dir: Path) -> bo
         
         # Drop the "Unused" columns right away
         cols_to_drop = [col for col in df.columns 
-                        if col.lower().startswith(('Unused'))]
+                        if col.lower().startswith(('unused'))]
         if cols_to_drop:
             df.drop(columns=cols_to_drop, inplace=True)
             print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
@@ -271,9 +271,8 @@ def process_files(schema: FileSchema, output_path: Path, source_dir: Path) -> bo
 
     combined_df = pd.concat(dataframes, ignore_index=True)
     
-    # Drop columns that start with "Unused"
-    cols_to_drop = [col for col in combined_df.columns 
-                    if col.lower().startswith(('Unused'))]
+    # Drop columns that start with "Unused" or "unknown" (case-insensitive)
+    cols_to_drop = [col for col in combined_df.columns if col.lower().startswith(('unused', 'unknown'))]
     if cols_to_drop:
         combined_df.drop(columns=cols_to_drop, inplace=True)
         print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
