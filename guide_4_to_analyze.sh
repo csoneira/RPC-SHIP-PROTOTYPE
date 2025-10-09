@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# echo "Starting test, copying test directory"
+# cp -r /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/PROCESSING/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s
+
 set -euo pipefail
 
 # Create a usage function
