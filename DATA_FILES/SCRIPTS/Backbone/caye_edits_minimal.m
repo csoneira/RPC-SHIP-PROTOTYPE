@@ -32,8 +32,8 @@ clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir;
 close all; clc;
 
 % -------------------------------
-test = true;
-run = 1;
+test = false;
+run = 0;
 
 if test
     if run == 1
@@ -184,6 +184,7 @@ for idx = 1:numel(charge_files)
     load(charge_path);
 end
 
+whos
 
 % -----------------------------------------------------------
 % Select run number and percentile thresholds for charge cuts
@@ -223,8 +224,6 @@ charge_narrow_strip_min = 0;
 charge_narrow_strip_max = 30000;
 % -----------------------------------------------------------
 % -----------------------------------------------------------
-
-whos
 
 % -------- NaN scrubber: replace NaNs with 0 across all float variables -----
 ws = 'base';                     % workspace to operate on
@@ -388,6 +387,8 @@ end
 rawEvents = sum(any(Tl_cint(:,1:4) ~= 0, 2));
 fprintf('Total raw events with any leading time in Tl_cint: %d\n', rawEvents);
 
+total_raw_events = rawEvents;
+
 % If any value in Tl_cint or any value in Tt_cint is outside the expected range, put it to 0
 Tl_cint(Tl_cint < lead_time_pmt_min | Tl_cint > lead_time_pmt_max) = 0;
 Tt_cint(Tt_cint < trail_time_pmt_min | Tt_cint > trail_time_pmt_max) = 0;
@@ -467,8 +468,9 @@ Tt_cint(Tl_cint == 0) = 0;
 
 % Count the number of events that not all Tl_cint(:,1:4) are zero after filtering
 filteredEvents = sum(any(Tl_cint(:,1:4) ~= 0, 2));
-fprintf('Total filtered events with any leading time in Tl_cint after tTH cut: %d\n', filteredEvents);
-fprintf('Percentage of good events after tTH cut: %.2f%%\n', 100 * filteredEvents / rawEvents);
+fprintf('Total filtered events with any leading time in Tl_cint after PMT cuts: %d\n', filteredEvents);
+percentage_good_events_in_pmts = 100 * filteredEvents / rawEvents;
+fprintf('Percentage of good events in PMTs after PMT cuts: %.2f%%\n', percentage_good_events_in_pmts);
 
 %channels 1 and 2 -> bottom PMTs
 Qcint = [Tt_cint(:,1) - Tl_cint(:,1) Tt_cint(:,2) - Tl_cint(:,2) Tt_cint(:,3) - Tl_cint(:,3) Tt_cint(:,4) - Tl_cint(:,4)]; 
@@ -483,8 +485,6 @@ Qcint(Qcint(:,3) == 0, 4) = 0;  % if col1 is 0 → set col2 to 0 (same rows)
 Qcint(Qcint(:,4) == 0, 3) = 0;  % if col2 is 0 → set col1 to 0 (same rows)
 Qcint(Qcint(:,3) == 0, 4) = 0;  % if col1 is 0 → set col2 to 0 (same rows)
 Qcint(Qcint(:,4) == 0, 3) = 0;  % if col2 is 0 → set col1 to 0 (same rows)
-
-
 
 
 %%
@@ -1086,45 +1086,43 @@ validEvents = (Qcint(:,1) ~= 0) & (Qcint(:,2) ~= 0) & (Qcint(:,3) ~= 0) & (Qcint
 
 % OG VALID EVENTS ---------------------------
 
-% PMT
-Qcint_valid_OG = Qcint_OG(validEvents, :); %matrix of the four pmts for the valid events
+% Assume: validEvents is a logical column vector with length size(Qcint_OG,1)
 
-% THICK STRIPS
-X_thick_strip_valid_OG = X_thick_strip_OG(validEvents,:);
-Y_thick_strip_valid_OG = Y_thick_strip_OG(validEvents,:);
-T_thick_strip_valid_OG = T_thick_strip_OG(validEvents,:);
+% --- PMTs ---
+Qcint_OG_valid = Qcint_OG(validEvents, :); %matrix of the four pmts for the valid events
 
-Q_thick_event_valid_OG = Q_thick_event_OG(validEvents);
+% --- THICK (event-level) ---
+Q_thick_event_OG_valid = Q_thick_event_OG(validEvents);
 
-% THIN STRIPS
-Qb_valid_OG = Qb_OG(validEvents, :); %matrix of bottom narrow strips for the valid events
-Qt_valid_OG = Qt_OG(validEvents, :); %matrix of top narrow strips for the valid events
+% --- THIN STRIPS ---
+Qb_OG_valid = Qb_OG(validEvents, :); %matrix of bottom narrow strips for the valid events
+Qt_OG_valid = Qt_OG(validEvents, :); %matrix of top narrow strips for the valid events
 
-Q_thin_top_event_valid_OG = sum(Qt_valid_OG, 2); % total charge in the 5 narrow strips on the top side per event
-Q_thin_bot_event_valid_OG = sum(Qb_valid_OG, 2); % total charge in the 5 narrow strips on the bottom side per event
+% Totals per event within the valid selection
+Q_thin_top_event_OG_valid = sum(Qt_OG_valid, 2); % total charge in the 5 narrow strips on the top side per event
+Q_thin_bot_event_OG_valid = sum(Qb_OG_valid, 2); % total charge in the 5 narrow strips on the bottom side per event
 
-
-
+%%
 
 % VALID EVENTS ---------------------------
 
-% PMT
+% --- PMTs ---
 Qcint_valid = Qcint(validEvents, :); %matrix of the four pmts for the valid events
 
-% THICK STRIPS
+% --- THICK (event-level) ---
 X_thick_strip_valid = X_thick_strip(validEvents,:);
 Y_thick_strip_valid = Y_thick_strip(validEvents,:);
 T_thick_strip_valid = T_thick_strip(validEvents,:);
 
 Q_thick_event_valid = Q_thick_event(validEvents);
 
-% THIN STRIPS
+% --- THIN STRIPS ---
 Qb_valid = Qb(validEvents, :); %matrix of bottom narrow strips for the valid events
 Qt_valid = Qt(validEvents, :); %matrix of top narrow strips for the valid events
 
+% Totals per event within the valid selection
 Q_thin_top_event_valid = sum(Qt_valid, 2); % total charge in the 5 narrow strips on the top side per event
 Q_thin_bot_event_valid = sum(Qb_valid, 2); % total charge in the 5 narrow strips on the bottom side per event
-
 
 
 
@@ -1857,10 +1855,6 @@ Q_thick = Q_thick_event_valid;
 Q_thin_top = Q_thin_top_event_valid;
 Q_thin_bot = Q_thin_bot_event_valid;
 
-
-%%
-
-
 % Plot Q_thick, Q_thin_top, Q_thin_bot histograms in ylog scale
 
 Q_thick_streamer_threshold = 50; % ADCbins
@@ -1881,6 +1875,12 @@ percentage_streamer_pmt_bot = 0; % Not defined
 fprintf('Percentage of streamers (Q > threshold) in Thin RPC TOP: %.2f%%\n', percentage_streamer_thin_top);
 fprintf('Percentage of streamers (Q > threshold) in Thick RPC: %.2f%%\n', percentage_streamer_thick);
 fprintf('Percentage of streamers (Q > threshold) in Thin RPC BOTTOM: %.2f%%\n', percentage_streamer_thin_bot);
+
+% percentage_streamer_pmt_top
+% percentage_streamer_thin_top
+% percentage_streamer_thick
+% percentage_streamer_thin_bot
+% percentage_streamer_pmt_bot
 
 % Take only positive charges for the plots in a new vector that does not replace the original
 Q_thick_plot = Q_thick(Q_thick > 0);
@@ -1944,26 +1944,30 @@ validEventsFiltered = ...
     (Q_thin_top >= top_narrow_strip_charge_threshold_min) & (Q_thin_top <= top_narrow_strip_charge_threshold_max) & ...
     (Q_thin_bot >= bot_narrow_strip_charge_threshold_min) & (Q_thin_bot <= bot_narrow_strip_charge_threshold_max);
 
+
+
+
+
+
 % VALID FILTERED EVENTS ---------------------------
 
-% PMT
-Qcint_valid_range = Qcint(validEventsFiltered, :); %matrix of the four pmts for the valid events
+% --- PMTs ---
+Qcint_valid_range = Qcint_valid(validEventsFiltered, :); %matrix of the four pmts for the valid events
 
-% THICK STRIPS
-X_thick_strip_valid_range = X_thick_strip(validEventsFiltered,:);
-Y_thick_strip_valid_range = Y_thick_strip(validEventsFiltered,:);
-T_thick_strip_valid_range = T_thick_strip(validEventsFiltered,:);
+% --- THICK STRIPS ---
+X_thick_strip_valid_range = X_thick_strip_valid(validEventsFiltered,:);
+Y_thick_strip_valid_range = Y_thick_strip_valid(validEventsFiltered,:);
+T_thick_strip_valid_range = T_thick_strip_valid(validEventsFiltered,:);
 
-Q_thick_event_valid_range = Q_thick_event(validEventsFiltered);
+Q_thick_event_valid_range = Q_thick_event_valid(validEventsFiltered);
 
-% THIN STRIPS
-Qb_valid_range = Qb(validEventsFiltered, :); %matrix of bottom narrow strips for the valid events
-Qt_valid_range = Qt(validEventsFiltered, :); %matrix of top narrow strips for the valid events
+% --- THIN STRIPS ---
+Qb_valid_range = Qb_valid(validEventsFiltered, :); %matrix of bottom narrow strips for the valid events
+Qt_valid_range = Qt_valid(validEventsFiltered, :); %matrix of top narrow strips for the valid events
 
+% Totals per event within the valid-range selection
 Q_thin_top_event_valid_range = sum(Qt_valid_range, 2); % total charge in the 5 narrow strips on the top side per event
 Q_thin_bot_event_valid_range = sum(Qb_valid_range, 2); % total charge in the 5 narrow strips on the bottom side per event
-
-
 
 
 
@@ -2095,6 +2099,9 @@ for k = 5:7
         hIn = [];
     end
 
+    % log scale in Y
+    set(gca, 'YScale', 'log');
+
     xlabel('ADC bins'); ylabel('Counts');
     title(detNames{k}, 'Interpreter','tex');
 
@@ -2115,223 +2122,170 @@ sgtitle('RPC charge distributions (zeros excluded)');
 
 
 
-
-
-% Now define masks for each detector based on the min/max thresholds, explicitly
-
-% ---------- Helpers ----------
-safe_between = @(x,lo,hi) isfinite(x) & (x >= lo) & (x <= hi);
-
-
-% ---------- PMTs -------------
-% PMTs BOT
-pmt_1_exists_Mask = safe_between(Q_pmt_1, prctile(Q_pmt_1, 1), ...
-                                          prctile(Q_pmt_1, 99));
-pmt_1_range_Mask = safe_between(Q_pmt_1, pmt_1_charge_threshold_min, ...
-                                         pmt_1_charge_threshold_max);
-pmt_2_exists_Mask = safe_between(Q_pmt_1, prctile(Q_pmt_1, 1), ...
-                                          prctile(Q_pmt_1, 99));
-pmt_2_range_Mask = safe_between(Q_pmt_1, pmt_1_charge_threshold_min, ...
-                                         pmt_1_charge_threshold_max);
-
-pmt_bot_exists_Mask = pmt_1_exists_Mask & pmt_2_exists_Mask;
-pmt_bot_range_Mask  = pmt_1_range_Mask  & pmt_2_range_Mask;
-
-% PMTs TOP
-pmt_3_exists_Mask = safe_between(Q_pmt_3, prctile(Q_pmt_3, 1), ...
-                                          prctile(Q_pmt_3, 99));
-pmt_3_range_Mask = safe_between(Q_pmt_3, pmt_3_charge_threshold_min, ...
-                                         pmt_3_charge_threshold_max);
-pmt_4_exists_Mask = safe_between(Q_pmt_4, prctile(Q_pmt_4, 1), ...
-                                          prctile(Q_pmt_4, 99));
-pmt_4_range_Mask = safe_between(Q_pmt_4, pmt_4_charge_threshold_min, ...
-                                         pmt_4_charge_threshold_max);
-
-pmt_top_exists_Mask = pmt_3_exists_Mask & pmt_4_exists_Mask;
-pmt_top_range_Mask  = pmt_3_range_Mask  & pmt_4_range_Mask;
-
-
-% ---------- THICK ----------
-thick_exists_Mask = safe_between(Q_thick, prctile(Q_thick, 1), ...
-                                          prctile(Q_thick, 99));
-thick_range_Mask  = safe_between(Q_thick, thick_strip_charge_threshold_min, ...
-                                          thick_strip_charge_threshold_max);
-
-% ---------- THIN TOP ----------
-thinTop_exists_Mask = safe_between(Q_thin_top, prctile(Q_thin_top, 1), ...
-                                          prctile(Q_thin_top, 99));
-thinTop_range_Mask  = safe_between(Q_thin_top, top_narrow_strip_charge_threshold_min, ...
-                                              top_narrow_strip_charge_threshold_max);
-
-% ---------- THIN BOTTOM ----------
-thinBot_exists_Mask = safe_between(Q_thin_bot, prctile(Q_thin_bot, 1), ...
-                                          prctile(Q_thin_bot, 99));
-thinBot_range_Mask  = safe_between(Q_thin_bot, bot_narrow_strip_charge_threshold_min, ...
-                                              bot_narrow_strip_charge_threshold_max);
-
-
-
-% ---------- Summary counts (NaNs automatically excluded by masks) ----------
-Q_pmt_top_event_count  = sum(pmt_top_exists_Mask);
-Q_thin_top_event_count = sum(thinTop_exists_Mask);
-Q_thick_event_count    = sum(thick_exists_Mask);
-Q_thin_bot_event_count = sum(thinBot_exists_Mask);
-Q_pmt_bot_event_count  = sum(pmt_bot_exists_Mask);
-
-
-% Now combine masks in different ways to see the effect on efficiency for different detectors
-% For example, I want the efficiency of thin top when pmt exists
-
-
-% Efficiency of pmt top -------------------------------------------
-Q_pmt_top_eff_exists = 100; Q_pmt_top_eff_range = 100;
-
-
-% Add the time coioncidence in the PMTs
-exists_passing_condition = pmt_top_exists_Mask & pmt_bot_exists_Mask;
-range_passing_condition  = pmt_top_range_Mask & pmt_bot_range_Mask;
-
-
-
-% Efficiency of thin top -------------------------------------------
-% Existence masks. I want the efficiency of thin top when pmt exists
-Q_thin_top_eff_exists = sum(thinTop_exists_Mask & exists_passing_condition) / ...
-                        sum(exists_passing_condition) * 100;
-
-% Range masks. I want the efficiency of thin top when pmt is in range
-Q_thin_top_eff_range = sum(thinTop_range_Mask & range_passing_condition) / ...
-                        sum(range_passing_condition) * 100;
-
-
-% Efficiency of thick -------------------------------------------
-% Existence masks. I want the efficiency of thick when pmt exists
-Q_thick_eff_exists = sum(thick_exists_Mask & exists_passing_condition) / ...
-                        sum(exists_passing_condition) * 100;
-
-% Range masks. I want the efficiency of thick when pmt is in range
-Q_thick_eff_range = sum(thick_range_Mask & range_passing_condition) / ...
-                    sum(range_passing_condition) * 100;
-
-
-% Efficiency of thin bot -------------------------------------------
-% Existence masks. I want the efficiency of thin bot when pmt exists
-Q_thin_bot_eff_exists = sum(thinBot_exists_Mask & exists_passing_condition) / ...
-                        sum(exists_passing_condition) * 100;
-
-% Range masks. I want the efficiency of thin bot when pmt is in range
-Q_thin_bot_eff_range = sum(thinBot_range_Mask & range_passing_condition) / ...
-                        sum(range_passing_condition) * 100;
-
-% Efficiency of pmt bot -------------------------------------------
-Q_pmt_bot_eff_exists = 100; Q_pmt_bot_eff_range = 100;
-
-
-
 %%
 
 
-% Prepare the table data for CSV export, also display in terminal.
-% i want the csv to be a table where the rows are: PMT top, THIN_TOP,
-% THICK, THIN_BOT, PMT bot and the columns are DETECTOR, EVENT_NUMBER (which is
-% the length of the vector of events that are >0), STREAMER_PERCENTAGE and EFF;
-% ---------- Helpers ----------
-toScalar = @(x,name) local_toScalarNumeric(x,name);   % reduce vectors to a scalar
-clip01   = @(x) max(0, min(100, x));                  % optional: clamp to [0,100]
+variantSpecs = struct( ...
+    'label', {'OG', 'valid_OG', 'valid', 'valid_range'}, ...
+    'Qcint', {Qcint_OG, Qcint_OG_valid, Qcint_valid, Qcint_valid_range}, ...
+    'Q_thick', {Q_thick_event_OG, Q_thick_event_OG_valid, Q_thick_event_valid, Q_thick_event_valid_range}, ...
+    'Q_thin_top',{Q_thin_top_event_OG, Q_thin_top_event_OG_valid, Q_thin_top_event_valid, Q_thin_top_event_valid_range}, ...
+    'Q_thin_bot',{Q_thin_bot_event_OG, Q_thin_bot_event_OG_valid, Q_thin_bot_event_valid, Q_thin_bot_event_valid_range} );
 
-% ---------- Ensure masks are logical (prevents >100% from inflated sums) ----------
-% If you already have logicals, this is a no-op.
-% (Uncomment if needed)
-% pmt_top_exists_Mask  = pmt_top_exists_Mask  ~= 0;
-% thinTop_exists_Mask  = thinTop_exists_Mask  ~= 0;
-% thick_exists_Mask    = thick_exists_Mask    ~= 0;
-% thinBot_exists_Mask  = thinBot_exists_Mask  ~= 0;
-% pmt_bot_exists_Mask  = pmt_bot_exists_Mask  ~= 0;
+thin_top_threshold = 500;
+thin_bot_threshold = 500;
+thick_threshold   = 1;
 
-% ---------- Build rows with guaranteed scalar numerics ----------
-row1 = { 'PMT Top', ...
-    toScalar(Q_pmt_top_event_count, 'Q_pmt_top_event_count'), ...
-    toScalar(percentage_streamer_pmt_top, 'percentage_streamer_pmt_top'), ...
-    toScalar(Q_pmt_top_eff_exists, 'Q_pmt_top_eff_exists'), ...
-    toScalar(Q_pmt_top_eff_range,  'Q_pmt_top_eff_range') };
+% Map PMT channels to top/bottom (adjust if your ordering differs)
+pmt_top_cols = [1 2];
+pmt_bot_cols = [3 4];
 
-row2 = { 'Thin TOP', ...
-    toScalar(Q_thin_top_event_count, 'Q_thin_top_event_count'), ...
-    toScalar(percentage_streamer_thin_top, 'percentage_streamer_thin_top'), ...
-    toScalar(Q_thin_top_eff_exists, 'Q_thin_top_eff_exists'), ...
-    toScalar(Q_thin_top_eff_range,  'Q_thin_top_eff_range') };
+% Function that given numerator and denominator gives uncertainty in percentage
+% assume a poisson for the number of counts in both numerator and denominator
+effUnc = @(num,den) 100 * sqrt( (sqrt(num)/den)^2 + (num*sqrt(den)/den^2)^2 );
 
-row3 = { 'Thick', ...
-    toScalar(Q_thick_event_count, 'Q_thick_event_count'), ...
-    toScalar(percentage_streamer_thick, 'percentage_streamer_thick'), ...
-    toScalar(Q_thick_eff_exists, 'Q_thick_eff_exists'), ...
-    toScalar(Q_thick_eff_range,  'Q_thick_eff_range') };
+% Collect per-variant efficiencies, including PMT top/bottom
+accum = struct([]);
+for v = 1:numel(variantSpecs)
+    spec = variantSpecs(v);
+    Qcint_v      = spec.Qcint;
+    Q_thick_v    = spec.Q_thick;
+    Q_thin_top_v = spec.Q_thin_top;
+    Q_thin_bot_v = spec.Q_thin_bot;
 
-row4 = { 'Thin BOTTOM', ...
-    toScalar(Q_thin_bot_event_count, 'Q_thin_bot_event_count'), ...
-    toScalar(percentage_streamer_thin_bot, 'percentage_streamer_thin_bot'), ...
-    toScalar(Q_thin_bot_eff_exists, 'Q_thin_bot_eff_exists'), ...
-    toScalar(Q_thin_bot_eff_range,  'Q_thin_bot_eff_range') };
+    events_with_pmt = sum(all(Qcint_v > 0, 2));
 
-row5 = { 'PMT Bottom', ...
-    toScalar(Q_pmt_bot_event_count, 'Q_pmt_bot_event_count'), ...
-    toScalar(percentage_streamer_pmt_bot, 'percentage_streamer_pmt_bot'), ...
-    toScalar(Q_pmt_bot_eff_exists, 'Q_pmt_bot_eff_exists'), ...
-    toScalar(Q_pmt_bot_eff_range,  'Q_pmt_bot_eff_range') };
+    thick_hits     = sum(any(Q_thick_v    > thick_threshold, 2) & all(Qcint_v > 0, 2));
+    thin_top_hits  = sum(any(Q_thin_top_v > thin_top_threshold, 2) & all(Qcint_v > 0, 2));
+    thin_bot_hits  = sum(any(Q_thin_bot_v > thin_bot_threshold, 2) & all(Qcint_v > 0, 2));
+    pmt_top_hits   = sum(any(Qcint_v(:, pmt_top_cols) > 0, 2));
+    pmt_bot_hits   = sum(any(Qcint_v(:, pmt_bot_cols) > 0, 2));
 
-rows = [row1; row2; row3; row4; row5];
+    if events_with_pmt == 0
+        eff_thick = NaN; eff_thin_top = NaN; eff_thin_bot = NaN;
+        eff_pmt_top = NaN; eff_pmt_bot = NaN;
+    else
+        eff_thick     = 100 * thick_hits    / events_with_pmt;
+        eff_thin_top  = 100 * thin_top_hits / events_with_pmt;
+        eff_thin_bot  = 100 * thin_bot_hits / events_with_pmt;
+        eff_pmt_top   = 100 * pmt_top_hits  / events_with_pmt;
+        eff_pmt_bot   = 100 * pmt_bot_hits  / events_with_pmt;
 
-% Optional: round and/or clamp to [0,100]
-for i = 1:size(rows,1)
-    rows{i,3} = round(rows{i,3}, 2);        % streamer
-    rows{i,4} = round(rows{i,4});           % eff exists
-    rows{i,5} = round(rows{i,5});           % eff range
-    % rows{i,3} = clip01(rows{i,3});        % uncomment to clamp
-    % rows{i,4} = clip01(rows{i,4});
-    % rows{i,5} = clip01(rows{i,5});
+        % Uncertainties
+        unc_thick     = effUnc(thick_hits,    events_with_pmt);
+        unc_thin_top  = effUnc(thin_top_hits, events_with_pmt);
+        unc_thin_bot  = effUnc(thin_bot_hits, events_with_pmt);
+        unc_pmt_top   = effUnc(pmt_top_hits,  events_with_pmt);
+        unc_pmt_bot   = effUnc(pmt_bot_hits,  events_with_pmt);
+    end
+
+    accum(v).label        = spec.label;
+    accum(v).eff_thick    = eff_thick;
+    accum(v).eff_thin_top = eff_thin_top;
+    accum(v).eff_thin_bot = eff_thin_bot;
+    accum(v).eff_pmt_top  = eff_pmt_top;
+    accum(v).eff_pmt_bot  = eff_pmt_bot;
+
+    accum(v).unc_thick    = unc_thick;
+    accum(v).unc_thin_top = unc_thin_top;
+    accum(v).unc_thin_bot = unc_thin_bot;
+    accum(v).unc_pmt_top  = unc_pmt_top;
+    accum(v).unc_pmt_bot  = unc_pmt_bot;
 end
 
-% ---------- Pretty print ----------
-fprintf('\n=====================================================\n');
-fprintf('Efficiency Summary (Date %s):\n', char(formatted_datetime));
-fprintf('=====================================================\n');
-fprintf('%-12s | %-12s | %-14s | %-23s | %-20s\n', ...
-    'Detector','Events > 0','Streamer (%)','Eff (Exists Mask) (%)','Eff (Range Mask) (%)');
-fprintf('---------------------------------------------------------------------------------------\n');
-for i = 1:size(rows,1)
-    fprintf('%-12s | %-12d | %-14.2f | %-23.2f | %-20.2f\n', ...
-        rows{i,1}, rows{i,2}, rows{i,3}, rows{i,4}, rows{i,5});
+% Desired variant order for columns
+variantOrder = {'OG','valid_OG','valid','valid_range'};
+
+% Helpers: fetch efficiency and uncertainty by label
+getEff = @(lab, field) accum(strcmp({accum.label}, lab)).(field);
+getUnc = @(lab, field) accum(strcmp({accum.label}, lab)).(strrep(field,'eff_','unc_'));
+
+% Build detector rows in required order
+detectors = { ...
+    'PMT_top',         'eff_pmt_top',  percentage_streamer_pmt_top;  ...
+    'RPC_thin_top',    'eff_thin_top', percentage_streamer_thin_top; ...
+    'RPC_thick_center','eff_thick',    percentage_streamer_thick;    ...
+    'RPC_thin_bottom', 'eff_thin_bot', percentage_streamer_thin_bot; ...
+    'PMT_bottom',      'eff_pmt_bot',  percentage_streamer_pmt_bot   ...
+};
+
+% Interleaved columns: [Detector] [OG, OG_unc] [valid_OG, valid_OG_unc] [valid, valid_unc] [valid_range, valid_range_unc] [StreamerPct]
+nDet = size(detectors,1);
+nVar = numel(variantOrder);
+detRows = cell(nDet, 1 + 2*nVar + 1);
+
+for i = 1:nDet
+    detName   = detectors{i,1};
+    effField  = detectors{i,2};
+    streamerP = detectors{i,3};
+
+    detRows{i,1} = detName;
+    col = 2;
+    for c = 1:nVar
+        lab = variantOrder{c};
+        detRows{i,col}   = getEff(lab, effField); col = col + 1;
+        detRows{i,col}   = getUnc(lab, effField); col = col + 1;
+    end
+    detRows{i, 1 + 2*nVar + 1} = streamerP;  % StreamerPct
 end
-fprintf('=====================================================\n\n');
 
-% ---------- CSV / table output (csvData exists now) ----------
-csvData = rows;  % <— define it so later code can use it
-effTable = cell2table(csvData, 'VariableNames', ...
-    {'Detector','Events','Streamer_Percentage','Eff_Exists','Eff_Range'});
+% Build variable names interleaving efficiency and its uncertainty
+varNames = {'Detector'};
+for c = 1:nVar
+    varNames{end+1} = variantOrder{c};
+    varNames{end+1} = [variantOrder{c} '_unc'];
+end
+varNames{end+1} = 'StreamerPct';
 
+detTable = cell2table(detRows, 'VariableNames', varNames);
+
+% Round to 1 decimal place
+for c = 1:nVar
+    detTable{:, 1 + 2*(c-1) + 1} = round(detTable{:, 1 + 2*(c-1) + 1}, 1);
+    detTable{:, 1 + 2*(c-1) + 2} = round(detTable{:, 1 + 2*(c-1) + 2}, 1);
+end
+detTable.StreamerPct = round(detTable.StreamerPct, 1);
+
+% Pretty print
+fprintf('\n==== Efficiency Summary (values in %%) ====\n');
+
+% Header
+fprintf('%-17s', 'Detector');
+for c = 1:nVar
+    fprintf(' %12s %12s', varNames{1 + 2*(c-1) + 1}, varNames{1 + 2*(c-1) + 2});
+end
+fprintf(' | %12s\n', 'StreamerPct');
+
+% Separator
+sepLen = 17 + (12+1)*2*nVar + 3 + 12;
+fprintf('%s\n', repmat('-',1, max(86, sepLen)));
+
+% Rows
+for i = 1:size(detTable,1)
+    fprintf('%-17s', detTable.Detector{i});
+    for c = 1:nVar
+        effVal = detTable{ i, 1 + 2*(c-1) + 1 };
+        uncVal = detTable{ i, 1 + 2*(c-1) + 2 };
+        fprintf(' %12.1f %12.1f', effVal, uncVal);
+    end
+    fprintf(' | %11.1f%%\n', detTable.StreamerPct(i));
+end
+fprintf('%s\n', repmat('=',1, max(86, sepLen)));
+
+% CSV output
 outCsv = fullfile(summary_output_dir, ...
     sprintf('efficiency_summary_%s.csv', char(formatted_datetime)));
-writetable(effTable, outCsv);
 
-% ---------- Local function ----------
-function s = local_toScalarNumeric(x, name)
-    % Coerce to a scalar double for printing/writing.
-    if isscalar(x)
-        if isnumeric(x) || islogical(x)
-            s = double(x);
-        else
-            error('Field %s must be numeric/logical scalar; got %s.', name, class(x));
-        end
-        return;
-    end
-    if isnumeric(x) || islogical(x)
-        s = mean(double(x(:)), 'omitnan');   % choose mean/sum/median/first as you prefer
-        warning('Value for %s was not scalar; reduced via mean(omitnan).', name);
-    else
-        error('Field %s must be numeric/logical; got %s.', name, class(x));
-    end
-end
+fid = fopen(outCsv, 'w');
+% Update header comment with new column ordering
+fprintf(fid, '# total_raw_events: %d\n', total_raw_events);
+fprintf(fid, '# percentage_good_events_in_pmts: %.4f\n', percentage_good_events_in_pmts);
+fprintf(fid, '%s\n', strjoin(varNames, ', '));
+fclose(fid);
 
+writetable(detTable, outCsv, 'WriteMode','append');
 
+%%
 
 
 % -------------------------------------------------------------------------
@@ -2341,50 +2295,87 @@ end
 % -------------------------------------------------------------------------
 
 function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
-%   Export all open figures into a single rasterized PDF.
-%   [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
-%   saves all open MATLAB figures to a single PDF named pdfFileName,
-%   stored inside targetDir.
-
     figs = findall(0, 'Type', 'figure');
     figCount = numel(figs);
     pdfPath = '';
-
     if figCount == 0
         return;
     end
-
-    % Ensure targetDir exists
     if ~exist(targetDir, 'dir')
         mkdir(targetDir);
     end
-
-    % Build full file path
     pdfPath = fullfile(targetDir, pdfFileName);
-
-    % Sort figures by creation order
     [~, sortIdx] = sort([figs.Number]);
     figs = figs(sortIdx);
 
-    % Delete existing PDF if present
+    dpi = 300;
+    rasterOpts = {'ContentType','image','Resolution',dpi,'BackgroundColor','white'};
+
+    tempDir = tempname;
+    mkdir(tempDir);
+    cleanupObj = onCleanup(@() cleanup_temp_directory(tempDir));
+
+    pngFiles = cell(figCount, 1);
+    for k = 1:figCount
+        fig = figs(k);
+        pngFiles{k} = fullfile(tempDir, sprintf('page_%04d.png', k));
+        exportgraphics(fig, pngFiles{k}, rasterOpts{:});
+        close(fig);
+    end
+
+    try
+        combine_images_to_pdf(pngFiles, pdfPath, rasterOpts);
+    catch combineErr
+        warning(combineErr.identifier, 'Failed to combine rasterized figures into PDF: %s', combineErr.message);
+        pdfPath = '';
+    end
+
+end
+
+function combine_images_to_pdf(pngFiles, pdfPath, exportOpts)
+    validMask = cellfun(@(p) ~isempty(p) && exist(p, 'file'), pngFiles);
+    pngFiles = pngFiles(validMask);
+    if isempty(pngFiles)
+        return;
+    end
     if exist(pdfPath, 'file')
         delete(pdfPath);
     end
 
-    % Export options
-    opts = {'ContentType','image','Resolution',300};
-    firstPage = true;
+    comboFig = figure('Visible', 'off', 'Units', 'pixels', 'Position', [100 100 640 480]);
+    ax = axes(comboFig, 'Units', 'normalized', 'Position', [0 0 1 1]);
+    axis(ax, 'off');
+    set(comboFig, 'PaperPositionMode', 'auto');
 
-    % Loop over figures and append to PDF
-    for k = 1:figCount
-        fig = figs(k);
+    firstPage = true;
+    for idx = 1:numel(pngFiles)
+        img = imread(pngFiles{idx});
+        image(ax, 'CData', img, 'XData', [1 size(img, 2)], 'YData', [1 size(img, 1)]);
+        axis(ax, 'off');
+        axis(ax, 'image');
+        ax.YDir = 'reverse';
+
+        set(comboFig, 'Position', [100 100 size(img, 2) size(img, 1)]);
+        drawnow limitrate;
+
         if firstPage
-            exportgraphics(fig, pdfPath, opts{:});
+            exportgraphics(comboFig, pdfPath, exportOpts{:});
             firstPage = false;
         else
-            exportgraphics(fig, pdfPath, opts{:}, 'Append', true);
+            exportgraphics(comboFig, pdfPath, exportOpts{:}, 'Append', true);
         end
-        close(fig);
+    end
+
+    close(comboFig);
+end
+
+function cleanup_temp_directory(tempDir)
+    if exist(tempDir, 'dir')
+        try
+            rmdir(tempDir, 's');
+        catch cleanupErr
+            warning('Failed to remove temporary directory %s: %s', tempDir, cleanupErr.message);
+        end
     end
 end
 
@@ -2397,9 +2388,7 @@ if save_plots
         if ~exist(save_plots_dir, 'dir')
             mkdir(save_plots_dir);
         end
-
         [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName);
-
         if figCount > 0 && ~isempty(pdfPath)
             fprintf('Saved %d figure(s) to %s\n', figCount, pdfPath);
         else
