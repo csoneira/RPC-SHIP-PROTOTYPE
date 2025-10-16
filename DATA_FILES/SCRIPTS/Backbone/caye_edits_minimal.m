@@ -696,8 +696,6 @@ subplot(1,2,2); plot(Qcint_OG(:,3), Qcint_OG(:,4), '.'); hold on; plot(Qcint(:,3
 xlabel('Qcint3'); ylabel('Qcint4'); title('Charge PMT3 vs PMT4');
 xlim([min(min(Qcint_OG)) max(max(Qcint_OG))]); ylim([min(min(Qcint_OG)) max(max(Qcint_OG))]);
 sgtitle(sprintf('PMT charge correlations (data from %s)', formatted_datetime));
-
-
 %%
 
 % Finally, plot the Tl_cint i vs Tl_cint j scatter plots for all PMT pairs
@@ -857,7 +855,6 @@ subplot(2,5,10); plot(QF_OG(:,5), QB_OG(:,5),'.'); hold on; plot(QF(:,5), QB(:,5
 xlabel('QF'); ylabel('QB'); title('Charge Front vs back strip5');
 xlim([min(min(QF_OG)) max(max(QF_OG))]); ylim([min(min(QB_OG)) max(max(QB_OG))]);
 sgtitle(sprintf('Thick strip time and charge front vs back (data from %s)', formatted_datetime));
-
 %%
 
 % Histograms of QF-QB for each strip to see the distribution of the difference
@@ -873,15 +870,12 @@ for i = 1:5
     valid_diff = QF(:,i) - QB(:,i);
     valid_diff(valid_diff == 0) = [];
     histogram(valid_diff, 100, 'Normalization', 'probability');
-    title(sprintf('Histogram of QF - QB for wide strip %d (run %s)', i, run));
+    title(sprintf('Histogram of QF - QB for wide strip %d', i));
     xlabel('QF - QB [ns]');
     ylabel('Counts');
     xline(charge_wide_strip_diff_thr, 'r--'); xline(-charge_wide_strip_diff_thr, 'r--');
 end
 sgtitle(sprintf('Histograms of QF - QB for all WIDE strips (data from %s)', formatted_datetime));
-
-
-
 %%
 
 % Wide Strip Charge Spectra and Offset Calibration
@@ -982,9 +976,6 @@ xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
 subplot(4,6,24); plot(Qt(:,24), Qb(:,24),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XXIV');
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
 sgtitle(sprintf('Narrow strip charge top vs bottom (data from %s)', formatted_datetime));
-
-
-
 %%
 
 
@@ -1155,7 +1146,6 @@ subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); 
 subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
 subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
 sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime));
-
 X_thick_strip = X; %redefine X_thick_strip to be the strip number with maximum charge
 Y_thick_strip = Y; %redefine Y_thick_strip to be the Y position with maximum charge
 T_thick_strip = T; %redefine T_thick_strip to be the T from the strip with maximum charge
@@ -1203,7 +1193,6 @@ subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); 
 subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
 subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
 sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime));
-
 X_thick_strip_good = X; %redefine X_thick_strip to be the strip number with maximum charge
 Y_thick_strip_good = Y; %redefine Y_thick_strip to be the Y position with maximum charge
 T_thick_strip_good = T; %redefine T_thick_strip to be the T from the strip with maximum charge
@@ -1270,37 +1259,38 @@ for i = 1:size(pairs,1)
 
         grid on; box on; axis tight;
         xlabel(names{pairs(i,1)}); ylabel(names{pairs(i,2)});
-        title(sprintf('%s vs %s (run %s)', names{pairs(i,2)}, names{pairs(i,1)}, run));
+        title(sprintf('%s vs %s', names{pairs(i,2)}, names{pairs(i,1)}));
     else
         axis off; title(sprintf('%s vs %s (no data)', names{pairs(i,2)}, names{pairs(i,1)}));
     end
 end
 
 
-sgtitle(sprintf('All 2D scatter combinations (zeros removed) — run %s', run));
-
-
-
-
+sgtitle(sprintf('All 2D scatter combinations (zeros removed) (data from %s)', formatted_datetime));
 %%
 
 
 % 2) Quantile limits (thin channels share limits)
-q005_b = quantile(Q_thin_bot_event_good, 0.005);
-q005_t = quantile(Q_thin_top_event_good, 0.005);
-q005   = min(q005_b, q005_t);
+q005_bot = quantile(Q_thin_bot_event_good, 0.005);
+q005_top = quantile(Q_thin_top_event_good, 0.005);
+q005   = min(q005_bot, q005_top);
 
-q95_b  = quantile(Q_thin_bot_event_good, 0.95);
-q95_t  = quantile(Q_thin_top_event_good, 0.95);
-q95    = max(q95_b, q95_t);
+q95_bot  = quantile(Q_thin_bot_event_good, 0.95);
+q95_top  = quantile(Q_thin_top_event_good, 0.95);
+q95    = max(q95_bot, q95_top);
 
 % Thick channel limits (separate scale)
 q005_thick = quantile(Q_thick_event_good, 0.005);
 q95_thick  = quantile(Q_thick_event_good, 0.95);
 
 % Bin edges (match your “like this” snippet for thin; keep fine bins for thick)
-thinEdges  = 0:300:5e4;
-thickEdges = 0:1:300;
+thinTopBins = 70;   % number of bins for thin top charge histograms
+thinBotBins = 70;   % number of bins for thin bottom charge histograms
+thickBins   = 70;   % number of bins for thick charge histograms
+
+thinTopEdges  = linspace(0, quantile(Q_thin_top_event_good, 0.99), thinTopBins + 1);
+thinBotEdges  = linspace(0, quantile(Q_thin_bot_event_good, 0.99), thinBotBins + 1);
+thickEdges    = linspace(0, quantile(Q_thick_event_good, 0.99),   thickBins   + 1);
 
 
 % Create a non_zero version called Q_thick_event_good_hist
@@ -1326,36 +1316,35 @@ Q_thin_top_event_good_hist(Q_thin_top_event_good_hist == 0) = []; % remove zeros
 % FIGURE 1 — Thin bottom / Thin top (hist + hist + scatter), with valid overlays
 figure;
 subplot(1,3,1);
-histogram(Q_thin_bot_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_bot_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_bot_event_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (bottom)');
 title('Q narrow bottom spectrum (sum of Q per event)');
-xlim([q005 q95]); legend('show');
+xlim([q005_bot q95_bot]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thin_top_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_top_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_top_event_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (top)');
 title('Q narrow top spectrum (sum of Q per event)');
-xlim([q005 q95]); legend('show');
+xlim([q005_top q95_top]); legend('show');
 
 subplot(1,3,3);
 plot(Q_thin_bot_event, Q_thin_top_event, '.', 'DisplayName','all events'); hold on;
 plot(Q_thin_bot_event_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
-plot([q005 q95],[q005 q95],'--','Color',[1 0.5 0],'LineWidth',2.5,'DisplayName','y = x');
+plot([q005_bot q95_bot],[q005_top q95_top],'--','Color',[1 0.5 0],'LineWidth',2.5,'DisplayName','y = x');
 xlabel('Q (bottom)'); ylabel('Q (top)');
 title('Q bottom vs Q top');
-xlim([q005 q95]); ylim([q005 q95]); legend('show');
-sgtitle(sprintf('Charge of the event (thin only; all vs valid; run %s)', run));
-
+xlim([q005_bot q95_bot]); ylim([q005_top q95_top]); legend('show');
+sgtitle(sprintf('Charge of the event (thin only; all vs valid) (data from %s)', formatted_datetime));
 % FIGURE 2 — Thin bottom vs Thick
 figure;
 subplot(1,3,1);
-histogram(Q_thin_bot_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_bot_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_bot_event_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (bottom)');
 title('Q narrow bottom spectrum (sum of Q per event)');
-xlim([q005 q95]); legend('show');
+xlim([q005_bot q95_bot]); legend('show');
 
 subplot(1,3,2);
 histogram(Q_thick_event_hist, thickEdges, 'DisplayName','all events'); hold on;
@@ -1369,9 +1358,8 @@ plot(Q_thin_bot_event, Q_thick_event, '.', 'DisplayName','all events'); hold on;
 plot(Q_thin_bot_event_good, Q_thick_event_good, '.', 'DisplayName','valid only');
 xlabel('Q (bottom)'); ylabel('Q (thick)');
 title('Q bottom vs Q thick');
-xlim([q005 q95]); ylim([q005_thick q95_thick]); legend('show');
-sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid; run %s)', run));
-
+xlim([q005_bot q95_bot]); ylim([q005_thick q95_thick]); legend('show');
+sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid) (data from %s)', formatted_datetime));
 % FIGURE 3 — Thick vs Thin top
 figure;
 subplot(1,3,1);
@@ -1382,23 +1370,19 @@ title('Q thick spectrum (sum of Q per event)');
 xlim([q005_thick q95_thick]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thin_top_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_top_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_top_event_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (top)');
 title('Q narrow top spectrum (sum of Q per event)');
-xlim([q005 q95]); legend('show');
+xlim([q005_top q95_top]); legend('show');
 
 subplot(1,3,3);
 plot(Q_thick_event, Q_thin_top_event, '.', 'DisplayName','all events'); hold on;
 plot(Q_thick_event_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
 xlabel('Q (thick)'); ylabel('Q (top)');
 title('Q thick vs Q top');
-xlim([q005_thick q95_thick]); ylim([q005 q95]); legend('show');
-sgtitle(sprintf('Charge of the event (thick vs top; all vs valid; run %s)', run));
-
-
-
-
+xlim([q005_thick q95_thick]); ylim([q005_top q95_top]); legend('show');
+sgtitle(sprintf('Charge of the event (thick vs top; all vs valid) (data from %s)', formatted_datetime));
 %%
 
 % Define a function called mm_to_strip that converts mm to strip number, it works with vectors too,
@@ -1435,7 +1419,7 @@ if position_from_narrow_strips
     % Plot only a random sample of 1000 events to avoid overplotting
     sample_indices = randperm(rawEvents, min(5, rawEvents));
     plot(1:24, Qt(sample_indices, :)', '-o'); hold on;
-    title(sprintf('Charge distribution across NARROW strips for sample events (top) - Sample size: %d (run %s)', length(sample_indices), run));
+    title(sprintf('Charge distribution across NARROW strips for sample events (top) - Sample size: %d', length(sample_indices)));
     xlabel('Strip Number');
     ylabel('Charge Qt [ns]');
     xlim([1 24]);
@@ -1443,14 +1427,12 @@ if position_from_narrow_strips
     % Plot only a random sample of 1000 events to avoid overplotting
     sample_indices = randperm(rawEvents, min(10, rawEvents));
     plot(1:24, Qb(sample_indices, :)', '-o'); hold on;
-    title(sprintf('Charge distribution across NARROW strips for sample events (bottom) - Sample size: %d (run %s)', length(sample_indices), run));
+    title(sprintf('Charge distribution across NARROW strips for sample events (bottom) - Sample size: %d', length(sample_indices)));
     xlabel('Strip Number');
     ylabel('Charge Qb [ns]');
     xlim([1 24]);
 
     sgtitle(sprintf('NARROW STRIP CHARGE DISTRIBUTION (top and bottom) (data from %s)', formatted_datetime));
-
-
     % ===============================================================
     % WRAPPED GAUSSIAN FITS FOR Qt AND Qb
     % ===============================================================
@@ -1591,9 +1573,6 @@ if position_from_narrow_strips
     end
 
     sgtitle(sprintf('Correlation of Gaussian Fit Parameters (Top and Bot Combined) (data from %s)', formatted_datetime));
-
-
-
     % I want a scatter plot which is X_thick_strip vs Y_thick_strip
     % Also there is a multiplexing in the thin strips, so what we have to do is to
     % remove the degeneracy using the thick strip information, that is, X_thin_strip is
@@ -1753,9 +1732,6 @@ if position_from_narrow_strips
     rectangle('Position', rect_ax, 'EdgeColor', 'r', 'LineWidth', 2);
 
     sgtitle(sprintf('2×2 Correlations between THICK and THIN Strip Positions (all wrapped) (data from %s)', formatted_datetime));
-    
-
-
     % ===============================================================
     % Joint wrap decode using a composite cost over multiple pairings:
     %   (Xthin,Ythin), (Xthick,Ythick), (Xthin,Ythick), (Xthick,Ythin)
@@ -2066,24 +2042,27 @@ Q_thin_top_plot = Q_thin_top(Q_thin_top > 0);
 Q_thin_bot_plot = Q_thin_bot(Q_thin_bot > 0);
 
 % the streamer % in the histogram title with no decimals
+
+% thinTopEdges
+% thinBotEdges
+% thickEdges
+
 figure;
-subplot(2,3,1); histogram(Q_thick_plot, 0:1:200); set(gca, 'YScale', 'log'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thick RPC Q, streamer <%d%%> (run %s)', round(percentage_streamer_thick), run));
+subplot(2,3,1); histogram(Q_thick_plot, thickEdges); set(gca, 'YScale', 'log'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thick RPC Q, streamer <%d%%>', round(percentage_streamer_thick)));
 hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
-subplot(2,3,2); histogram(Q_thin_top_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC TOP Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_top), run));
+subplot(2,3,2); histogram(Q_thin_top_plot, thinTopEdges); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC TOP Q, streamer <%d%%>', round(percentage_streamer_thin_top)));
 hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
-subplot(2,3,3); histogram(Q_thin_bot_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC BOTTOM Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_bot), run));
+subplot(2,3,3); histogram(Q_thin_bot_plot, thinBotEdges); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC BOTTOM Q, streamer <%d%%>', round(percentage_streamer_thin_bot)));
 hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
 
-subplot(2,3,4); histogram(Q_thick_plot, 0:2:200, 'Normalization', 'cdf'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thick RPC Q CDF');
+subplot(2,3,4); histogram(Q_thick_plot, thickEdges, 'Normalization', 'cdf'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thick RPC Q CDF');
 hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
-subplot(2,3,5); histogram(Q_thin_top_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC TOP Q CDF');
+subplot(2,3,5); histogram(Q_thin_top_plot, thinTopEdges, 'Normalization', 'cdf'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC TOP Q CDF');
 hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
-subplot(2,3,6); histogram(Q_thin_bot_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC BOTTOM Q CDF');
+subplot(2,3,6); histogram(Q_thin_bot_plot, thinBotEdges, 'Normalization', 'cdf'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC BOTTOM Q CDF');
 hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
 
 sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)', formatted_datetime));
-
-
 %%
 
 % ---------------------------------------------------------------------
@@ -2208,7 +2187,8 @@ maxVals  = [ ...
     bot_narrow_strip_charge_threshold_max ];
 
 
-nBins = 150;  % histogram resolution
+
+nBins = 100;  % histogram resolution
 
 % ========= 2x2: PMTs (zeros excluded) =========
 figure('Name','PMT charges (zeros excluded)');
@@ -2262,6 +2242,8 @@ end
 sgtitle(sprintf('PMT charge distributions (zeros excluded) (data from %s)', formatted_datetime));
 
 
+
+
 % ========= 1x3: RPCs (Thick, Thin TOP, Thin BOTTOM; zeros excluded) =========
 figure('Name','RPC charges (zeros excluded)');
 tiledlayout(1,3,'TileSpacing','compact','Padding','compact');
@@ -2282,7 +2264,22 @@ for k = 5:7
 
     xmin = min(x); xmax = max(x);
     if xmin == xmax, xmax = xmin + 1; end
+    
+    
     edges = linspace(xmin, xmax, nBins+1);
+    
+    if k == 5
+        % Thick RPC: use fixed edges for better comparison across runs
+        edges = thickEdges;
+    elseif k == 6
+        % Thin TOP RPC: use fixed edges for better comparison across runs
+        edges = thinTopEdges;
+    elseif k == 7
+        % Thin BOTTOM RPC: use fixed edges for better comparison across runs
+        edges = thinBotEdges;
+    end
+    
+    
 
     inMin = minVals(k); inMax = maxVals(k);
     xin = x((x >= inMin) & (x <= inMax));
@@ -2315,9 +2312,6 @@ for k = 5:7
 end
 
 sgtitle(sprintf('RPC charge distributions (zeros excluded) (data from %s)', formatted_datetime));
-
-
-
 %%
 
 
