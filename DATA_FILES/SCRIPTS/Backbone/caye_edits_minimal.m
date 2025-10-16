@@ -341,9 +341,9 @@ charge_narrow_strip_min = 0;
 charge_narrow_strip_max = 30000;
 
 % Crosstalk
-thick_strip_crosstalk = 0; % ADCbins
-top_narrow_strip_crosstalk = 0; % ADCbins/event
-bot_narrow_strip_crosstalk = 0; % ADCbins/event
+thick_strip_crosstalk = 5; % ADCbins
+top_narrow_strip_crosstalk = 1500; % ADCbins/event
+bot_narrow_strip_crosstalk = 2500; % ADCbins/event
 
 % Streamers
 Q_thick_streamer_threshold = 35; % ADCbins
@@ -1521,450 +1521,351 @@ sgtitle(sprintf('PMT charge (data from %s)', formatted_datetime));
 
 %%
 
-
-% ---------------------------------------------------------------------
-% ---------------------------------------------------------------------
+% -------------------------------------------------------------------------
 % Position from narrow strips (24 strips, no timing, only charge)
-% ---------------------------------------------------------------------
-% ---------------------------------------------------------------------
+% -------------------------------------------------------------------------
 
 position_from_narrow_strips = true;
 if position_from_narrow_strips
 
-    % Position determination from the narrow strips
-    % Plot in X the strip numbers (1 to 24) and in Y each row of the Qt matrix
-    % I explain: I want in the x axes the strip number (1 to 24) and in the y axis
-    % the charge value in each component
-    
-    charge_thin_top_for_position = Qt_no_crosstalk;
-    charge_thin_bot_for_position = Qb_no_crosstalk;
 
-    charge_thin_top_total = sum(Qt_no_crosstalk, 2); % sum over strips (rows)
-    charge_thin_bot_total = sum(Qb_no_crosstalk, 2);
+    % charge_thin_top_for_position = Qt_no_crosstalk;
+    % charge_thin_bot_for_position = Qb_no_crosstalk;
+    % charge_thick_for_position = Q_thick_strip_no_crosstalk;
+    % X_thick_for_position = X_thick_strip_no_crosstalk; % discrete (1..5)
+    % T_thick_for_position = T_thick_strip_no_crosstalk; % mean(Tfl,Tbl)
+    % Y_thick_for_position = Y_thick_strip_no_crosstalk; % (Tfl - Tbl)/2 in ns
 
-    charge_thick_for_position = Q_thick_strip_no_crosstalk;
+    fprintf('Position from narrow strips: using raw Qt, Qb, Q_thick_strip (with no coincidence)\n');
+    charge_thin_top_for_position = Qt_signal;
+    charge_thin_bot_for_position = Qb_signal;
+    charge_thick_for_position = Q_thick_strip_signal;
+    X_thick_for_position = X_thick_strip_signal; % discrete (1..5)
+    T_thick_for_position = T_thick_strip_signal; % mean(Tfl,Tbl)
+    Y_thick_for_position = Y_thick_strip_signal; % (Tfl - Tbl)/2 in ns
 
-    X_thick_for_position = X_thick_strip_no_crosstalk; % strip with max Q
-    T_thick_for_position = T_thick_strip_no_crosstalk; % mean of Tfl and Tbl
-    Y_thick_for_position = Y_thick_strip_no_crosstalk; % (Tfl - Tbl)/2
 
-    figure;
-    subplot(2,1,1);
-    % Plot only a random sample of 1000 events to avoid overplotting
-    sample_indices = randperm(rawEvents, min(5, rawEvents));
-    plot(1:24, Qt(sample_indices, :)', '-o'); hold on;
-    title(sprintf('Charge distribution across NARROW strips for sample events (top) - Sample size: %d (run %s)', length(sample_indices), run));
-    xlabel('Strip Number');
-    ylabel('Charge Qt [ns]');
-    xlim([1 24]);
-    subplot(2,1,2);
-    % Plot only a random sample of 10 events to avoid overplotting
-    sample_indices = randperm(rawEvents, min(10, rawEvents));
-    plot(1:24, Qb(sample_indices, :)', '-o'); hold on;
-    title(sprintf('Charge distribution across NARROW strips for sample events (bottom) - Sample size: %d (run %s)', length(sample_indices), run));
-    xlabel('Strip Number');
-    ylabel('Charge Qb [ns]');
-    xlim([1 24]);
+    charge_thin_top_total = sum(charge_thin_top_for_position, 2);
+    charge_thin_bot_total = sum(charge_thin_bot_for_position, 2);
 
-    sgtitle(sprintf('NARROW STRIP CHARGE DISTRIBUTION (top and bottom) (data from %s)', formatted_datetime));
-
+    % ----- helpers -----
+    ensure_col = @(v) v(:);
+    isgood     = @(v) isfinite(v) & ~isnan(v);
 
     % ===============================================================
-    % WRAPPED GAUSSIAN FITS FOR Qt AND Qb
+    % (1) WRAPPED GAUSSIAN FITS FOR Qt (TOP) AND Qb (BOTTOM)
+    %     Return per-event [mu, sigma, chisq] for each plane
     % ===============================================================
-
     nStrips = 24;
-    x = (1:nStrips)';                 % strip indices (column)
-    nTop   = size(Qt,1);
-    nBot   = size(Qb,1);
+    x = (1:nStrips)';               % strip index
+    nTop = size(Qt,1);  nBot = size(Qb,1);
 
-    fitTop = nan(nTop,3);             % [mu, sigma, chisq]
+    fitTop = nan(nTop,3);           % [mu, sigma, chisq]
     fitBot = nan(nBot,3);
 
-    % Helper to wrap distances on a 24-strip circle
-    wrapDist = @(dx) mod(dx + nStrips/2, nStrips) - nStrips/2;  % in [-12, 12)
-
-    % Model with parameters p = [mu_raw, log_sigma, log_amp, baseline]
-    % (sigma = exp(p2) >= 0, amp = exp(p3) >= 0, baseline free)
-    model_from_p = @(p) ( ...
-        p(4) + exp(p(3)) * exp( -0.5 * (wrapDist(x - (1 + mod(p(1)-1,nStrips))).^2) / (exp(p(2))^2) ) ...
-    );
-
-    % Sum of squared residuals (used as "chisq" proxy)
-    sse = @(y, p) sum( (y - model_from_p(p)).^2 );
-
-    % fminsearch options
+    wrapDist = @(dx) mod(dx + nStrips/2, nStrips) - nStrips/2;           % [-12,12)
+    model_from_p = @(p) ( p(4) + exp(p(3)) .* exp( -0.5*(wrapDist(x - (1 + mod(p(1)-1,nStrips))).^2) ./ (exp(p(2)).^2) ) );
+    sse = @(y,p) sum( (y - model_from_p(p)).^2 );
     optsFS = optimset('Display','off','MaxFunEvals',2000,'MaxIter',2000);
 
-    % --------------- Fit Qt (TOP) ---------------
+    % --- Fit TOP ---
     for i = 1:nTop
         y = double(Qt(i,:))';
-        if ~any(isfinite(y)) || all(y==0)
-            continue;
-        end
-        % Initial guesses
-        [~, mu0] = max(y);
+        if ~any(isfinite(y)) || all(y==0), continue; end
+        [~,mu0] = max(y);
         yMin = min(y); yMax = max(y);
         A0 = max(yMax - yMin, eps);
         p0 = [mu0, log(3), log(A0), yMin];
-
-        obj = @(p) sse(y, p);
-        pFit = fminsearch(obj, p0, optsFS);
-
-        mu    = 1 + mod(pFit(1)-1, nStrips);  % wrap to [1,24]
-        sigma = max(exp(pFit(2)), eps);
-        chisq = obj(pFit);                     % SSE as chi^2-like metric
-
-        fitTop(i,:) = [mu, sigma, chisq];
-    end
-
-    % --------------- Fit Qb (BOTTOM) ---------------
-    for i = 1:nBot
-        y = double(Qb(i,:))';
-        if ~any(isfinite(y)) || all(y==0)
-            continue;
-        end
-        [~, mu0] = max(y);
-        yMin = min(y); yMax = max(y);
-        A0 = max(yMax - yMin, eps);
-        p0 = [mu0, log(3), log(A0), yMin];
-
-        obj = @(p) sse(y, p);
+        obj = @(p) sse(y,p);
         pFit = fminsearch(obj, p0, optsFS);
 
         mu    = 1 + mod(pFit(1)-1, nStrips);
         sigma = max(exp(pFit(2)), eps);
         chisq = obj(pFit);
+        fitTop(i,:) = [mu, sigma, chisq];
+    end
 
+    % --- Fit BOTTOM ---
+    for i = 1:nBot
+        y = double(Qb(i,:))';
+        if ~any(isfinite(y)) || all(y==0), continue; end
+        [~,mu0] = max(y);
+        yMin = min(y); yMax = max(y);
+        A0 = max(yMax - yMin, eps);
+        p0 = [mu0, log(3), log(A0), yMin];
+        obj = @(p) sse(y,p);
+        pFit = fminsearch(obj, p0, optsFS);
+
+        mu    = 1 + mod(pFit(1)-1, nStrips);
+        sigma = max(exp(pFit(2)), eps);
+        chisq = obj(pFit);
         fitBot(i,:) = [mu, sigma, chisq];
     end
 
-    % Clean rows (optional): remove any rows that stayed NaN
-    fitTop = fitTop(any(isfinite(fitTop),2), :);
-    fitBot = fitBot(any(isfinite(fitBot),2), :);
+    % Keep only rows with finite fits
+    goodTop = all(isfinite(fitTop),2);
+    goodBot = all(isfinite(fitBot),2);
+    % Use a common mask length (events) — assume Qt and Qb align by rows
+    nEvents = min(numel(goodTop), numel(goodBot));
+    fitTop  = fitTop (1:nEvents,:);
+    fitBot  = fitBot (1:nEvents,:);
+    goodTop = goodTop(1:nEvents);
+    goodBot = goodBot(1:nEvents);
+    goodFit = goodTop & goodBot;
 
-    Y_thin_strip_top = fitTop(:,1);    % mu from top fit
-    X_thin_strip_bot = fitBot(:,1);    % mu from bottom fit
+    fitTop  = fitTop(goodFit,:);
+    fitBot  = fitBot(goodFit,:);
+
+    mu_top    = ensure_col(fitTop(:,1));
+    sigma_top = ensure_col(fitTop(:,2));
+    chi_top   = ensure_col(fitTop(:,3));
+
+    mu_bot    = ensure_col(fitBot(:,1));
+    sigma_bot = ensure_col(fitBot(:,2));
+    chi_bot   = ensure_col(fitBot(:,3));
 
 
     % ===============================================================
-    % Diagnostic plots
+    % (1b) DIAGONAL INFERIOR COMPARISON PLOT (TOP vs BOTTOM)
+    %      3x3 matrix: variables = {mu, sigma, chi^2}
+    %      Diagonal: hist overlays (top & bottom). Lower triangle: scatter (bottom vs top).
     % ===============================================================
+    varsTop = {mu_top, sigma_top, chi_top};
+    varsBot = {mu_bot, sigma_bot, chi_bot};
+    labels3 = {'\mu','\sigma','\chi^2'};
 
-    % ===============================================================
-    % 6x6 CORRELATION PLOT FOR FIT PARAMETERS (Top and Bot Combined)
-    % ===============================================================
+    figure('Name','Fits: top vs bottom (diagonal inferior)');
+    tiledlayout(3,3,'TileSpacing','compact','Padding','compact');
+    for r = 1:3
+        for c = 1:3
+            nexttile;
+            if r == c
+                % Diagonal: overlaid histograms (top vs bottom)
+                vT = varsTop{r}; vB = varsBot{r};
+                v  = [vT; vB]; v = v(isfinite(v));
+                if isempty(v), axis off; continue; end
+                be = linspace(min(v), max(v), 60);
 
-    % Combine fitTop and fitBot data in the specified order: mu_top, sigma_top, chisq_top, chisq_bot, sigma_bot, mu_bot
-    fitCombined = [fitTop(:,1), fitTop(:,2), fitTop(:,3), charge_thin_top_total, charge_thin_bot_total, fitBot(:,3), fitBot(:,2), fitBot(:,1)];
+                % Remove zeroes of vT and vB
+                vT = vT(vT ~= 0);
+                vB = vB(vB ~= 0);
+                % Filter the values inside 0 and 24 for sigma
+                if r == 2  % sigma
+                    vT = vT(vT >= 0 & vT <= 24);
+                    vB = vB(vB >= 0 & vB <= 24);
+                    be = linspace(0, 24, 60);
+                end
+                histogram(vT, be, 'DisplayName','top', 'FaceAlpha',0.6); hold on;
+                histogram(vB, be, 'DisplayName','bottom', 'FaceAlpha',0.6);
+                % xlim between 0 and 24 for sigma
+                if r == 2  % sigma
+                    xlim([0, 24]);
+                end
+                xlabel(labels3{r}, 'Interpreter','tex'); ylabel('count');
+                % log scale for all
+                set(gca, 'YScale','log');
+                legend('show'); grid on; box on;
+            elseif r > c
+                % Lower triangle: bottom vs top scatter
+                vTy = varsTop{r}; vBx = varsBot{c};
+                m = isfinite(vTy) & isfinite(vBx);
+                if any(m)
+                    % Remove zeroes
+                    vTy = vTy(vTy ~= 0); vBx = vBx(vBx ~= 0);
+                    scatter(vBx(m), vTy(m), 5, 'filled', 'MarkerFaceAlpha',0.5);
+                    % Calculate 1% and 99% percentiles for limits
+                    percentile_position = 5;
+                    % p1x = prctile(vBx(m), percentile_position);
+                    p99x = prctile(vBx(m), 100 - percentile_position);
+                    % p1y = prctile(vTy(m), percentile_position);
+                    p99y = prctile(vTy(m), 100 - percentile_position);
+                    xlim([0, p99x]); ylim([0, p99y]);
 
-    % Labels for the variables
-    labels = {'\mu_{top}', '\sigma_{top}', '\chi^2_{top}', 'Q_{top}', 'Q_{bot}', '\chi^2_{bot}', '\sigma_{bot}', '\mu_{bot}'};
-
-    % Remove rows with any NaN
-    fitCombined = fitCombined(all(isfinite(fitCombined), 2), :);
-
-    % Compute 95th percentiles for chisq variables to set appropriate limits
-    q_95_qthin_top = prctile(fitCombined(:,4), 99);
-    q_95_qthin_bot = prctile(fitCombined(:,5), 99);
-    q95_chisq_top = prctile(fitTop(:,3), 99);
-    q95_chisq_bot = prctile(fitBot(:,3), 99);
-    max_chisq = max(q95_chisq_top, q95_chisq_bot);
-
-    % Define xLimits for each variable (use 0-25 for mu and sigma, 0-max_chisq for chisq)
-    xLimits = [25, 8, max_chisq, q_95_qthin_top, q_95_qthin_bot, max_chisq, 8, 25];  % Adjust as needed for other variables
-
-    % Bin edges (fixed for simplicity, but xlim will adjust)
-    binEdges = 0:0.1:25;
-
-    figure;
-    tiledlayout(8,8,'TileSpacing','compact','Padding','compact');
-
-    for i = 1:8
-        for j = 1:8
-            nexttile((i-1)*8 + j);
-            if i == j
-                % --- Diagonal: histogram of the variable ---
-                histogram(fitCombined(:,i), binEdges, ...
-                    'FaceColor',[0.3 0.5 0.8], 'EdgeColor','none');
-                xlim([0, xLimits(i)]);
-                xlabel(labels{i}, 'Interpreter','tex');
-                ylabel('Count');
-            elseif i > j
-                % --- Lower triangle: scatter ---
-                scatter(fitCombined(:,j), fitCombined(:,i), 3, ...
-                    'filled', 'MarkerFaceAlpha', 0.5);
-                xlim([0, xLimits(j)]);
-                ylim([0, xLimits(i)]);
-                xlabel(labels{j}, 'Interpreter','tex');
-                ylabel(labels{i}, 'Interpreter','tex');
-                
+                else
+                    axis off;
+                end
+                xlabel(['bottom ' labels3{c}], 'Interpreter','tex');
+                ylabel(['top '    labels3{r}], 'Interpreter','tex');
+                grid on; box on;
             else
-                % --- Upper triangle: leave blank ---
                 axis off;
             end
         end
     end
-
-    sgtitle(sprintf('Correlation of Gaussian Fit Parameters (Top and Bot Combined) (data from %s)', formatted_datetime));
-
-
-
-    % I want a scatter plot which is X_thick_strip vs Y_thick_strip
-    % Also there is a multiplexing in the thin strips, so what we have to do is to
-    % remove the degeneracy using the thick strip information, that is, X_thin_strip is
-    % a value between 1 and 24, but actually is like a modulo 24, because there are 5 thick strips
-    % and 24 thin strips INSIDE each thick strip. So I want to create first a matrix of X_thin positions
-    % where to each X, it is associated [X, X+24, X +48, X+72, X+96] and now display them in a scatter plot
-    % top and bottom
-
-
-    wrapPeriod = 24;             % strips per period
-    nWraps = 5;                  % number of periods to replicate
-
-
-    % X position from the bottom thin strips
-    X_thin_bot_real = X_thin_strip_bot + (X_thick_strip - 1) * wrapPeriod;
-
-    % Y position from the top thin strips
-    Y_thin_strip_top_sel = Y_thin_strip_top;      % [N x 1]
-    Yvals = (Y_thick_strip + 1.5)/3 * 120 + 1;   % [N x 1]
-    Y_thin_strip_top_all = Y_thin_strip_top_sel + (0:nWraps-1)*wrapPeriod; % [N x nWraps]
-    diffs = abs(Y_thin_strip_top_all - Yvals);
-    [~, idx_min] = min(diffs, [], 2);
-    Y_thin_strip_top_real = Y_thin_strip_top_all(sub2ind(size(Y_thin_strip_top_all), (1:size(Y_thin_strip_top_all,1))', idx_min));
+    sgtitle(sprintf('Top vs Bottom fits (diagonal inferior) — run %s', run));
 
 
     % ===============================================================
-    % Periodically expanded scatter: top vs bottom fitted mu values
-    % showing all wrapped diagonals
+    % (2) EXTENDED (PERIODICALLY EXPANDED) THIN COORDS
     % ===============================================================
+    wrapPeriod = 24;  % strips per thick
+    nWraps     = 5;   % number of thick strips in X (→ total 120)
 
-    wrapPeriod = 24;             % strips per period
-    nWraps = 5;                  % number of periods to replicate
+    % “Original” 1..24 fits
+    X_thin_strip_bot = ensure_col(mu_bot);
+    Y_thin_strip_top = ensure_col(mu_top);
 
-    % Expand along the wrap dimension for both axes
+    % Expand to show all periodic images
     X_thin_expanded_bot = arrayfun(@(x) x + (0:nWraps-1)*wrapPeriod, X_thin_strip_bot, 'UniformOutput', false);
     X_thin_expanded_bot = vertcat(X_thin_expanded_bot{:});
-
     Y_thin_expanded_top = arrayfun(@(x) x + (0:nWraps-1)*wrapPeriod, Y_thin_strip_top, 'UniformOutput', false);
     Y_thin_expanded_top = vertcat(Y_thin_expanded_top{:});
 
-    % Make all combinations of (top+offsetTop , bot+offsetBot)
-    [Xgrid_bot, Ygrid_top] = ndgrid(0:(nWraps-1), 0:(nWraps-1));
-    pairs = [Xgrid_bot(:), Ygrid_top(:)];
 
+    % ===============================================================
+    % (3) THICK & ORIGINAL THIN (top row), then THICK & FINAL THIN (bottom row)
+    % ===============================================================
 
-    nonzero_idx = Y_thick_for_position ~= 0;
+    % Build a consistent event mask for thick variables
+    % Use the same events as kept in goodFit; align vectors to nEvents first
+    X_thick_for_position = ensure_col(X_thick_for_position);
+    Y_thick_for_position = ensure_col(Y_thick_for_position);
+
+    nThick = min([numel(X_thick_for_position), numel(Y_thick_for_position), numel(goodFit)]);
+    X_thick_for_position = X_thick_for_position(1:nThick);
+    Y_thick_for_position = Y_thick_for_position(1:nThick);
+    gf = goodFit(1:nThick);
+
+    X_thick_for_position = X_thick_for_position(gf);   % 1..5
+    Y_thick_for_position = Y_thick_for_position(gf);   % -1.5..1.5 ns
+    % Thin fits (already gf-applied via fit trimming)
+    % Now re-ensure same length:
+    nPair = min([numel(X_thin_strip_bot), numel(Y_thin_strip_top), numel(X_thick_for_position), numel(Y_thick_for_position)]);
+    X_thin_strip_bot = X_thin_strip_bot(1:nPair);
+    Y_thin_strip_top = Y_thin_strip_top(1:nPair);
+    X_thick_for_position = X_thick_for_position(1:nPair);
+    Y_thick_for_position = Y_thick_for_position(1:nPair);
+
+    % Take events (that is, rows) where the four vectors are different to 0
+    nonzero_idx = (X_thick_for_position ~= 0) & (Y_thick_for_position ~= 0) & (X_thin_strip_bot ~= 0) & (Y_thin_strip_top ~= 0);
     X_thick_for_position = X_thick_for_position(nonzero_idx);      % [N x 1]
     Y_thick_for_position = Y_thick_for_position(nonzero_idx);      % [N x 1]
-    X_thin_strip_bot = X_thin_strip_bot(nonzero_idx);% [N x 1]
-    Y_thin_strip_top = Y_thin_strip_top(nonzero_idx);% [N x 1]
+    X_thin_strip_bot = X_thin_strip_bot(nonzero_idx); % [N x 1]
+    Y_thin_strip_top = Y_thin_strip_top(nonzero_idx); % [N x 1]
+    nPair = numel(X_thick_for_position);
 
-    X_thick_pos = X_thick_for_position / 5 * 120 - 12;
+    % Map thick to [1..120] axis for overlay plots
+    X_thick_pos = X_thick_for_position / 5 * 120 - 12;            % your mapping
     Y_thick_pos = (Y_thick_for_position + 1.5)/3 * 120 + 1;
 
-    % I want you to put distribute every value in X_thick_pos in a uniform distribution
-    % between [0, 24] if it is between [0, 24], between [24, 48] if it is between [24, 48], etc
-    wrap_idx = floor(X_thick_pos / wrapPeriod); % 0-based index: 0 for [0,24), 1 for [24,48), etc.
-    X_thick_pos_uniform = wrap_idx * wrapPeriod + rand(size(X_thick_pos)) * wrapPeriod;
-    X_thick_pos = X_thick_pos_uniform;
+    % Randomize thick-X within each 24-wide sector to reduce aliasing (keeps sector)
+    wrap_idx = floor(X_thick_pos / wrapPeriod); % 0,1,2,3,4
+    X_thick_pos = wrap_idx * wrapPeriod + rand(size(X_thick_pos))*wrapPeriod;
+
+    % “Final” (unwrapped) thin using thick X to pick the period
+    X_thin_bot_final = X_thin_strip_bot + (X_thick_for_position - 1) * wrapPeriod;   % [1..120]
+
+    % For Y (thin top): choose among 5 wraps the one closest to mapped thick-Y
+    Ymap = Y_thick_pos;                                 % [1..120]
+    Y_all = Y_thin_strip_top + (0:nWraps-1)*wrapPeriod; % [N x 5, implicit]
+    Y_all_mat = Y_thin_strip_top + (0:nWraps-1)*wrapPeriod; % row vector offsets
+    Y_all_mat = Y_all_mat(:)'; % 1x5
+    Y_cands = Y_thin_strip_top + Y_all_mat;             % N x 5
+    diffs   = abs(Y_cands - Ymap);
+    [~, idx_min] = min(diffs, [], 2);
+    Y_thin_top_final = Y_cands(sub2ind(size(Y_cands), (1:nPair)', idx_min)); % [1..120]
+
+    % ---- PLOTS: original thin vs thick (top row), final thin vs thick (bottom row) ----
+    commonColor = [0.2 0.8 0.2];
+    lims = [1, 24*5];
+
+    figure('Name','Original thin vs thick (top row) → Final thin vs thick (bottom row)');
+    tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
+
+    % (a) THIN X (original 1..24 repeated) vs THICK Y
+    nexttile; hold on;
+    for w = 0:nWraps-1
+        scatter(X_thin_strip_bot + w*wrapPeriod, Y_thick_pos, 3, 'filled', 'MarkerFaceAlpha',0.6);
+    end
+    for k = 0:nWraps
+        xline(k*wrapPeriod+1, '-',  'LineWidth', 1);
+        xline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+        yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
+        yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+    end
+    xlabel('THIN X_{bot} (original, wrapped to each period) [1–120]');
+    ylabel('THICK Y [1–120]');
+    xlim(lims); ylim(lims); grid off; box on; axis square;
+
+    % (b) THICK X vs THIN Y (original 1..24 repeated)
+    nexttile; hold on;
+    for w = 0:nWraps-1
+        scatter(X_thick_pos, Y_thin_strip_top + w*wrapPeriod, 3, 'filled', 'MarkerFaceAlpha',0.6);
+    end
+    for k = 0:nWraps
+        xline(k*wrapPeriod+1, '-',  'LineWidth', 1);
+        xline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+        yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
+        yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+    end
+    xlabel('THICK X [1–120]');
+    ylabel('THIN Y_{top} (original, wrapped to each period) [1–120]');
+    xlim(lims); ylim(lims); grid off; box on; axis square;
+
+    % (c) THIN X (final unwrapped) vs THICK Y
+    nexttile; hold on;
+    scatter(X_thin_bot_final, Y_thick_pos, 3, commonColor, 'filled', 'MarkerFaceAlpha',0.6);
+    for k = 0:nWraps
+        xline(k*wrapPeriod+1, '-',  'LineWidth', 1);
+        xline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+        yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
+        yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+    end
+    xlabel('THIN X_{bot} (final, unwrapped) [1–120]');
+    ylabel('THICK Y [1–120]');
+    xlim(lims); ylim(lims); grid off; box on; axis square;
+
+    % (d) THICK X vs THIN Y (final unwrapped)
+    nexttile; hold on;
+    scatter(X_thick_pos, Y_thin_top_final, 3, commonColor, 'filled', 'MarkerFaceAlpha',0.6);
+    for k = 0:nWraps
+        xline(k*wrapPeriod+1, '-',  'LineWidth', 1);
+        xline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+        yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
+        yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
+    end
+    xlabel('THICK X [1–120]');
+    ylabel('THIN Y_{top} (final, unwrapped) [1–120]');
+    xlim(lims); ylim(lims); grid off; box on; axis square;
+
+    sgtitle(sprintf('Original thin vs thick → Final thin vs thick (run %s)', run));
 
 
     % ===============================================================
-    % Unified 2x2 scatter plot matrix with consistent limits, labels, and boundaries
+    % (4) FINAL X–Y MAP (in mm) USING FINAL UNWRAPPED VALUES
     % ===============================================================
+    % mm conversions
+    to_mm = @(ax) (ax/120 - 0.5) * 300;  % 1..120 → -150..150 mm
 
-    wrapPeriod = 24;
-    nWraps     = 5;
-    totalRange = wrapPeriod * nWraps;
-    lims       = [1 totalRange];
-    commonColor = [0.2 0.8 0.2];  % same greenish tone for all points
+    X_final_ax = ensure_col(X_thin_bot_final);
+    Y_final_ax = ensure_col(Y_thin_top_final);
+    valid = isgood(X_final_ax) & isgood(Y_final_ax);
 
-    % ---------------------------------------------------------------
+    X_final_mm = to_mm(X_final_ax(valid));
+    Y_final_mm = to_mm(Y_final_ax(valid));
 
-
-    % mm in [-150,150] -> axis coordinate in [1,120]
-    toPosCoord = @(mm) 1 + (mm + 150) * (119/300);   % exact: -150 -> 1, +150 -> 120
-
-    % mm size (width/height) -> axis size (same units as [1..120])
-    toPosSize  = @(mm) abs(mm) * (119/300);          % scale only, no offset
-
-
-    % --- Inputs in mm ---
+    % Optional rectangle in mm
     base_mm   = 20;
     height_mm = 80;
     center_mm = [-80, -27];
 
-    % --- Convert to axis units (1..120) ---
-    base_ax   = toPosSize(base_mm);
-    height_ax = toPosSize(height_mm);
-    center_ax = [toPosCoord(center_mm(1)), toPosCoord(center_mm(2))];
-
-    % --- Rectangle [x_left, y_bottom, width, height] in axis units ---
-    rect_ax = [center_ax(1) - base_ax/2, center_ax(2) - height_ax/2, base_ax, height_ax];
-
-    
-    figure;
-
-    % === (1) THICK X vs THICK Y ===
-    subplot(2,2,1);
-    scatter(X_thick_pos, Y_thick_pos, 3, commonColor, 'filled', 'MarkerFaceAlpha', 0.6);
-    hold on;
-    xlabel('THICK X position [1–120]');
-    ylabel('THICK Y position [1–120]');
-    title('THICK X vs THICK Y');
-    addBoundaries(gca, wrapPeriod, nWraps, lims);
-    rectangle('Position', rect_ax, 'EdgeColor', 'r', 'LineWidth', 2);
-
-    % === (2) THIN X vs THICK Y ===
-    subplot(2,2,2); hold on;
-    for k = 1:size(pairs,1)
-        offsetBot = pairs(k,2)*wrapPeriod;
-        scatter(X_thin_strip_bot + offsetBot, Y_thick_pos, ...
-                3, commonColor, 'filled', 'MarkerFaceAlpha', 0.6);
+    figure('Name','Final XY map');
+    scatter(X_final_mm, Y_final_mm, 6, 'filled', 'MarkerFaceAlpha',0.4); hold on;
+    % Add xlines not dashed and dashed ylines each 24 strip interval, transforming from strip to mm
+    for k = 0:nWraps
+        xline((( k*wrapPeriod + 1 ) /120 - 0.5)*300, '-',  'LineWidth', 1);
+        xline(((k*wrapPeriod+wrapPeriod + 1)/120 - 0.5)*300, '--', 'LineWidth', 1);
+        yline(((k*wrapPeriod + 1 ) /120 - 0.5)*300, '--', 'LineWidth', 1);
+        yline(((k*wrapPeriod+wrapPeriod + 1)/120 - 0.5)*300, '--', 'LineWidth', 1);
     end
-    hold on;
-    xlabel('THIN X_{bot} (unwrapped) [1–120]');
-    ylabel('THICK Y position [1–120]');
-    title('THIN X (bot) vs THICK Y');
-    addBoundaries(gca, wrapPeriod, nWraps, lims);
-    rectangle('Position', rect_ax, 'EdgeColor', 'r', 'LineWidth', 2);
-
-    % === (3) THICK X vs THIN Y ===
-    subplot(2,2,3); hold on;
-    for k = 1:size(pairs,1)
-        offsetTop = pairs(k,1)*wrapPeriod;
-        scatter(X_thick_pos, Y_thin_strip_top + offsetTop, ...
-                3, commonColor, 'filled', 'MarkerFaceAlpha', 0.6);
-    end
-    hold on;
-    xlabel('THICK X position [1–120]');
-    ylabel('THIN Y_{top} (unwrapped) [1–120]');
-    title('THICK X vs THIN Y (top)');
-    addBoundaries(gca, wrapPeriod, nWraps, lims);
-    rectangle('Position', rect_ax, 'EdgeColor', 'r', 'LineWidth', 2);
-
-    % === (4) THIN X vs THIN Y ===
-    subplot(2,2,4); hold on;
-    for k = 1:size(pairs,1)
-        offsetBot = pairs(k,2)*wrapPeriod;
-        offsetTop = pairs(k,1)*wrapPeriod;
-        scatter(X_thin_strip_bot + offsetBot, Y_thin_strip_top + offsetTop, ...
-                3, commonColor, 'filled', 'MarkerFaceAlpha', 0.6);
-    end
-    hold on;
-    xlabel('THIN X_{bot} (unwrapped) [1–120]');
-    ylabel('THIN Y_{top} (unwrapped) [1–120]');
-    title('THIN X vs THIN Y');
-    addBoundaries(gca, wrapPeriod, nWraps, lims);
-    rectangle('Position', rect_ax, 'EdgeColor', 'r', 'LineWidth', 2);
-
-    sgtitle(sprintf('2×2 Correlations between THICK and THIN Strip Positions (all wrapped) (data from %s)', formatted_datetime));
-    
-    % ===============================================================
-
-
-
-    % ===============================================================
-    % Correlation: X_thin_BOT (unwrapped) vs X_thick
-    % ===============================================================
-    figure;
-    % Histogram of Y_thick_strip, avoid zeroes
-    subplot(2,2,1);
-    histogram( X_thick_strip - 0.5, 0.5:1:5.5);
-    xlabel('X_{thick} [strip]');
-    ylabel('# of events');
-    title('X_{thick} distribution');
-    xlim([0.5 5.5]);
-    grid on; box on;
-
-    % Histogram of Y_thin_strip_top (unwrapped) but the unwrapping does not use X_thick_strip,
-    % I prefer that it simply creates the full posibilities which is Y_thin_strip_top + (1:5-1)*24
-    subplot(2,2,3);
-    histogram(X_thin_strip_bot + (0:nWraps-1)*wrapPeriod, 1:0.5:120); hold on;
-    histogram(X_thin_bot_real, 1:0.5:120);
-    xlabel('X_{thin} (unwrapped) [ns]');
-    ylabel('# of events');
-    title('X_{thin} (unwrapped) distribution');
-    xlim([1 120]);
-    grid on; box on;
-
-
-    % Y_thick_strip is a value in ns which goes from -1.5 to 1.5 ns, since the strips are 30 cm long
-    % and the signal propagates at 2/3 the speed of light, so 30 cm / (c*2/3) = 1.5 ns.
-    % At the same time, the Y_thin_strip_top is a value between 1 and 24, when it's wrapped,
-    % but actually it is a value between 1 and 120. What I want is to histogram Y_thick_strip
-    % and above it plot Y_thin_strip_top but uynwrapped, that is, Y_thin_strip_top + (X_thick_strip - 1)*24
-    % to see if there is a correlation between Y_thin_strip_top unwrapped and Y_thick_strip
-
-    % ===============================================================
-    % Correlation: X_thin_TOP (unwrapped) vs Y_thick
-    % ===============================================================
-
-    % Histogram of Y_thick_strip, avoid zeroes
-    subplot(2,2,2);
-    histogram( ( Y_thick_strip(Y_thick_strip ~= 0) + 1.5 ) / 3 * 120 + 1, 1:0.5:120);
-    xlabel('Y_{thick} [(Tfl - Tbl)/2] [AU]');
-    ylabel('# of events');
-    title('Y_{thick} distribution');
-    % xlim([-1.5 1.5]);
-    grid on; box on;
-
-
-    % Only use nonzero Y_thick_strip values
-    nonzero_idx = Y_thick_strip ~= 0;
-    Y_thin_strip_top_sel = Y_thin_strip_top(nonzero_idx);      % [N x 1]
-    Yvals = (Y_thick_strip(nonzero_idx) + 1.5)/3 * 120 + 1;   % [N x 1]
-
-    % Expand Y_thin_strip_top_sel for all wrap possibilities [N x nWraps]
-    Y_thin_strip_top_all = Y_thin_strip_top_sel + (0:nWraps-1)*wrapPeriod; % [N x nWraps]
-
-    % Do a copy of Y vals to match dimensions [N x nWraps]
-    % Yvals = repmat(Yvals, 1, nWraps); % [N x nWraps]
-
-    % For each event, find the wrap that minimizes the distance to Yvals
-    diffs = abs(Y_thin_strip_top_all - Yvals);
-    [~, idx_min] = min(diffs, [], 2);
-
-    % Select the best unwrapped Y_thin_strip_top for each event
-    Y_thin_strip_top_real = Y_thin_strip_top_all(sub2ind(size(Y_thin_strip_top_all), (1:size(Y_thin_strip_top_all,1))', idx_min));
-
-    % Histogram of Y_thin_strip_top (unwrapped) but the unwrapping does not use X_thick_strip,
-    % I prefer that it simply creates the full posibilities which is Y_thin_strip_top + (1:5-1)*24
-    subplot(2,2,4);
-    histogram(Y_thin_strip_top + (0:nWraps-1)*wrapPeriod, 1:0.5:120); hold on;
-    histogram(Y_thin_strip_top_real, 1:0.5:120);
-    xlabel('X_{thin} (unwrapped) [ns]');
-    ylabel('# of events');
-    title('X_{thin} (unwrapped) distribution');
-    xlim([1 120]);
-    grid on; box on;
-
-
-
-    X_final = X_thin_bot_real;
-    Y_final = Y_thin_strip_top_real;
-
-
-    figure; scatter( (X_final(valid) / 120 - 0.5) * 300, ( Y_final(valid) / 120 - 0.5) * 300, 6, 'filled', 'MarkerFaceAlpha', 0.4);
-    hold on;
-    % for k = 1:nWraps
-    %     xline((k-1)*wrapPeriod + 0.5, '-',  'LineWidth', 1);
-    %     xline(k*wrapPeriod       + 0.5, '--', 'LineWidth', 1);
-    %     yline((k-1)*wrapPeriod + 0.5, '--', 'LineWidth', 1);
-    %     yline(k*wrapPeriod       + 0.5, '--', 'LineWidth', 1);
-    % end
-    plot([-150 -150], [150 150], '--', 'LineWidth', 1);
-    xlim([-150 150]); ylim([-150 150]); grid on; box on; axis square;
-    xlabel('X_{final} (1..120)'); ylabel('Y_{final} (1..120)');
-    title('Disambiguated thin positions using thick constraints');
-
-    % Add a rectangle
-    rectangle('Position',[center_mm(1)-base_mm/2, center_mm(2)-height_mm/2, base_mm, height_mm],'EdgeColor','r','LineWidth',2);
-
+    xlim([-150 150]); ylim([-150 150]); grid off; box on; axis square;
+    xlabel('X_{final} [mm]'); ylabel('Y_{final} [mm]');
+    title(sprintf('Disambiguated thin positions using thick constraints — run %s', run));
+    rectangle('Position', [center_mm(1)-base_mm/2, center_mm(2)-height_mm/2, base_mm, height_mm], ...
+              'EdgeColor', 'r', 'LineWidth', 2);
 
 end
+
 
 %%
 
