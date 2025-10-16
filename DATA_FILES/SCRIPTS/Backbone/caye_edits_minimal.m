@@ -16,9 +16,11 @@
 % Q = t - l
 
 
-% =====================================================================
-% Configuration Paths and Run Selection
-% =====================================================================
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Header
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
 
 save_plots_dir_default = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/PDF';
 if ~exist('save_plots','var')
@@ -31,31 +33,61 @@ end
 clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp;
 close all; clc;
 
-% -------------------------------
+
+%%
+
+
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Run test definition
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+
 test = true;
 run = 1;
 
 if test
     if run == 1
         input_dir = 'dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s";
+        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s";
     elseif run == 2
         input_dir = 'dabc25127151027-dabc25147011139_JOANA_RUN_2_2025-10-08_15h05m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED/dabc25127151027-dabc25147011139_JOANA_RUN_2_2025-10-08_15h05m00s";
+        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/dabc25127151027-dabc25147011139_JOANA_RUN_2_2025-10-08_15h05m00s";
     elseif run == 3
         input_dir = 'dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED/dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s";
+        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s";
     else
         error('For test mode, set run to 1, 2, or 3.');
     end
 end
-% -------------------------------
 
+% ---------------------------------------------------------------------
+
+
+%%
+
+
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% File import and Setup
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+
+
+% Some paths ----------------------------------------------------------
 HOME    = '/home/csoneira/WORK/LIP_stuff/';
 SCRIPTS = 'JOAO_SETUP/';
 DATA    = 'matFiles/time/';
 DATA_Q    = 'matFiles/charge/';
 path(path,[HOME SCRIPTS 'util_matPlots']);
+
+summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/';
+path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/util_matPlots');
+project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
+mst_saves_root = fullfile(project_root, 'MST_saves');
+unpacked_root = fullfile(project_root, 'DATA_FILES', 'DATA', 'UNPACKED', 'PROCESSING');
+% ---------------------------------------------------------------------
+
 
 if isstring(save_plots_dir)
     save_plots_dir = char(save_plots_dir);
@@ -80,18 +112,9 @@ if save_plots
     set(groot, 'DefaultFigureCreateFcn', @(fig, ~) set(fig, 'Visible', 'off'));
 end
 
-
-
-summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/';
 if ~exist(summary_output_dir, 'dir')
     mkdir(summary_output_dir);
 end
-
-path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/util_matPlots');
-
-project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
-mst_saves_root = fullfile(project_root, 'MST_saves');
-unpacked_root = fullfile(project_root, 'DATA_FILES', 'DATA', 'UNPACKED', 'PROCESSING');
 
 if ( ~exist('input_dir','var') || isempty(input_dir) ) && ~test
     if ~isfolder(mst_saves_root)
@@ -188,48 +211,19 @@ for idx = 1:numel(charge_files)
     load(charge_path);
 end
 
-whos
+% whos
 
-% -----------------------------------------------------------
-% Select run number and percentile thresholds for charge cuts
-% -----------------------------------------------------------
 
-% if run is not 1,2,3, then set run to 0
-if run ~= 1 && run ~= 2 && run ~= 3
-    run = 0;
-end
+%%
 
-percentile_pmt = 25;
-percentile_narrow = 1;
-percentile_thick = 1;
-percentiles = true;
 
-% Filters of the raw data only
-% PMTs
-lead_time_pmt_min = -120;
-lead_time_pmt_max = -70;
-trail_time_pmt_min = -50;
-trail_time_pmt_max = 200;
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% NaN scrubber: replace NaNs with 0 across all float variables
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
 
-time_pmt_diff_thr = 50; % ns
 
-tTH = 4; %time threshold [ns] to assume it comes from a good event; obriga a ter tempos nos 4 cint JOANA HAD 3 ns
-
-% WIDE
-lead_time_wide_strip_min = -200;
-lead_time_wide_strip_max = -50;
-trail_time_wide_strip_min = -150;
-trail_time_wide_strip_max = 300;
-
-charge_wide_strip_diff_thr = 25;
-
-% NARROW
-charge_narrow_strip_min = 0;
-charge_narrow_strip_max = 30000;
-% -----------------------------------------------------------
-% -----------------------------------------------------------
-
-% -------- NaN scrubber: replace NaNs with 0 across all float variables -----
 ws = 'base';                     % workspace to operate on
 vars = evalin(ws, 'whos');       % list all variables
 
@@ -256,7 +250,7 @@ for k = 1:numel(vars)
             assignin(ws, name, val);
         end
 
-        fprintf('NaNs in %-25s : %d\n', name, nans);
+        % fprintf('NaNs in %-25s : %d\n', name, nans);
         replaced_names{end+1}  = name; %#ok<AGROW>
         replaced_counts(end+1) = nans; %#ok<AGROW>
 
@@ -276,6 +270,83 @@ fprintf('  Variables processed (float): %d\n', numel(replaced_names));
 fprintf('  Total NaNs replaced:         %d\n', total_nans);
 fprintf('  Variables skipped:           %d\n', numel(skipped_names));
 fprintf('=====================================================\n');
+
+
+
+
+
+
+
+
+
+%%
+
+
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Parameters and Thresholds
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+
+% -----------------------------------------------------------
+% Select run number and percentile thresholds for charge cuts
+% -----------------------------------------------------------
+
+% if run is not 1,2,3, then set run to 0
+if run ~= 1 && run ~= 2 && run ~= 3
+    run = 0;
+end
+
+percentile_pmt = 25;
+percentile_narrow = 1;
+percentile_thick = 1;
+percentiles = true;
+
+% PMTs
+lead_time_pmt_min = -120;
+lead_time_pmt_max = -70;
+trail_time_pmt_min = -50;
+trail_time_pmt_max = 200;
+
+time_pmt_diff_thr = 50; % ns
+
+tTH = 4; %time threshold [ns] to assume it comes from a good event; obriga a ter tempos nos 4 cint JOANA HAD 3 ns
+
+% WIDE
+lead_time_wide_strip_min = -200;
+lead_time_wide_strip_max = -50;
+trail_time_wide_strip_min = -150;
+trail_time_wide_strip_max = 300;
+
+charge_wide_strip_diff_thr = 25;
+
+if run == 1 || run == 2 || run == 3
+    % Joana runs (previous to June 2025)
+    QF_offsets = [82, 75, 82, 80, 75]; % from selfTrigger
+    QB_offsets = [82, 84, 81, 83, 81];
+else
+    % October run (from October 2025 to beyond)
+    fprintf('Using October 2025 offsets\n');
+    QF_offsets = [90, 83, 70, 86, 81]; % from selfTrigger
+    QB_offsets = [87, 88, 70, 87, 87];
+end
+
+% NARROW
+charge_narrow_strip_min = 0;
+charge_narrow_strip_max = 30000;
+
+% Crosstalk
+thick_strip_crosstalk = 0; % ADCbins
+top_narrow_strip_crosstalk = 0; % ADCbins/event
+bot_narrow_strip_crosstalk = 0; % ADCbins/event
+% -----------------------------------------------------------
+% -----------------------------------------------------------
+
+
+
+
+
+
 
 
 % ---------------------------------------------------------------------
@@ -607,6 +678,321 @@ Q_thin_bot_event = sum(Qb, 2); % total charge in the 5 narrow strips on the bott
 
 %%
 
+
+
+
+
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Wide strip calibrations
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+
+
+% For the original events only ----------------------------------------
+QB_p_OG = QB_OG - QB_offsets .* (QB_OG ~= 0);
+QF_p_OG = QF_OG - QF_offsets .* (QF_OG ~= 0);
+
+% calculation of maximum charges and RAW position as a function of Qmax
+T_OG = nan(rawEvents,1); Q_OG = nan(rawEvents,1); X_OG = nan(rawEvents,1); Y_OG = nan(rawEvents,1);
+T_OG(rows) = (TFl_OG(Ind2Keep) + TBl_OG(Ind2Keep)) / 2; %[ns]
+Q_OG(rows) = (QF_p_OG(Ind2Keep) + QB_p_OG(Ind2Keep)) /2;    %[ns] sum of Qmax front and back -> contains NaNs if an event fails the Ind2Keep condition
+X_OG(rows) = XFmax(rows);  %strip number where Qmax is found (1 to 5)
+Y_OG(rows) = (TFl_OG(Ind2Keep) - TBl_OG(Ind2Keep)) / 2; %[ns]
+
+X_thick_strip_OG = X_OG; %redefine X_thick_strip to be the strip number with maximum charge
+Y_thick_strip_OG = Y_OG; %redefine Y_thick_strip to be the Y position with maximum charge
+T_thick_strip_OG = T_OG; %redefine T_thick_strip to be the T from the strip with maximum charge
+Q_thick_event_OG = Q_OG; %redefine Q_thick_event to be the Q from the strip with maximum charge
+
+
+% For the good events only --------------------------------------------
+QB_p = QB - QB_offsets .* (QB ~= 0);
+QF_p = QF - QF_offsets .* (QF ~= 0);
+
+% calculation of maximum charges and RAW position as a function of Qmax
+[QFmax,XFmax] = max(QF_p,[],2);    %XFmax -> strip of Qmax
+[QBmax,XBmax] = max(QB_p,[],2);
+
+% Keep only events where the strip with maximum charge matches on both faces
+Ind2Cut   = find(~isnan(QF_p) & ~isnan(QB_p) & XFmax == XBmax);
+[row,col] = ind2sub(size(TFl),Ind2Cut); %row=evento com Qmax na mesma strip; col=strip não interessa pois fica-se com a strip com Qmax
+rows      = unique(row); %events sorted and without repetitions
+Ind2Keep  = sub2ind(size(TFl),rows,XFmax(rows)); %indices of the Qmax values, provided QFmax and QBmax are on the same strip
+
+T = nan(rawEvents,1); Q = nan(rawEvents,1); X = nan(rawEvents,1); Y = nan(rawEvents,1);
+T(rows) = (TFl(Ind2Keep) + TBl(Ind2Keep)) / 2; %[ns]
+Q(rows) = (QF_p(Ind2Keep) + QB_p(Ind2Keep)) /2;    %[ns] sum of Qmax front and back -> contains NaNs if an event fails the Ind2Keep condition
+X(rows) = XFmax(rows);  %strip number where Qmax is found (1 to 5)
+Y(rows) = (TFl(Ind2Keep) - TBl(Ind2Keep)) / 2; %[ns]
+
+X_thick_strip = X; %redefine X_thick_strip to be the strip number with maximum charge
+Y_thick_strip = Y; %redefine Y_thick_strip to be the Y position with maximum charge
+T_thick_strip = T; %redefine T_thick_strip to be the T from the strip with maximum charge
+Q_thick_event = Q; %redefine Q_thick_event to be the Q from the strip with maximum charge
+
+
+
+%%
+
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Definition of new detasets
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+
+
+% ---------------------------------------------------------------------
+% ==================== Signal EVENTS (zero-out others) ================
+% ---------------------------------------------------------------------
+
+% Create masks------------------------------------------------------------
+validEvents_signal = (Qcint_OG(:,1) ~= 0) & (Qcint_OG(:,2) ~= 0) & (Qcint_OG(:,3) ~= 0) & (Qcint_OG(:,4) ~= 0);
+
+
+% Apply masks ------------------------------------------------------------
+
+% --- PMTs --- N x 4
+Qcint_signal = zeros(size(Qcint_OG), 'like', Qcint_OG);
+Qcint_signal(validEvents_signal, :) = Qcint_OG(validEvents_signal, :);
+
+% --- THICK (event-level) --- N x 1
+X_thick_strip_signal = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
+Y_thick_strip_signal = zeros(size(Y_thick_strip_OG), 'like', Y_thick_strip_OG);
+T_thick_strip_signal = zeros(size(T_thick_strip_OG), 'like', T_thick_strip_OG);
+Q_thick_event_signal = zeros(size(Q_thick_event_OG), 'like', Q_thick_event_OG);
+X_thick_strip_signal(validEvents_signal) = X_thick_strip_OG(validEvents_signal);
+Y_thick_strip_signal(validEvents_signal) = Y_thick_strip_OG(validEvents_signal);
+T_thick_strip_signal(validEvents_signal) = T_thick_strip_OG(validEvents_signal);
+Q_thick_event_signal(validEvents_signal) = Q_thick_event_OG(validEvents_signal);
+
+% --- THIN STRIPS --- N x 24
+Qb_signal = zeros(size(Qb_OG), 'like', Qb_OG);
+Qt_signal = zeros(size(Qt_OG), 'like', Qt_OG);
+Qb_signal(validEvents_signal, :) = Qb_OG(validEvents_signal, :);
+Qt_signal(validEvents_signal, :) = Qt_OG(validEvents_signal, :);
+
+% Totals per event --- N x 1
+Q_thin_top_event_signal = sum(Qt_signal, 2);
+Q_thin_bot_event_signal = sum(Qb_signal, 2);
+
+
+
+% ---------------------------------------------------------------------
+% ==================== COIN VALID EVENTS (zero-out others) ============
+% ---------------------------------------------------------------------
+
+% Create masks------------------------------------------------------------
+validEvents_coin = (Qcint(:,1) ~= 0) & (Qcint(:,2) ~= 0) & (Qcint(:,3) ~= 0) & (Qcint(:,4) ~= 0);
+
+
+% Apply masks ------------------------------------------------------------
+
+% --- PMTs --- N x 4
+Qcint_coin = zeros(size(Qcint_OG), 'like', Qcint_OG);
+Qcint_coin(validEvents_coin, :) = Qcint_OG(validEvents_coin, :);
+
+% --- THICK (event-level) --- N x 1
+X_thick_strip_coin = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
+Y_thick_strip_coin = zeros(size(Y_thick_strip_OG), 'like', Y_thick_strip_OG);
+T_thick_strip_coin = zeros(size(T_thick_strip_OG), 'like', T_thick_strip_OG);
+Q_thick_event_coin = zeros(size(Q_thick_event_OG), 'like', Q_thick_event_OG);
+X_thick_strip_coin(validEvents_coin) = X_thick_strip_OG(validEvents_coin);
+Y_thick_strip_coin(validEvents_coin) = Y_thick_strip_OG(validEvents_coin);
+T_thick_strip_coin(validEvents_coin) = T_thick_strip_OG(validEvents_coin);
+Q_thick_event_coin(validEvents_coin) = Q_thick_event_OG(validEvents_coin);
+
+% --- THIN STRIPS --- N x 24
+Qb_coin = zeros(size(Qb_OG), 'like', Qb_OG);
+Qt_coin = zeros(size(Qt_OG), 'like', Qt_OG);
+Qb_coin(validEvents_coin, :) = Qb_OG(validEvents_coin, :);
+Qt_coin(validEvents_coin, :) = Qt_OG(validEvents_coin, :);
+
+% Totals per event --- N x 1
+Q_thin_top_event_coin = sum(Qt_coin, 2);
+Q_thin_bot_event_coin = sum(Qb_coin, 2);
+
+
+
+% ---------------------------------------------------------------------
+% ==================== GOOD VALID EVENTS (zero-out others) ============
+% ---------------------------------------------------------------------
+
+% Create masks---------------------------------------------------------
+% Same as before, validEvents_coin = (Qcint(:,1) ~= 0) & (Qcint(:,2) ~= 0) & (Qcint(:,3) ~= 0) & (Qcint(:,4) ~= 0);
+
+
+% Apply masks ---------------------------------------------------------
+
+% --- PMTs --- N x 4
+Qcint_good = zeros(size(Qcint), 'like', Qcint);
+Qcint_good(validEvents_coin, :) = Qcint(validEvents_coin, :);
+
+% --- THICK ---
+X_thick_strip_good = zeros(size(X_thick_strip), 'like', X_thick_strip);
+Y_thick_strip_good = zeros(size(Y_thick_strip), 'like', Y_thick_strip);
+T_thick_strip_good = zeros(size(T_thick_strip), 'like', T_thick_strip);
+Q_thick_event_good = zeros(size(Q_thick_event), 'like', Q_thick_event);
+X_thick_strip_good(validEvents_coin, :) = X_thick_strip(validEvents_coin, :);
+Y_thick_strip_good(validEvents_coin, :) = Y_thick_strip(validEvents_coin, :);
+T_thick_strip_good(validEvents_coin, :) = T_thick_strip(validEvents_coin, :);
+Q_thick_event_good(validEvents_coin) = Q_thick_event(validEvents_coin);
+
+% Extra, only for calibration checking
+QF_good = zeros(size(QF), 'like', QF);
+QB_good = zeros(size(QB), 'like', QB);
+QF_p_good = zeros(size(QF_p), 'like', QF_p);
+QB_p_good = zeros(size(QB_p), 'like', QB_p);
+QF_good(validEvents_coin, :) = QF(validEvents_coin, :);
+QB_good(validEvents_coin, :) = QB(validEvents_coin, :);
+QF_p_good(validEvents_coin, :) = QF_p(validEvents_coin, :);
+QB_p_good(validEvents_coin, :) = QB_p(validEvents_coin, :);
+
+% --- THIN STRIPS ---
+Qb_good = zeros(size(Qb), 'like', Qb);
+Qt_good = zeros(size(Qt), 'like', Qt);
+Qb_good(validEvents_coin, :) = Qb(validEvents_coin, :);
+Qt_good(validEvents_coin, :) = Qt(validEvents_coin, :);
+
+% Totals per event --- N x 1
+Q_thin_top_event_good = sum(Qt_good, 2);
+Q_thin_bot_event_good = sum(Qb_good, 2);
+
+
+
+% ------------------------------------------------------------------------
+% ==================== RANGE EVENTS (zero-out others) ====================
+% ------------------------------------------------------------------------
+
+% Create masks------------------------------------------------------------
+validEventsFiltered_range = ...
+    (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
+    (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
+    (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
+    (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
+
+% Apply masks ------------------------------------------------------------
+
+% --- PMTs --- N x 4
+Qcint_range = zeros(size(Qcint_good), 'like', Qcint_good);
+Qcint_range(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_PMT, :);
+
+% --- THICK STRIPS --- N x 1
+X_thick_strip_range = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
+Y_thick_strip_range = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
+T_thick_strip_range = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
+Q_thick_event_range = zeros(size(Q_thick_event_good), 'like', Q_thick_event_good);
+X_thick_strip_range(validEventsFiltered_range, :) = X_thick_strip_good(validEventsFiltered_range, :);
+Y_thick_strip_range(validEventsFiltered_range, :) = Y_thick_strip_good(validEventsFiltered_range, :);
+T_thick_strip_range(validEventsFiltered_range, :) = T_thick_strip_good(validEventsFiltered_range, :);
+
+Q_thick_event_range(validEventsFiltered_range) = Q_thick_event_good(validEventsFiltered_range);
+
+% --- THIN STRIPS --- N x 24
+Qb_range = zeros(size(Qb_good), 'like', Qb_good);
+Qt_range = zeros(size(Qt_good), 'like', Qt_good);
+Qb_range(validEventsFiltered_range, :) = Qb_good(validEventsFiltered_range, :);
+Qt_range(validEventsFiltered_range, :) = Qt_good(validEventsFiltered_range, :);
+
+% Totals per event --- N x 1
+Q_thin_top_event_range = sum(Qt_range, 2);
+Q_thin_bot_event_range = sum(Qb_range, 2);
+
+
+
+% ------------------------------------------------------------------------
+% ==================== NO CROSSTALK EVENTS (zero-out others) =============
+% ------------------------------------------------------------------------
+
+% Create masks------------------------------------------------------------
+validEventsFiltered_PMT = ...
+    (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
+    (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
+    (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
+    (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
+validEventsFiltered_thick = (Q_thick >= thick_strip_crosstalk);
+validEventsFiltered_thin_top = (Q_thin_top >= top_narrow_strip_crosstalk);
+validEventsFiltered_thin_bot = (Q_thin_bot >= bot_narrow_strip_crosstalk);
+
+
+% Apply masks ------------------------------------------------------------
+% --- PMTs --- N x 4
+Qcint_no_crosstalk = zeros(size(Qcint_good), 'like', Qcint_good);
+Qcint_no_crosstalk(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_PMT, :);
+
+% --- THICK STRIPS --- N x 1
+X_thick_strip_no_crosstalk = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
+Y_thick_strip_no_crosstalk = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
+T_thick_strip_no_crosstalk = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
+Q_thick_event_no_crosstalk = zeros(size(Q_thick_event_good), 'like', Q_thick_event_good);
+X_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = X_thick_strip_good(validEventsFiltered_thick, :);
+Y_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = Y_thick_strip_good(validEventsFiltered_thick, :);
+T_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = T_thick_strip_good(validEventsFiltered_thick, :);
+Q_thick_event_no_crosstalk(validEventsFiltered_thick) = Q_thick_event(validEventsFiltered_thick);
+
+% --- THIN STRIPS --- N x 24
+Qb_no_crosstalk = zeros(size(Qb_good), 'like', Qb_good);
+Qt_no_crosstalk = zeros(size(Qt_good), 'like', Qt_good);
+Qb_no_crosstalk(validEventsFiltered_thin_bot, :) = Qb_good(validEventsFiltered_thin_bot, :);
+Qt_no_crosstalk(validEventsFiltered_thin_top, :) = Qt_good(validEventsFiltered_thin_top, :);
+
+% Totals per event --- N x 1
+Q_thin_top_event_no_crosstalk = zeros(size(Q_thin_top_event_good), 'like', Q_thin_top_event_good);
+Q_thin_bot_event_no_crosstalk = zeros(size(Q_thin_bot_event_good), 'like', Q_thin_bot_event_good);
+Q_thin_top_event_no_crosstalk(validEventsFiltered_thin_top) = Q_thin_top_event_good(validEventsFiltered_thin_top);
+Q_thin_bot_event_no_crosstalk(validEventsFiltered_thin_bot) = Q_thin_bot_event_good(validEventsFiltered_thin_bot);
+
+%%
+
+
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Definitions for histograms and plots
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+
+% Quantile limits (thin channels share limits)
+q005_b = quantile(Q_thin_bot_event_good, 0.005);
+q005_t = quantile(Q_thin_top_event_good, 0.005);
+q005   = min(q005_b, q005_t);
+
+q95_b  = quantile(Q_thin_bot_event_good, 0.95);
+q95_t  = quantile(Q_thin_top_event_good, 0.95);
+q95    = max(q95_b, q95_t);
+
+% Thick channel limits (separate scale)
+q005_thick = quantile(Q_thick_event_good, 0.005);
+q95_thick  = quantile(Q_thick_event_good, 0.95);
+
+% Bin edges (match your “like this” snippet for thin; keep fine bins for thick)
+bin_number = 100; % number of bins
+thinTopEdges  = linspace(q005, q95, bin_number); % 100 bins between 0.5% and 95% quantiles
+thinBotEdges  = linspace(q005, q95, bin_number); % 100 bins between 0.5% and 95% quantiles
+thickEdges    = linspace(q005_thick, q95_thick, bin_number); % 100 bins between 0.5% and 95% quantiles
+
+
+% Create a non_zero version called Q_thick_event_good_hist
+% THICK
+Q_thick_event_hist = Q_thick_event;
+Q_thick_event_hist(Q_thick_event_hist == 0) = []; % remove zeros for histogram
+Q_thick_event_good_hist = Q_thick_event_good;
+Q_thick_event_good_hist(Q_thick_event_good_hist == 0) = []; % remove zeros for histogram
+
+% THIN TOP
+Q_thin_bot_event_hist = Q_thin_bot_event;
+Q_thin_bot_event_hist(Q_thin_bot_event_hist == 0) = []; % remove zeros for histogram
+Q_thin_bot_event_good_hist = Q_thin_bot_event_good;
+Q_thin_bot_event_good_hist(Q_thin_bot_event_good_hist == 0) = []; % remove zeros for histogram
+
+% THIN BOTTOM
+Q_thin_top_event_hist = Q_thin_top_event;
+Q_thin_top_event_hist(Q_thin_top_event_hist == 0) = []; % remove zeros for histogram
+Q_thin_top_event_good_hist = Q_thin_top_event_good;
+Q_thin_top_event_good_hist(Q_thin_top_event_good_hist == 0) = []; % remove zeros for histogram
+
+
+%%
+
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 % Quick Visual Checks
@@ -643,7 +1029,6 @@ sgtitle(sprintf('PMT time lead vs trail (data from %s)', formatted_datetime));
 xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
 yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
 
-%%
 
 % Now plot the charge correlations for the same PMT pairs
 figure;
@@ -655,8 +1040,6 @@ xlabel('Qcint3'); ylabel('Qcint4'); title('Charge PMT3 vs PMT4');
 xlim([min(min(Qcint_OG)) max(max(Qcint_OG))]); ylim([min(min(Qcint_OG)) max(max(Qcint_OG))]);
 sgtitle(sprintf('PMT charge correlations (data from %s)', formatted_datetime));
 
-
-%%
 
 % Finally, plot the Tl_cint i vs Tl_cint j scatter plots for all PMT pairs
 figure;
@@ -670,7 +1053,6 @@ xlim([min(min(Tl_cint_OG)) max(max(Tl_cint_OG))]); ylim([min(min(Tl_cint_OG)) ma
 sgtitle(sprintf('PMT time coincidences (data from %s)', formatted_datetime));
 refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
 
-%%
 
 % Histograms of Tl for each strip to see the distribution of the difference
 % Normalized histograms of the time lead differences for each PMT pair to verify the
@@ -702,9 +1084,6 @@ sgtitle(sprintf('Histograms of time lead differences for PMTs (data from %s)', f
 xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
 
 
-%%
-
-
 
 % -----------------------------------------------------------------------------
 % RPC wide strip Timing and Charge Derivations
@@ -713,8 +1092,6 @@ xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
 % leading times front [ns]; channels [32,28] -> 5 wide front strips
 % TFl, TFt
 % TBl, TBt
-
-
 
 % Similar scatter subplot plots for the wide strips to verify no obvious problems.
 figure;
@@ -770,8 +1147,6 @@ sgtitle(sprintf('Thick strip time lead vs trail (data from %s)', formatted_datet
 xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
 yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
 
-%%
-
 
 figure;
 subplot(2,5,1); plot(TFl_OG(:,1), TBl_OG(:,1),'.'); hold on; plot(TFl(:,1), TBl(:,1),'.');
@@ -816,7 +1191,48 @@ xlabel('QF'); ylabel('QB'); title('Charge Front vs back strip5');
 xlim([min(min(QF_OG)) max(max(QF_OG))]); ylim([min(min(QB_OG)) max(max(QB_OG))]);
 sgtitle(sprintf('Thick strip time and charge front vs back (data from %s)', formatted_datetime));
 
-%%
+
+right_lim_q_wide = 100; %adjust as needed
+
+figure;
+for strip = 1:5
+    % Left column: uncalibrated
+    subplot(5,2,strip*2-1);
+    % Avoid plotting zero values
+    QF_nonzero = QF_good(:,strip); QF_nonzero(QF_nonzero==0) = [];
+    QB_nonzero = QB_good(:,strip); QB_nonzero(QB_nonzero==0) = [];
+    histogram(QF_nonzero,-2:1:150); hold on;
+    histogram(QB_nonzero,-2:1:150); xlim([-2 150]);
+    legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
+    ylabel('# of events');
+    xlabel('Q [ns]');
+    % Right column: calibrated
+    subplot(5,2,strip*2);
+    % Avoid plotting zero values
+    QF_p_nonzero = QF_p_good(:,strip); QF_p_nonzero(QF_p_nonzero==0) = [];
+    QB_p_nonzero = QB_p_good(:,strip); QB_p_nonzero(QB_p_nonzero==0) = [];
+    histogram(QF_p_nonzero, -2:1:right_lim_q_wide); hold on;
+    histogram(QB_p_nonzero, -2:1:right_lim_q_wide);
+    xlim([-2 right_lim_q_wide]);
+    legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
+    ylabel('# of events');
+    xlabel('Q [ns]');
+    sgtitle(sprintf('Wide strip charge spectra and calibration (data from %s)', formatted_datetime));
+end
+
+
+figure;
+% Avoid plotting zero values in histograms, take ~= 0 values
+Q_nonzero = Q; Q_nonzero(Q_nonzero==0) = [];
+X_nonzero = X; X_nonzero(X_nonzero==0) = [];
+T_nonzero = T; T_nonzero(T_nonzero==0) = [];
+Y_nonzero = Y; Y_nonzero(Y_nonzero==0) = [];
+subplot(2,2,1); histogram(Q_nonzero, 0:0.1:200); xlabel('Q [ns]'); ylabel('# of events'); title('Q total in sum of THICK STRIPS');
+subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); ylabel('# of events'); title('X position (strip with Qmax)');
+subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
+subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
+sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime));
+
 
 % Histograms of QF-QB for each strip to see the distribution of the difference
 % Normalized histograms for better comparison
@@ -838,51 +1254,74 @@ for i = 1:5
 end
 sgtitle(sprintf('Histograms of QF - QB for all WIDE strips (data from %s)', formatted_datetime));
 
+% Scatter plots of all pairs of Q, X, T, Y for the thick strips (always color version)
+Qv = Q(:); Xv = X(:); Tv = T(:); Yv = Y(:);
+n = min([numel(Qv), numel(Xv), numel(Tv), numel(Yv)]);
+Qv = Qv(1:n); Xv = Xv(1:n); Tv = Tv(1:n); Yv = Yv(1:n);
 
+% Pair definitions
+names = {'Q','X','T','Y'};
+vals  = {Qv,  Xv,  Tv,  Yv};
+pairs = [1 2; 1 3; 1 4; 2 3; 2 4; 3 4];  % (Q,X), (Q,T), (Q,Y), (X,T), (X,Y), (T,Y)
 
-%%
+figure('Name','Scatter pairs: Q, X, T, Y');
+tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
 
-% Wide Strip Charge Spectra and Offset Calibration
+% config outside the loop
+ptSize = 20;      % point size
+nx = 80; ny = 80; % 2D-hist bins
+useLog = true;    % color scale
 
-% Inspect per-strip charge spectra before any calibration to compare front
-% and back readouts channel by channel.
+for i = 1:size(pairs,1)
+    a = vals{pairs(i,1)};
+    b = vals{pairs(i,2)};
+    mask = (a ~= 0) & (b ~= 0) & isfinite(a) & isfinite(b);
 
-% 5 histograms for wide strips, Q as a function of # of events
+    nexttile; 
+    if any(mask)
+        av = a(mask); 
+        bv = b(mask);
 
-% Static offsets measured with self-trigger data; subtract to calibrate strip
-% responses on both faces.
+        % 1) edges from masked data
+        xedges = linspace(min(av), max(av), nx+1);
+        yedges = linspace(min(bv), max(bv), ny+1);
 
+        % 2) bin masked data
+        [N,~,~,binX,binY] = histcounts2(av, bv, xedges, yedges);
 
+        % 3) per-point counts
+        idxValid = binX>0 & binY>0;
+        cVals = zeros(size(av));
+        cVals(idxValid) = N(sub2ind(size(N), binX(idxValid), binY(idxValid)));
+        if useLog
+            cVals = log10(cVals + 1);
+        end
 
-% QF_offsets = [75, 85.5, 82, 80, 80]; % from selfTrigger
-% QB_offsets = [81, 84, 82, 85, 84];
+        % 4) density-colored scatter
+        scatter(av, bv, ptSize, cVals, 'filled', 'MarkerFaceAlpha', 0.7);
+        colormap(parula);
+        cb = colorbar;
+        if useLog
+            cb.Label.String = 'log_{10}(count+1)';
+        else
+            cb.Label.String = 'count';
+        end
 
-
-if run == 1 || run == 2 || run == 3
-    % Joana runs (previous to June 2025)
-    QF_offsets = [82, 75, 82, 80, 75]; % from selfTrigger
-    QB_offsets = [82, 84, 81, 83, 81];
-else
-    % October run (from October 2025 to beyond)
-    fprintf('Using October 2025 offsets\n');
-    QF_offsets = [90, 83, 70, 86, 81]; % from selfTrigger
-    QB_offsets = [87, 88, 70, 87, 87];
+        grid on; box on; axis tight;
+        xlabel(names{pairs(i,1)}); ylabel(names{pairs(i,2)});
+        title(sprintf('%s vs %s (run %s)', names{pairs(i,2)}, names{pairs(i,1)}, run));
+    else
+        axis off; 
+        title(sprintf('%s vs %s (no data)', names{pairs(i,2)}, names{pairs(i,1)}));
+    end
 end
 
+sgtitle(sprintf('All 2D scatter combinations (zeros removed) — run %s', run));
 
-% Only subtract offsets where the original entries are non-zero
-QB_p = QB - QB_offsets .* (QB ~= 0);
-QF_p = QF - QF_offsets .* (QF ~= 0);
-
-QB_p_OG = QB_OG - QB_offsets .* (QB_OG ~= 0);
-QF_p_OG = QF_OG - QF_offsets .* (QF_OG ~= 0);
-Q_thick_event_OG = sum( (QF_p_OG + QB_p_OG) / 2, 2); % total charge in the 5 wide strips per event, calibrated
-
-clearvars QB_offsets QF_offsets
 
 
 % -----------------------------------------------------------------------------
-% RPC charges for the five narrow strips, which do not carry timing info.
+% RPC charges for the narrow strips, which do not carry timing info.
 % -----------------------------------------------------------------------------
 
 % This is a key plot. In run 1 the span of both axes is similar, while in runs 2
@@ -941,344 +1380,6 @@ subplot(4,6,24); plot(Qt(:,24), Qb(:,24),'.'); xlabel('Qt'); ylabel('Qb'); title
 xlim([min(min(Qt)) max(max(Qt))]); ylim([min(min(Qb)) max(max(Qb))]);
 sgtitle(sprintf('Narrow strip charge top vs bottom (data from %s)', formatted_datetime));
 
-
-
-%%
-
-
-% NOW THE CROSSED CUTS ARE APPLIED TO SELECT VALID EVENTS IN THE PMTS
-% Create a condition where the Qcint is ~= 0 in the four PMTs
-
-validEvents_signal = (Qcint_OG(:,1) ~= 0) & (Qcint_OG(:,2) ~= 0) & (Qcint_OG(:,3) ~= 0) & (Qcint_OG(:,4) ~= 0);
-validEvents_coin = (Qcint(:,1) ~= 0) & (Qcint(:,2) ~= 0) & (Qcint(:,3) ~= 0) & (Qcint(:,4) ~= 0);
-
-
-% ==================== Signal EVENTS (zero-out others) ====================
-
-% --- PMTs ---
-Qcint_signal = zeros(size(Qcint_OG), 'like', Qcint_OG);
-Qcint_signal(validEvents_signal, :) = Qcint_OG(validEvents_signal, :);
-
-% --- THICK (event-level) ---
-Q_thick_event_signal = zeros(size(Q_thick_event_OG), 'like', Q_thick_event_OG);
-Q_thick_event_signal(validEvents_signal) = Q_thick_event_OG(validEvents_signal);
-
-% --- THIN STRIPS ---
-Qb_signal = zeros(size(Qb_OG), 'like', Qb_OG);
-Qt_signal = zeros(size(Qt_OG), 'like', Qt_OG);
-Qb_signal(validEvents_signal, :) = Qb_OG(validEvents_signal, :);
-Qt_signal(validEvents_signal, :) = Qt_OG(validEvents_signal, :);
-
-% Totals per event within the valid selection (zeros for non-valid rows)
-Q_thin_top_event_signal = sum(Qt_signal, 2);
-Q_thin_bot_event_signal = sum(Qb_signal, 2);
-
-
-% ==================== COIN VALID EVENTS (zero-out others) ====================
-
-% --- PMTs ---
-Qcint_coin = zeros(size(Qcint_OG), 'like', Qcint_OG);
-Qcint_coin(validEvents_coin, :) = Qcint_OG(validEvents_coin, :);
-
-% --- THICK (event-level) ---
-Q_thick_event_coin = zeros(size(Q_thick_event_OG), 'like', Q_thick_event_OG);
-Q_thick_event_coin(validEvents_coin) = Q_thick_event_OG(validEvents_coin);
-
-% --- THIN STRIPS ---
-Qb_coin = zeros(size(Qb_OG), 'like', Qb_OG);
-Qt_coin = zeros(size(Qt_OG), 'like', Qt_OG);
-Qb_coin(validEvents_coin, :) = Qb_OG(validEvents_coin, :);
-Qt_coin(validEvents_coin, :) = Qt_OG(validEvents_coin, :);
-
-% Totals per event within the valid selection (zeros for non-valid rows)
-Q_thin_top_event_coin = sum(Qt_coin, 2);
-Q_thin_bot_event_coin = sum(Qb_coin, 2);
-
-
-% ==================== VALID EVENTS (zero-out others) ====================
-
-% --- PMTs ---
-Qcint_good = zeros(size(Qcint), 'like', Qcint);
-Qcint_good(validEvents_coin, :) = Qcint(validEvents_coin, :);
-
-% --- THICK (event-level/matrices) ---
-% X_thick_strip_good = zeros(size(X_thick_strip), 'like', X_thick_strip);
-% Y_thick_strip_good = zeros(size(Y_thick_strip), 'like', Y_thick_strip);
-% T_thick_strip_good = zeros(size(T_thick_strip), 'like', T_thick_strip);
-
-% X_thick_strip_good(validEvents_coin, :) = X_thick_strip(validEvents_coin, :);
-% Y_thick_strip_good(validEvents_coin, :) = Y_thick_strip(validEvents_coin, :);
-% T_thick_strip_good(validEvents_coin, :) = T_thick_strip(validEvents_coin, :);
-
-% Q_thick_event_good = zeros(size(Q_thick_event), 'like', Q_thick_event);
-% Q_thick_event_good(validEvents_coin) = Q_thick_event(validEvents_coin);
-
-% --- THIN STRIPS ---
-Qb_good = zeros(size(Qb), 'like', Qb);
-Qt_good = zeros(size(Qt), 'like', Qt);
-Qb_good(validEvents_coin, :) = Qb(validEvents_coin, :);
-Qt_good(validEvents_coin, :) = Qt(validEvents_coin, :);
-
-% Totals per event within the valid selection (zeros for non-valid rows)
-Q_thin_top_event_good = sum(Qt_good, 2);
-Q_thin_bot_event_good = sum(Qb_good, 2);
-
-
-%%
-
-
-
-QF_good = zeros(size(QF), 'like', QF);
-QB_good = zeros(size(QB), 'like', QB);
-QF_good(validEvents_coin, :) = QF(validEvents_coin, :);
-QB_good(validEvents_coin, :) = QB(validEvents_coin, :);
-
-
-QF_p_good = zeros(size(QF_p), 'like', QF_p);
-QB_p_good = zeros(size(QB_p), 'like', QB_p);
-QF_p_good(validEvents_coin, :) = QF_p(validEvents_coin, :);
-QB_p_good(validEvents_coin, :) = QB_p(validEvents_coin, :);
-
-
-TFl_good = zeros(size(TFl), 'like', TFl);
-TBl_good = zeros(size(TBl), 'like', TBl);
-TFl_good(validEvents_coin, :) = TFl(validEvents_coin, :);
-TBl_good(validEvents_coin, :) = TBl(validEvents_coin, :);
-
-% Charge sum over all wide strips per event
-
-% QB_p_pos = QB_p; QB_p_pos(QB_p<0) = 0; %set negative charges to 0
-% QF_p_pos = QF_p; QF_p_pos(QF_p<0) = 0; %set negative charges to 0
-
-% Q_thick_event = (QB_p_pos + QF_p_pos) / 2; % total charge in the 5 wide strips per event
-
-right_lim_q_wide = 100; %adjust as needed
-
-figure;
-for strip = 1:5
-    % Left column: uncalibrated
-    subplot(5,2,strip*2-1);
-    % Avoid plotting zero values
-    QF_nonzero = QF_good(:,strip); QF_nonzero(QF_nonzero==0) = [];
-    QB_nonzero = QB_good(:,strip); QB_nonzero(QB_nonzero==0) = [];
-    histogram(QF_nonzero,-2:1:150); hold on;
-    histogram(QB_nonzero,-2:1:150); xlim([-2 150]);
-    legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
-    ylabel('# of events');
-    xlabel('Q [ns]');
-    % Right column: calibrated
-    subplot(5,2,strip*2);
-    % Avoid plotting zero values
-    QF_p_nonzero = QF_p_good(:,strip); QF_p_nonzero(QF_p_nonzero==0) = [];
-    QB_p_nonzero = QB_p_good(:,strip); QB_p_nonzero(QB_p_nonzero==0) = [];
-    histogram(QF_p_nonzero, -2:1:right_lim_q_wide); hold on;
-    histogram(QB_p_nonzero, -2:1:right_lim_q_wide);
-    xlim([-2 right_lim_q_wide]);
-    legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
-    ylabel('# of events');
-    xlabel('Q [ns]');
-    sgtitle(sprintf('Wide strip charge spectra and calibration (data from %s)', formatted_datetime));
-end
-
-
-%%
-
-
-
-
-% calculation of maximum charges and RAW position as a function of Qmax
-[QFmax,XFmax] = max(QF_p,[],2);    %XFmax -> strip of Qmax
-[QBmax,XBmax] = max(QB_p,[],2);
-
-% Keep only events where the strip with maximum charge matches on both faces
-Ind2Cut   = find(~isnan(QF_p) & ~isnan(QB_p) & XFmax == XBmax);
-[row,col] = ind2sub(size(TFl),Ind2Cut); %row=evento com Qmax na mesma strip; col=strip não interessa pois fica-se com a strip com Qmax
-rows      = unique(row); %events sorted and without repetitions
-Ind2Keep  = sub2ind(size(TFl),rows,XFmax(rows)); %indices of the Qmax values, provided QFmax and QBmax are on the same strip
-
-T = nan(rawEvents,1); Q = nan(rawEvents,1); X = nan(rawEvents,1); Y = nan(rawEvents,1);
-T(rows) = (TFl(Ind2Keep) + TBl(Ind2Keep)) / 2; %[ns]
-Q(rows) = (QF_p(Ind2Keep) + QB_p(Ind2Keep)) /2;    %[ns] sum of Qmax front and back -> contains NaNs if an event fails the Ind2Keep condition
-X(rows) = XFmax(rows);  %strip number where Qmax is found (1 to 5)
-Y(rows) = (TFl(Ind2Keep) - TBl(Ind2Keep)) / 2; %[ns]
-
-figure;
-% Avoid plotting zero values in histograms, take ~= 0 values
-Q_nonzero = Q; Q_nonzero(Q_nonzero==0) = [];
-X_nonzero = X; X_nonzero(X_nonzero==0) = [];
-T_nonzero = T; T_nonzero(T_nonzero==0) = [];
-Y_nonzero = Y; Y_nonzero(Y_nonzero==0) = [];
-subplot(2,2,1); histogram(Q_nonzero, 0:0.1:200); xlabel('Q [ns]'); ylabel('# of events'); title('Q total in sum of THICK STRIPS');
-subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); ylabel('# of events'); title('X position (strip with Qmax)');
-subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
-subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
-sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime));
-
-X_thick_strip = X; %redefine X_thick_strip to be the strip number with maximum charge
-Y_thick_strip = Y; %redefine Y_thick_strip to be the Y position with maximum charge
-T_thick_strip = T; %redefine T_thick_strip to be the T from the strip with maximum charge
-
-Q_thick_event = Q; %redefine Q_thick_event to be the Q from the strip with maximum charge
-
-
-
-%%
-
-
-
-
-
-
-
-% Event-Level Maximum Charge Aggregation
-
-% Filtered events for 0s
-
-% calculation of maximum charges and RAW position as a function of Qmax
-[QFmax,XFmax] = max(QF_p_good,[],2);    %XFmax -> strip of Qmax
-[QBmax,XBmax] = max(QB_p_good,[],2);
-
-% Keep only events where the strip with maximum charge matches on both faces
-Ind2Cut   = find(~isnan(QF_p_good) & ~isnan(QB_p_good) & XFmax == XBmax);
-[row,col] = ind2sub(size(TFl),Ind2Cut); %row=evento com Qmax na mesma strip; col=strip não interessa pois fica-se com a strip com Qmax
-rows      = unique(row); %events sorted and without repetitions
-Ind2Keep  = sub2ind(size(TFl),rows,XFmax(rows)); %indices of the Qmax values, provided QFmax and QBmax are on the same strip
-
-T = nan(rawEvents,1); Q = nan(rawEvents,1); X = nan(rawEvents,1); Y = nan(rawEvents,1);
-T(rows) = (TFl_good(Ind2Keep) + TBl_good(Ind2Keep)) / 2; %[ns]
-Q(rows) = (QF_p_good(Ind2Keep) + QB_p_good(Ind2Keep)) /2;    %[ns] sum of Qmax front and back -> contains NaNs if an event fails the Ind2Keep condition
-X(rows) = XFmax(rows);  %strip number where Qmax is found (1 to 5)
-Y(rows) = (TFl_good(Ind2Keep) - TBl_good(Ind2Keep)) / 2; %[ns]
-
-figure;
-% Avoid plotting zero values in histograms, take ~= 0 values
-Q_nonzero = Q; Q_nonzero(Q_nonzero==0) = [];
-X_nonzero = X; X_nonzero(X_nonzero==0) = [];
-T_nonzero = T; T_nonzero(T_nonzero==0) = [];
-Y_nonzero = Y; Y_nonzero(Y_nonzero==0) = [];
-subplot(2,2,1); histogram(Q_nonzero, 0:0.1:200); xlabel('Q [ns]'); ylabel('# of events'); title('Q total in sum of THICK STRIPS');
-subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); ylabel('# of events'); title('X position (strip with Qmax)');
-subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
-subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
-sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime));
-
-X_thick_strip_good = X; %redefine X_thick_strip to be the strip number with maximum charge
-Y_thick_strip_good = Y; %redefine Y_thick_strip to be the Y position with maximum charge
-T_thick_strip_good = T; %redefine T_thick_strip to be the T from the strip with maximum charge
-
-Q_thick_event_good = Q; %redefine Q_thick_event to be the Q from the strip with maximum charge
-
-scatter_plot = false;
-
-% Flatten to column vectors and equalize length
-Qv = Q(:); Xv = X(:); Tv = T(:); Yv = Y(:);
-n = min([numel(Qv), numel(Xv), numel(Tv), numel(Yv)]);
-Qv = Qv(1:n); Xv = Xv(1:n); Tv = Tv(1:n); Yv = Yv(1:n);
-
-% Pair definitions
-names = {'Q','X','T','Y'};
-vals  = {Qv,  Xv,  Tv,  Yv};
-pairs = [1 2; 1 3; 1 4; 2 3; 2 4; 3 4];  % (Q,X), (Q,T), (Q,Y), (X,T), (X,Y), (T,Y)
-
-figure('Name','Scatter pairs: Q, X, T, Y');
-tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
-% config outside the loop
-ptSize = 20;      % point size
-nx = 80; ny = 80; % 2D-hist bins
-useLog = true;    % color scale
-
-for i = 1:size(pairs,1)
-    a = vals{pairs(i,1)};
-    b = vals{pairs(i,2)};
-    mask = (a ~= 0) & (b ~= 0) & isfinite(a) & isfinite(b);
-
-    nexttile; 
-    if any(mask)
-        av = a(mask); 
-        bv = b(mask);
-
-        if scatter_plot
-            scatter(av, bv, ptSize, '.', 'MarkerEdgeAlpha', 0.35);
-        else
-            % 1) edges from masked data
-            xedges = linspace(min(av), max(av), nx+1);
-            yedges = linspace(min(bv), max(bv), ny+1);
-
-            % 2) bin masked data
-            [N,~,~,binX,binY] = histcounts2(av, bv, xedges, yedges);
-
-            % 3) per-point counts
-            idxValid = binX>0 & binY>0;
-            cVals = zeros(size(av));
-            cVals(idxValid) = N(sub2ind(size(N), binX(idxValid), binY(idxValid)));
-            if useLog
-                cVals = log10(cVals + 1);
-            end
-
-            % 4) density-colored scatter
-            scatter(av, bv, ptSize, cVals, 'filled', 'MarkerFaceAlpha', 0.7);
-            colormap(parula);
-            cb = colorbar;
-            if useLog
-                cb.Label.String = 'log_{10}(count+1)';
-            else
-                cb.Label.String = 'count';
-            end
-        end
-
-        grid on; box on; axis tight;
-        xlabel(names{pairs(i,1)}); ylabel(names{pairs(i,2)});
-        title(sprintf('%s vs %s (run %s)', names{pairs(i,2)}, names{pairs(i,1)}, run));
-    else
-        axis off; title(sprintf('%s vs %s (no data)', names{pairs(i,2)}, names{pairs(i,1)}));
-    end
-end
-
-
-sgtitle(sprintf('All 2D scatter combinations (zeros removed) — run %s', run));
-
-
-
-
-%%
-
-
-% 2) Quantile limits (thin channels share limits)
-q005_b = quantile(Q_thin_bot_event_good, 0.005);
-q005_t = quantile(Q_thin_top_event_good, 0.005);
-q005   = min(q005_b, q005_t);
-
-q95_b  = quantile(Q_thin_bot_event_good, 0.95);
-q95_t  = quantile(Q_thin_top_event_good, 0.95);
-q95    = max(q95_b, q95_t);
-
-% Thick channel limits (separate scale)
-q005_thick = quantile(Q_thick_event_good, 0.005);
-q95_thick  = quantile(Q_thick_event_good, 0.95);
-
-% Bin edges (match your “like this” snippet for thin; keep fine bins for thick)
-thinEdges  = 0:300:5e4;
-thickEdges = 0:1:300;
-
-
-% Create a non_zero version called Q_thick_event_good_hist
-% THICK
-Q_thick_event_hist = Q_thick_event;
-Q_thick_event_hist(Q_thick_event_hist == 0) = []; % remove zeros for histogram
-Q_thick_event_good_hist = Q_thick_event_good;
-Q_thick_event_good_hist(Q_thick_event_good_hist == 0) = []; % remove zeros for histogram
-
-% THIN TOP
-Q_thin_bot_event_hist = Q_thin_bot_event;
-Q_thin_bot_event_hist(Q_thin_bot_event_hist == 0) = []; % remove zeros for histogram
-Q_thin_bot_event_good_hist = Q_thin_bot_event_good;
-Q_thin_bot_event_good_hist(Q_thin_bot_event_good_hist == 0) = []; % remove zeros for histogram
-
-% THIN BOTTOM
-Q_thin_top_event_hist = Q_thin_top_event;
-Q_thin_top_event_hist(Q_thin_top_event_hist == 0) = []; % remove zeros for histogram
-Q_thin_top_event_good_hist = Q_thin_top_event_good;
-Q_thin_top_event_good_hist(Q_thin_top_event_good_hist == 0) = []; % remove zeros for histogram
 
 
 % FIGURE 1 — Thin bottom / Thin top (hist + hist + scatter), with valid overlays
@@ -1359,26 +1460,12 @@ sgtitle(sprintf('Charge of the event (thick vs top; all vs valid; run %s)', run)
 
 %%
 
-% Define a function called mm_to_strip that converts mm to strip number, it works with vectors too,
-% for example with center
-function strip = mm_to_strip(mm)
-    % Map from mm in [-150, 150] → strip in [0, 120]
-    strip = (mm + 150) / 300 * 120;
-end
 
-% Helper function to draw the vertical/horizontal boundary lines
-function addBoundaries(ax, wrapPeriod, nWraps, lims)
-    axes(ax); %#ok<LAXES>
-    for k = 1:nWraps
-        xline((k-1)*wrapPeriod + 0.5, '-', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
-        xline(k*wrapPeriod       + 0.5, '--', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
-        yline((k-1)*wrapPeriod + 0.5, '--', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
-        yline(k*wrapPeriod       + 0.5, '--', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
-    end
-    xlim(lims);
-    ylim(lims);
-    grid on; box on; axis square;
-end
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Position from narrow strips (24 strips, no timing, only charge)
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
 
 position_from_narrow_strips = false;
 if position_from_narrow_strips
@@ -2012,11 +2099,7 @@ fprintf('Percentage of streamers (Q > threshold) in Thin RPC TOP: %.2f%%\n', per
 fprintf('Percentage of streamers (Q > threshold) in Thick RPC: %.2f%%\n', percentage_streamer_thick);
 fprintf('Percentage of streamers (Q > threshold) in Thin RPC BOTTOM: %.2f%%\n', percentage_streamer_thin_bot);
 
-% percentage_streamer_pmt_top
-% percentage_streamer_thin_top
-% percentage_streamer_thick
-% percentage_streamer_thin_bot
-% percentage_streamer_pmt_bot
+
 
 % Take only positive charges for the plots in a new vector that does not replace the original
 Q_thick_plot = Q_thick(Q_thick > 0);
@@ -2068,93 +2151,6 @@ top_narrow_strip_charge_threshold_min = prctile(Q_thin_top(Q_thin_top>0), percen
 top_narrow_strip_charge_threshold_max = prctile(Q_thin_top(Q_thin_top>0), 100 - percentile_narrow);  % ADCbins/event
 bot_narrow_strip_charge_threshold_min = prctile(Q_thin_bot(Q_thin_bot>0), percentile_narrow);  % ADCbins/event
 bot_narrow_strip_charge_threshold_max = prctile(Q_thin_bot(Q_thin_bot>0), 100 - percentile_narrow);  % ADCbins/event
-
-
-
-validEventsFiltered_PMT = ...
-    (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
-    (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
-    (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
-    (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
-% validEventsFiltered_thick = ...
-%     (Q_thick >= thick_strip_charge_threshold_min) & (Q_thick <= thick_strip_charge_threshold_max);
-% validEventsFiltered_thin_top = ...
-%     (Q_thin_top >= top_narrow_strip_charge_threshold_min) & (Q_thin_top <= top_narrow_strip_charge_threshold_max);
-% validEventsFiltered_thin_bot = ...
-%     (Q_thin_bot >= bot_narrow_strip_charge_threshold_min) & (Q_thin_bot <= bot_narrow_strip_charge_threshold_max);
-
-
-% validEventsFiltered_thick, validEventsFiltered_thin_top, validEventsFiltered_thin_bot are all trues
-% validEventsFiltered_thick = true(size(Q_thick));
-% validEventsFiltered_thin_top = true(size(Q_thin_top));
-% validEventsFiltered_thin_bot = true(size(Q_thin_bot));
-
-validEventsFiltered_thick = validEventsFiltered_PMT; % Use the same mask as PMTs
-validEventsFiltered_thin_top = validEventsFiltered_PMT; % Use the same mask as PMTs
-validEventsFiltered_thin_bot = validEventsFiltered_PMT; % Use the same mask as PMTs
-
-
-% ========== VALID FILTERED EVENTS (zero-out everything else) ==========
-
-% --- PMTs (mask: validEventsFiltered_PMT) ---
-Qcint_range = zeros(size(Qcint_good), 'like', Qcint_good);
-Qcint_range(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_PMT, :);
-
-% --- THICK STRIPS (mask: validEventsFiltered_thick) ---
-X_thick_strip_range = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
-Y_thick_strip_range = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
-T_thick_strip_range = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
-
-X_thick_strip_range(validEventsFiltered_thick, :) = X_thick_strip_good(validEventsFiltered_thick, :);
-Y_thick_strip_range(validEventsFiltered_thick, :) = Y_thick_strip_good(validEventsFiltered_thick, :);
-T_thick_strip_range(validEventsFiltered_thick, :) = T_thick_strip_good(validEventsFiltered_thick, :);
-
-Q_thick_event_range = zeros(size(Q_thick_event_good), 'like', Q_thick_event_good);
-Q_thick_event_range(validEventsFiltered_thick) = Q_thick_event_good(validEventsFiltered_thick);
-
-% --- THIN STRIPS (masks: validEventsFiltered_thin_bot / validEventsFiltered_thin_top) ---
-Qb_range = zeros(size(Qb_good), 'like', Qb_good);
-Qt_range = zeros(size(Qt_good), 'like', Qt_good);
-
-Qb_range(validEventsFiltered_thin_bot, :) = Qb_good(validEventsFiltered_thin_bot, :);
-Qt_range(validEventsFiltered_thin_top, :) = Qt_good(validEventsFiltered_thin_top, :);
-
-% Totals per event (length preserved; zero for non-selected rows)
-Q_thin_top_event_range = sum(Qt_range, 2);
-Q_thin_bot_event_range = sum(Qb_range, 2);
-
-
-
-
-
-
-% NO CROSSTALK
-
-thick_strip_crosstalk = 0; % ADCbins
-top_narrow_strip_crosstalk = 0; % ADCbins/event
-bot_narrow_strip_crosstalk = 0; % ADCbins/event
-
-validEventsFiltered_PMT = ...
-    (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
-    (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
-    (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
-    (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
-validEventsFiltered_thick = (Q_thick >= thick_strip_crosstalk)
-validEventsFiltered_thin_top = (Q_thin_top >= top_narrow_strip_crosstalk)
-validEventsFiltered_thin_bot = (Q_thin_bot >= bot_narrow_strip_crosstalk);
-
-    
-Qcint_no_crosstalk = zeros(size(Qcint_good), 'like', Qcint_good);
-Qcint_no_crosstalk(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_PMT, :);
-
-Q_thick_event_no_crosstalk = zeros(size(Q_thick_event_good), 'like', Q_thick_event_good);
-Q_thick_event_no_crosstalk(validEventsFiltered_thick) = Q_thick_event_good(validEventsFiltered_thick);
-
-Q_thin_top_event_no_crosstalk = zeros(size(Q_thin_top_event_good), 'like', Q_thin_top_event_good);
-Q_thin_top_event_no_crosstalk(validEventsFiltered_thin_top) = Q_thin_top_event_good(validEventsFiltered_thin_top);
-
-Q_thin_bot_event_no_crosstalk = zeros(size(Q_thin_bot_event_good), 'like', Q_thin_bot_event_good);
-Q_thin_bot_event_no_crosstalk(validEventsFiltered_thin_bot) = Q_thin_bot_event_good(validEventsFiltered_thin_bot);
 
 
 
@@ -2575,15 +2571,60 @@ fclose(fid);
 
 writetable(detTable, outCsv, 'WriteMode','append');
 
+
+
+% Print for verification
+fprintf('Save plots directory: %s\n', save_plots_dir);
+fprintf('PDF file name: %s\n', pdfFileName);
+
+if save_plots
+    try
+        if ~exist(save_plots_dir, 'dir'), mkdir(save_plots_dir); end
+        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName);
+        if figCount > 0 && ~isempty(pdfPath)
+            fprintf('Saved %d figure(s) to %s\n', figCount, pdfPath);
+        else
+            fprintf('No figures generated to save.\n');
+        end
+    catch saveErr
+        warning('Failed to save figures: %s', saveErr.message);
+    end
+end
+
+
+
 %%
 
+% -------------------------------------------------------------------------
+% -------------------------------------------------------------------------
+% Functions ---------------------------------------------------------------
+% -------------------------------------------------------------------------
+% -------------------------------------------------------------------------
 
-% -------------------------------------------------------------------------
-% -------------------------------------------------------------------------
-% -------------------------------------------------------------------------
-% -------------------------------------------------------------------------
-% -------------------------------------------------------------------------
 
+% Define a function called mm_to_strip that converts mm to strip number
+function strip = mm_to_strip(mm)
+    % Map from mm in [-150, 150] → strip in [0, 120]
+    strip = (mm + 150) / 300 * 120;
+end
+
+
+% Helper function to draw the vertical/horizontal boundary lines
+function addBoundaries(ax, wrapPeriod, nWraps, lims)
+    axes(ax); %#ok<LAXES>
+    for k = 1:nWraps
+        xline((k-1)*wrapPeriod + 0.5, '-', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
+        xline(k*wrapPeriod       + 0.5, '--', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
+        yline((k-1)*wrapPeriod + 0.5, '--', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
+        yline(k*wrapPeriod       + 0.5, '--', 'Color',[0.8 0.8 0.8], 'LineWidth', 1.2);
+    end
+    xlim(lims);
+    ylim(lims);
+    grid on; box on; axis square;
+end
+
+
+% Saves all open figures to a single multi-page PDF in targetDir/pdfFileName
 function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
     figs = findall(0, 'Type', 'figure');
     figCount = numel(figs);
@@ -2657,6 +2698,8 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
     end
 end
 
+
+% Combines a list of PNG files into a single multi-page PDF
 function combine_images_to_pdf(pngFiles, pdfPath, exportOpts)
     validMask = cellfun(@(p) ~isempty(p) && exist(p, 'file'), pngFiles);
     pngFiles = pngFiles(validMask);
@@ -2699,26 +2742,9 @@ function cleanup_temp_directory(tempDir)
     end
 end
 
+
+% Save current defaults, set new ones, and restore at the end
 function restore_figure_defaults(defaultVisibility, defaultCreateFcn)
     set(groot, 'DefaultFigureVisible', defaultVisibility);
     set(groot, 'DefaultFigureCreateFcn', defaultCreateFcn);
-end
-
-
-% Print for verification
-fprintf('Save plots directory: %s\n', save_plots_dir);
-fprintf('PDF file name: %s\n', pdfFileName);
-
-if save_plots
-    try
-        if ~exist(save_plots_dir, 'dir'), mkdir(save_plots_dir); end
-        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName);
-        if figCount > 0 && ~isempty(pdfPath)
-            fprintf('Saved %d figure(s) to %s\n', figCount, pdfPath);
-        else
-            fprintf('No figures generated to save.\n');
-        end
-    catch saveErr
-        warning('Failed to save figures: %s', saveErr.message);
-    end
 end
