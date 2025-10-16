@@ -81,7 +81,7 @@ end
 
 % Some paths ----------------------------------------------------------
 HOME    = '/home/csoneira/WORK/LIP_stuff/';
-SCRIPTS = 'JOAO_SETUP/';
+SCRIPTS = 'JOAO_SETUP/STORED_NOT_ESSENTIAL/';
 DATA    = 'matFiles/time/';
 DATA_Q    = 'matFiles/charge/';
 path(path,[HOME SCRIPTS 'util_matPlots']);
@@ -709,7 +709,7 @@ Y_OG(rows_OG) = (TFl_OG(Ind2Keep_OG) - TBl_OG(Ind2Keep_OG)) / 2; %[ns]
 X_thick_strip_OG = X_OG; %redefine X_thick_strip to be the strip number with maximum charge
 Y_thick_strip_OG = Y_OG; %redefine Y_thick_strip to be the Y position with maximum charge
 T_thick_strip_OG = T_OG; %redefine T_thick_strip to be the T from the strip with maximum charge
-Q_thick_event_OG = Q_OG; %redefine Q_thick_event to be the Q from the strip with maximum charge
+Q_thick_strip_OG = Q_OG; %redefine Q_thick_event to be the Q from the strip with maximum charge
 
 
 % For the good events only --------------------------------------------
@@ -766,11 +766,11 @@ Qcint_signal(validEvents_signal, :) = Qcint_OG(validEvents_signal, :);
 X_thick_strip_signal = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
 Y_thick_strip_signal = zeros(size(Y_thick_strip_OG), 'like', Y_thick_strip_OG);
 T_thick_strip_signal = zeros(size(T_thick_strip_OG), 'like', T_thick_strip_OG);
-Q_thick_event_signal = zeros(size(Q_thick_event_OG), 'like', Q_thick_event_OG);
+Q_thick_strip_signal = zeros(size(Q_thick_strip_OG), 'like', Q_thick_strip_OG);
 X_thick_strip_signal(validEvents_signal) = X_thick_strip_OG(validEvents_signal);
 Y_thick_strip_signal(validEvents_signal) = Y_thick_strip_OG(validEvents_signal);
 T_thick_strip_signal(validEvents_signal) = T_thick_strip_OG(validEvents_signal);
-Q_thick_event_signal(validEvents_signal) = Q_thick_event_OG(validEvents_signal);
+Q_thick_strip_signal(validEvents_signal) = Q_thick_strip_OG(validEvents_signal);
 
 % --- THIN STRIPS --- N x 24
 Qb_signal = zeros(size(Qb_OG), 'like', Qb_OG);
@@ -802,11 +802,11 @@ Qcint_coin(validEvents_coin, :) = Qcint_OG(validEvents_coin, :);
 X_thick_strip_coin = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
 Y_thick_strip_coin = zeros(size(Y_thick_strip_OG), 'like', Y_thick_strip_OG);
 T_thick_strip_coin = zeros(size(T_thick_strip_OG), 'like', T_thick_strip_OG);
-Q_thick_event_coin = zeros(size(Q_thick_event_OG), 'like', Q_thick_event_OG);
+Q_thick_strip_coin = zeros(size(Q_thick_strip_OG), 'like', Q_thick_strip_OG);
 X_thick_strip_coin(validEvents_coin) = X_thick_strip_OG(validEvents_coin);
 Y_thick_strip_coin(validEvents_coin) = Y_thick_strip_OG(validEvents_coin);
 T_thick_strip_coin(validEvents_coin) = T_thick_strip_OG(validEvents_coin);
-Q_thick_event_coin(validEvents_coin) = Q_thick_event_OG(validEvents_coin);
+Q_thick_strip_coin(validEvents_coin) = Q_thick_strip_OG(validEvents_coin);
 
 % --- THIN STRIPS --- N x 24
 Qb_coin = zeros(size(Qb_OG), 'like', Qb_OG);
@@ -902,12 +902,12 @@ Qcint_range(validEventsFiltered_range, :) = Qcint_good(validEventsFiltered_range
 X_thick_strip_range = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
 Y_thick_strip_range = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
 T_thick_strip_range = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
-Q_thick_event_range = zeros(size(Q_thick_strip_good), 'like', Q_thick_strip_good);
+Q_thick_strip_range = zeros(size(Q_thick_strip_good), 'like', Q_thick_strip_good);
 X_thick_strip_range(validEventsFiltered_range, :) = X_thick_strip_good(validEventsFiltered_range, :);
 Y_thick_strip_range(validEventsFiltered_range, :) = Y_thick_strip_good(validEventsFiltered_range, :);
 T_thick_strip_range(validEventsFiltered_range, :) = T_thick_strip_good(validEventsFiltered_range, :);
 
-Q_thick_event_range(validEventsFiltered_range) = Q_thick_strip_good(validEventsFiltered_range);
+Q_thick_strip_range(validEventsFiltered_range) = Q_thick_strip_good(validEventsFiltered_range);
 
 % --- THIN STRIPS --- N x 24
 Qb_range = zeros(size(Qb_good), 'like', Qb_good);
@@ -945,11 +945,11 @@ Qcint_no_crosstalk(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_
 X_thick_strip_no_crosstalk = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
 Y_thick_strip_no_crosstalk = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
 T_thick_strip_no_crosstalk = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
-Q_thick_event_no_crosstalk = zeros(size(Q_thick_strip_good), 'like', Q_thick_strip_good);
+Q_thick_strip_no_crosstalk = zeros(size(Q_thick_strip_good), 'like', Q_thick_strip_good);
 X_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = X_thick_strip_good(validEventsFiltered_thick, :);
 Y_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = Y_thick_strip_good(validEventsFiltered_thick, :);
 T_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = T_thick_strip_good(validEventsFiltered_thick, :);
-Q_thick_event_no_crosstalk(validEventsFiltered_thick) = Q_thick_event(validEventsFiltered_thick);
+Q_thick_strip_no_crosstalk(validEventsFiltered_thick) = Q_thick_event(validEventsFiltered_thick);
 
 % --- THIN STRIPS --- N x 24
 Qb_no_crosstalk = zeros(size(Qb_good), 'like', Qb_good);
@@ -994,8 +994,8 @@ thickEdges    = linspace(q005_thick, q95_thick, bin_number); % 100 bins between 
 
 % Create a non_zero version called Q_thick_strip_good_hist
 % THICK
-Q_thick_event_hist = Q_thick_event;
-Q_thick_event_hist(Q_thick_event_hist == 0) = []; % remove zeros for histogram
+Q_thick_strip_hist = Q_thick_event;
+Q_thick_strip_hist(Q_thick_strip_hist == 0) = []; % remove zeros for histogram
 Q_thick_strip_good_hist = Q_thick_strip_good;
 Q_thick_strip_good_hist(Q_thick_strip_good_hist == 0) = []; % remove zeros for histogram
 
@@ -1459,7 +1459,7 @@ title('Q narrow bottom spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thick_event_hist, thickEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thick_strip_hist, thickEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (thick)');
 title('Q thick spectrum (sum of Q per event)');
@@ -1476,7 +1476,7 @@ sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid; run %s)', r
 % FIGURE 3 — Thick vs Thin top
 figure;
 subplot(1,3,1);
-histogram(Q_thick_event_hist, thickEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thick_strip_hist, thickEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (thick)');
 title('Q thick spectrum (sum of Q per event)');
@@ -1500,23 +1500,23 @@ sgtitle(sprintf('Charge of the event (thick vs top; all vs valid; run %s)', run)
 
 % PMT 2x2 charge CDFs with binning_pmt and the _signal, _good, _range versions
 figure;
-titles = {'Q pmt1 CDF','Q pmt2 CDF','Q pmt3 CDF','Q pmt4 CDF'};
+titles = {'Q pmt1','Q pmt2','Q pmt3','Q pmt4'};
 
 for k = 1:4
     subplot(2,2,k);
     hold on;
-    histogram(Qcint_signal(:,k), binning_pmt, 'DisplayName','all events', 'Normalization','cdf');
-    histogram(Qcint_good(:,k),   binning_pmt, 'DisplayName','valid only', 'Normalization','cdf');
-    histogram(Qcint_range(:,k),  binning_pmt, 'DisplayName','in range only', 'Normalization','cdf');
+    histogram(Qcint_signal(:,k), binning_pmt, 'DisplayName','all events', 'Normalization','pdf');
+    histogram(Qcint_good(:,k),   binning_pmt, 'DisplayName','valid only', 'Normalization','pdf');
+    histogram(Qcint_range(:,k),  binning_pmt, 'DisplayName','in range only', 'Normalization','pdf');
     xlabel(sprintf('Q (pmt%d)', k));
-    ylabel('Cumulative fraction');
+    ylabel('Fraction');
     title(titles{k});
     xlim([min(binning_pmt) max(binning_pmt)]);
     legend('show', 'Location','southeast');
     grid on; box on;
 end
 
-sgtitle(sprintf('PMT charge CDFs (data from %s)', formatted_datetime));
+sgtitle(sprintf('PMT charge (data from %s)', formatted_datetime));
 
 
 %%
@@ -1528,7 +1528,7 @@ sgtitle(sprintf('PMT charge CDFs (data from %s)', formatted_datetime));
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-position_from_narrow_strips = false;
+position_from_narrow_strips = true;
 if position_from_narrow_strips
 
     % Position determination from the narrow strips
@@ -1536,6 +1536,18 @@ if position_from_narrow_strips
     % I explain: I want in the x axes the strip number (1 to 24) and in the y axis
     % the charge value in each component
     
+    charge_thin_top_for_position = Qt_no_crosstalk;
+    charge_thin_bot_for_position = Qb_no_crosstalk;
+
+    charge_thin_top_total = sum(Qt_no_crosstalk, 2); % sum over strips (rows)
+    charge_thin_bot_total = sum(Qb_no_crosstalk, 2);
+
+    charge_thick_for_position = Q_thick_strip_no_crosstalk;
+
+    X_thick_for_position = X_thick_strip_no_crosstalk; % strip with max Q
+    T_thick_for_position = T_thick_strip_no_crosstalk; % mean of Tfl and Tbl
+    Y_thick_for_position = Y_thick_strip_no_crosstalk; % (Tfl - Tbl)/2
+
     figure;
     subplot(2,1,1);
     % Plot only a random sample of 1000 events to avoid overplotting
@@ -1546,7 +1558,7 @@ if position_from_narrow_strips
     ylabel('Charge Qt [ns]');
     xlim([1 24]);
     subplot(2,1,2);
-    % Plot only a random sample of 1000 events to avoid overplotting
+    % Plot only a random sample of 10 events to avoid overplotting
     sample_indices = randperm(rawEvents, min(10, rawEvents));
     plot(1:24, Qb(sample_indices, :)', '-o'); hold on;
     title(sprintf('Charge distribution across NARROW strips for sample events (bottom) - Sample size: %d (run %s)', length(sample_indices), run));
@@ -1635,8 +1647,6 @@ if position_from_narrow_strips
     X_thin_strip_bot = fitBot(:,1);    % mu from bottom fit
 
 
-
-
     % ===============================================================
     % Diagnostic plots
     % ===============================================================
@@ -1646,7 +1656,7 @@ if position_from_narrow_strips
     % ===============================================================
 
     % Combine fitTop and fitBot data in the specified order: mu_top, sigma_top, chisq_top, chisq_bot, sigma_bot, mu_bot
-    fitCombined = [fitTop(:,1), fitTop(:,2), fitTop(:,3), Q_thin_top_event, Q_thin_bot_event, fitBot(:,3), fitBot(:,2), fitBot(:,1)];
+    fitCombined = [fitTop(:,1), fitTop(:,2), fitTop(:,3), charge_thin_top_total, charge_thin_bot_total, fitBot(:,3), fitBot(:,2), fitBot(:,1)];
 
     % Labels for the variables
     labels = {'\mu_{top}', '\sigma_{top}', '\chi^2_{top}', 'Q_{top}', 'Q_{bot}', '\chi^2_{bot}', '\sigma_{bot}', '\mu_{bot}'};
@@ -1713,24 +1723,16 @@ if position_from_narrow_strips
     nWraps = 5;                  % number of periods to replicate
 
 
-    % Only use nonzero Y_thick_strip values
-    % nonzero_idx = Y_thick_strip ~= 0;
-    % Y_thin_strip_top_sel = Y_thin_strip_top(nonzero_idx);      % [N x 1]
+    % X position from the bottom thin strips
+    X_thin_bot_real = X_thin_strip_bot + (X_thick_strip - 1) * wrapPeriod;
+
+    % Y position from the top thin strips
     Y_thin_strip_top_sel = Y_thin_strip_top;      % [N x 1]
-    % Yvals = (Y_thick_strip(nonzero_idx) + 1.5)/3 * 120 + 1;   % [N x 1]
     Yvals = (Y_thick_strip + 1.5)/3 * 120 + 1;   % [N x 1]
-    % Expand Y_thin_strip_top_sel for all wrap possibilities [N x nWraps]
     Y_thin_strip_top_all = Y_thin_strip_top_sel + (0:nWraps-1)*wrapPeriod; % [N x nWraps]
-    % For each event, find the wrap that minimizes the distance to Yvals
     diffs = abs(Y_thin_strip_top_all - Yvals);
     [~, idx_min] = min(diffs, [], 2);
-    % Select the best unwrapped Y_thin_strip_top for each event
     Y_thin_strip_top_real = Y_thin_strip_top_all(sub2ind(size(Y_thin_strip_top_all), (1:size(Y_thin_strip_top_all,1))', idx_min));
-
-
-    X_thin_bot_real = X_thin_strip_bot + (X_thick_strip - 1) * wrapPeriod;
-    Y_thin_top_real = Y_thin_strip_top_real;
-
 
 
     % ===============================================================
@@ -1753,14 +1755,14 @@ if position_from_narrow_strips
     pairs = [Xgrid_bot(:), Ygrid_top(:)];
 
 
-    nonzero_idx = Y_thick_strip ~= 0;
-    X_thick_strip = X_thick_strip(nonzero_idx);      % [N x 1]
-    Y_thick_strip = Y_thick_strip(nonzero_idx);      % [N x 1]
+    nonzero_idx = Y_thick_for_position ~= 0;
+    X_thick_for_position = X_thick_for_position(nonzero_idx);      % [N x 1]
+    Y_thick_for_position = Y_thick_for_position(nonzero_idx);      % [N x 1]
     X_thin_strip_bot = X_thin_strip_bot(nonzero_idx);% [N x 1]
     Y_thin_strip_top = Y_thin_strip_top(nonzero_idx);% [N x 1]
 
-    X_thick_pos = X_thick_strip / 5 * 120 - 12;
-    Y_thick_pos = (Y_thick_strip + 1.5)/3 * 120 + 1;
+    X_thick_pos = X_thick_for_position / 5 * 120 - 12;
+    Y_thick_pos = (Y_thick_for_position + 1.5)/3 * 120 + 1;
 
     % I want you to put distribute every value in X_thick_pos in a uniform distribution
     % between [0, 24] if it is between [0, 24], between [24, 48] if it is between [24, 48], etc
@@ -1860,152 +1862,7 @@ if position_from_narrow_strips
 
     sgtitle(sprintf('2×2 Correlations between THICK and THIN Strip Positions (all wrapped) (data from %s)', formatted_datetime));
     
-
-
     % ===============================================================
-    % Joint wrap decode using a composite cost over multiple pairings:
-    %   (Xthin,Ythin), (Xthick,Ythick), (Xthin,Ythick), (Xthick,Ythin)
-    % The only degrees of freedom are the thin wraps (kx, ky). We score each
-    % candidate (kx, ky) with a weighted sum of distances:
-    %   - 2D thin↔thick:        rho2d([Xc-Xt, Yc-Yt])                (w_tt2d)
-    %   - 2D cross (thinX vs thickY & thickX vs thinY combined):     rho2d([Xc-Xt, Yc-Yt]) (w_cross2d)
-    %   - 1D X-only (thinX↔thickX):                                  rho1d(|Xc-Xt|)        (w_x1d)
-    %   - 1D Y-only (thinY↔thickY):                                  rho1d(|Yc-Yt|)        (w_y1d)
-    % Each term can use a different loss (L2, L1, Huber). Tweak weights/deltas
-    % to tune behavior and kill artifacts.
-    %
-    % Inputs (column vectors):
-    %   X_thick_pos : N x 1 in [1..120]
-    %   Y_thick_pos : N x 1 in [1..120]
-    %   Xthin_base  : N x 1 in [1..24]
-    %   Ythin_base  : N x 1 in [1..24]
-    %
-    wrapPeriod = 24;
-    nWraps     = 5;             % 5 * 24 = 120
-
-    % ---------- TUNABLE COST SETTINGS ----------
-    % Weights (start with these; tweak as needed)
-    w_tt2d    = 1.0;    % main thin↔thick (2D) term
-    w_cross2d = 0.2;    % cross 2D consistency (same geometry as 2D, but separate weight)
-    w_x1d     = 0.5;    % X-only consistency
-    w_y1d     = 0.9;    % Y-only consistency
-
-    % Loss choices: 'l2', 'l1', or 'huber'
-    loss_tt2d    = 'huber';
-    loss_cross2d = 'huber';
-    loss_x1d     = 'huber';
-    loss_y1d     = 'huber';
-
-    % Robust deltas (in strip units). Make larger if you still see wrap-jumps.
-    delta_2d_tt    = 1.8;
-    delta_2d_cross = 1.2;
-    delta_x1d      = 1.8;
-    delta_y1d      = 1.5;
-    % -------------------------------------------
-
-    % Anonymous robust penalties
-    huber = @(r,delta) (r<=delta).*0.5.*r.^2 + (r>delta).*(delta.*(r - 0.5*delta));
-    rho1d = @(d,loss,delta) ...
-        (strcmp(loss,'l2')    .* (0.5.*d.^2) + ...
-        strcmp(loss,'l1')    .* (d) + ...
-        strcmp(loss,'huber') .* huber(d,delta));
-    rho2d = @(dx,dy,loss,delta) ...
-        rho1d(sqrt(dx.^2 + dy.^2), loss, delta);   % reduce to 1D on the radius
-
-    Xthin_base = X_thin_strip_bot;
-    Ythin_base = Y_thin_strip_top;
-
-    % Valid mask
-    valid = isfinite(X_thick_pos) & isfinite(Y_thick_pos) & ...
-            isfinite(Xthin_base)  & isfinite(Ythin_base);
-
-    N  = numel(Xthin_base);
-    X_thin_unwrapped = nan(N,1);
-    Y_thin_unwrapped = nan(N,1);
-    kx_out = nan(N,1);
-    ky_out = nan(N,1);
-    cmin   = nan(N,1);
-
-    if any(valid)
-        nv    = sum(valid);
-        wraps = (0:nWraps-1) * wrapPeriod;          % 1 x nWraps
-
-        % Candidate wrapped copies (nv x nWraps)
-        Xc = Xthin_base(valid) + wraps;
-        Yc = Ythin_base(valid) + wraps;
-
-        Xt = X_thick_pos(valid);                    % nv x 1
-        Yt = Y_thick_pos(valid);                    % nv x 1
-
-        % Differences
-        DX = Xc - Xt;                               % nv x nWraps   (depends on kx)
-        DY = Yc - Yt;                               % nv x nWraps   (depends on ky)
-
-        % Broadcast to nv x nWraps x nWraps
-        DX3 = reshape(DX, nv, nWraps, 1);           % varies with kx
-        DY3 = reshape(DY, nv, 1,      nWraps);      % varies with ky
-
-        % ---- Composite cost over all (kx,ky) ----
-        % 2D thin↔thick:
-        C_tt2d    = rho2d(DX3, DY3, loss_tt2d,    delta_2d_tt);
-
-        % 2D cross term (thinX vs thickY, thickX vs thinY): same geometry (ΔX,ΔY),
-        % but its own weight/delta/loss lets you tune behavior independently.
-        C_cross2d = rho2d(DX3, DY3, loss_cross2d, delta_2d_cross);
-
-        % 1D X-only and Y-only terms (replicate along the "other" wrap dimension):
-        C_x1d = rho1d(abs(DX3), loss_x1d, delta_x1d);    % |ΔX|
-        C_y1d = rho1d(abs(DY3), loss_y1d, delta_y1d);    % |ΔY|
-
-        % Weighted sum
-        Cost = w_tt2d*C_tt2d + w_cross2d*C_cross2d + w_x1d*C_x1d + w_y1d*C_y1d;  % nv x nWraps x nWraps
-
-        % Argmin over (kx, ky)
-        [cmin_v, idxFlat] = min(reshape(Cost, nv, []), [], 2);   % nv x 1
-        [kx, ky] = ind2sub([nWraps, nWraps], idxFlat);
-
-        % Select winners
-        selX = sub2ind([nv, nWraps], (1:nv)', kx);
-        selY = sub2ind([nv, nWraps], (1:nv)', ky);
-
-        Xsel = Xc(selX);
-        Ysel = Yc(selY);
-
-        % Write back (clamp for safety)
-        totalRange = wrapPeriod * nWraps;           % 120
-        X_thin_unwrapped(valid) = min(max(Xsel, 1), totalRange);
-        Y_thin_unwrapped(valid) = min(max(Ysel, 1), totalRange);
-
-        % Debug/diagnostics
-        kx_out(valid) = kx;
-        ky_out(valid) = ky;
-        cmin(valid)   = cmin_v;
-    end
-
-
-
-    X_final = X_thin_unwrapped;
-    Y_final = Y_thin_unwrapped;
-
-
-    figure; scatter( (X_final(valid) / 120 - 0.5) * 300, ( Y_final(valid) / 120 - 0.5) * 300, 6, 'filled', 'MarkerFaceAlpha', 0.4);
-    hold on;
-    % for k = 1:nWraps
-    %     xline((k-1)*wrapPeriod + 0.5, '-',  'LineWidth', 1);
-    %     xline(k*wrapPeriod       + 0.5, '--', 'LineWidth', 1);
-    %     yline((k-1)*wrapPeriod + 0.5, '--', 'LineWidth', 1);
-    %     yline(k*wrapPeriod       + 0.5, '--', 'LineWidth', 1);
-    % end
-    plot([-150 -150], [150 150], '--', 'LineWidth', 1);
-    xlim([-150 150]); ylim([-150 150]); grid on; box on; axis square;
-    xlabel('X_{final} (1..120)'); ylabel('Y_{final} (1..120)');
-    title('Disambiguated thin positions using thick constraints');
-
-    % Add a rectangle
-    base = 20;
-    height = 80;
-    center = [-80 -27];
-    rectangle('Position',[center(1)-base/2, center(2)-height/2, base, height],'EdgeColor','r','LineWidth',2);
 
 
 
@@ -2022,14 +1879,11 @@ if position_from_narrow_strips
     xlim([0.5 5.5]);
     grid on; box on;
 
-
-    X_thin_strip_bot_real = X_thin_strip_bot + (X_thick_strip - 1)*wrapPeriod;
-
     % Histogram of Y_thin_strip_top (unwrapped) but the unwrapping does not use X_thick_strip,
     % I prefer that it simply creates the full posibilities which is Y_thin_strip_top + (1:5-1)*24
     subplot(2,2,3);
     histogram(X_thin_strip_bot + (0:nWraps-1)*wrapPeriod, 1:0.5:120); hold on;
-    histogram(X_thin_strip_bot_real, 1:0.5:120);
+    histogram(X_thin_bot_real, 1:0.5:120);
     xlabel('X_{thin} (unwrapped) [ns]');
     ylabel('# of events');
     title('X_{thin} (unwrapped) distribution');
@@ -2086,8 +1940,31 @@ if position_from_narrow_strips
     title('X_{thin} (unwrapped) distribution');
     xlim([1 120]);
     grid on; box on;
-end
 
+
+
+    X_final = X_thin_bot_real;
+    Y_final = Y_thin_strip_top_real;
+
+
+    figure; scatter( (X_final(valid) / 120 - 0.5) * 300, ( Y_final(valid) / 120 - 0.5) * 300, 6, 'filled', 'MarkerFaceAlpha', 0.4);
+    hold on;
+    % for k = 1:nWraps
+    %     xline((k-1)*wrapPeriod + 0.5, '-',  'LineWidth', 1);
+    %     xline(k*wrapPeriod       + 0.5, '--', 'LineWidth', 1);
+    %     yline((k-1)*wrapPeriod + 0.5, '--', 'LineWidth', 1);
+    %     yline(k*wrapPeriod       + 0.5, '--', 'LineWidth', 1);
+    % end
+    plot([-150 -150], [150 150], '--', 'LineWidth', 1);
+    xlim([-150 150]); ylim([-150 150]); grid on; box on; axis square;
+    xlabel('X_{final} (1..120)'); ylabel('Y_{final} (1..120)');
+    title('Disambiguated thin positions using thick constraints');
+
+    % Add a rectangle
+    rectangle('Position',[center_mm(1)-base_mm/2, center_mm(2)-height_mm/2, base_mm, height_mm],'EdgeColor','r','LineWidth',2);
+
+
+end
 
 %%
 
@@ -2102,7 +1979,7 @@ Q_pmt_1 = Qcint_coin(:,1);
 Q_pmt_2 = Qcint_coin(:,2);
 Q_pmt_3 = Qcint_coin(:,3);
 Q_pmt_4 = Qcint_coin(:,4);
-Q_thick = Q_thick_event_coin;
+Q_thick = Q_thick_strip_coin;
 Q_thin_top = Q_thin_top_event_coin;
 Q_thin_bot = Q_thin_bot_event_coin;
 
@@ -2157,7 +2034,7 @@ sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)'
 variantSpecs = struct( ...
     'label', {'signal', 'coin', 'good', 'range', 'no_crosstalk'}, ...
     'Qcint', {Qcint_signal, Qcint_coin, Qcint_good, Qcint_range, Qcint_no_crosstalk}, ...
-    'Q_thick', {Q_thick_event_signal, Q_thick_event_coin, Q_thick_strip_good, Q_thick_event_range, Q_thick_event_no_crosstalk}, ...
+    'Q_thick', {Q_thick_strip_signal, Q_thick_strip_coin, Q_thick_strip_good, Q_thick_strip_range, Q_thick_strip_no_crosstalk}, ...
     'Q_thin_top',{Q_thin_top_event_signal, Q_thin_top_event_coin, Q_thin_top_event_good, Q_thin_top_event_range, Q_thin_top_event_no_crosstalk}, ...
     'Q_thin_bot',{Q_thin_bot_event_signal, Q_thin_bot_event_coin, Q_thin_bot_event_good, Q_thin_bot_event_range, Q_thin_bot_event_no_crosstalk} );
 
@@ -2213,6 +2090,7 @@ for v = 1:nVar
     end
 end
 
+
 % --- Plot ---
 figure('Name','Efficiency vs Thresholds');
 tiledlayout(1,3,'TileSpacing','compact','Padding','compact');
@@ -2223,6 +2101,7 @@ plot(thin_top_thr_vec, eff_thin_top, 'LineWidth',1.5); hold on;
 xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
 xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
 xline(thin_top_median, 'g--', 'Median Threshold'); % median line
+xlim([0 thin_top_thr_vec(end)]); % zoom in to the first 70% of the distribution
 xlabel('Thin TOP threshold [ADC bins]');
 ylabel('Efficiency [%]');
 title('Thin TOP');
@@ -2235,6 +2114,7 @@ plot(thick_thr_vec, eff_thick, 'LineWidth',1.5); hold on;
 xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
 xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
 xline(thick_median, 'g--', 'Median Threshold'); % median line
+xlim([0 thick_thr_vec(end)]); % zoom in to the first 70% of the distribution
 xlabel('Thick threshold [ADC bins]');
 ylabel('Efficiency [%]');
 title('Thick');
@@ -2247,6 +2127,7 @@ plot(thin_bot_thr_vec, eff_thin_bot, 'LineWidth',1.5); hold on;
 xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
 xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
 xline(thin_bot_median, 'g--', 'Median Threshold'); % median line
+xlim([0 thin_bot_thr_vec(end)]); % zoom in to the first 70% of the distribution
 xlabel('Thin BOT threshold [ADC bins]');
 ylabel('Efficiency [%]');
 title('Thin BOT');
@@ -2447,7 +2328,6 @@ if save_plots
         warning('Failed to save figures: %s', saveErr.message);
     end
 end
-
 
 
 %%
