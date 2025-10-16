@@ -339,6 +339,8 @@ end
 % NARROW
 charge_narrow_strip_min = 0;
 charge_narrow_strip_max = 30000;
+charge_top_pedestal = 10;
+charge_bot_pedestal = 10;
 
 % Crosstalk
 thick_strip_crosstalk = 5; % ADCbins
@@ -425,9 +427,43 @@ Qb_OG = w; % bottom narrow strips charge proxy
 Q_thin_top_event_OG = sum(Qt_OG, 2); % total charge in the 5 narrow strips on the top side per event
 Q_thin_bot_event_OG = sum(Qb_OG, 2); % total charge in the 5 narrow strips on the bottom side per event
 
+%%
 
+% Ancillary
 
+fprintf('Note there are negative values in the charge proxies Qt and Qb due to baseline fluctuations.\n');
 
+Qt_OG_negative = Qt_OG(Qt_OG < 1000);
+Qb_OG_negative = Qb_OG(Qb_OG < 1000);
+Q_thin_top_event_OG_negative = sum(Qt_OG_negative, 2);
+Q_thin_bot_event_OG_negative = sum(Qb_OG_negative, 2);
+
+% Histogram them, thinner bars
+figure; histogram(Q_thin_top_event_OG_negative, 'BinWidth', 10); 
+xlabel('Charge (ADC bins)'); ylabel('Probability'); title('Negative Charges (Thin)'); hold on;
+histogram(Q_thin_bot_event_OG_negative, 'BinWidth', 10);
+
+%%
+
+% Sum 10 to all Qt_OG and Qb_OG to avoid negative values
+Qt_test = Qt_OG + charge_top_pedestal;
+Qb_test = Qb_OG + charge_bot_pedestal;
+Q_thin_top_event_test = sum(Qt_test, 2);
+Q_thin_bot_event_test = sum(Qb_test, 2);
+% Histogram them, thinner bars
+
+% Create with linspace edges from 0 to 50000
+edges = linspace(0, 50000, 150);
+
+figure; histogram(Q_thin_top_event_test, edges, 'Normalization', 'probability'); 
+xlabel('Charge (ADC bins)'); ylabel('Probability'); title('Positive Charges (Thin)'); hold on;
+histogram(Q_thin_bot_event_test, edges, 'Normalization', 'probability');
+
+%%
+
+% Pedestal addition
+Qt_OG = Qt_OG + charge_top_pedestal;
+Qb_OG = Qb_OG + charge_bot_pedestal;
 
 
 %%
@@ -657,6 +693,10 @@ w = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt 
 
 Qt = v; % top narrow strips charge proxy
 Qb = w; % bottom narrow strips charge proxy
+
+% Pedestal addition
+Qt = Qt + charge_top_pedestal;
+Qb = Qb + charge_bot_pedestal;
 
 % Filter out-of-bounds charges
 Qt(Qt < charge_narrow_strip_min | Qt > charge_narrow_strip_max) = 0;
