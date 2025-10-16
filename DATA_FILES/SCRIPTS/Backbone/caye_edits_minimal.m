@@ -5,6 +5,11 @@
 % run no.1 was acquired with the high voltage on
 % runs no.2 and 3 were acquired with the top high voltage turned off
 
+% System layout:
+% PMT 1 ------------------------ PMT 2
+% --------------- RPC ----------------
+% PMT 3 ------------------------ PMT 4
+
 % NOTE!!!
 % pay attention to the order of the strip connections:
 % wide strips: TFl = [l31 l32 l30 l28 l29]; TFt = [t31 t32 t30 t28 t29];  TBl = [l2 l1 l3 l5 l4]; TBt = [t2 t1 t3 t5 t4];
@@ -341,7 +346,7 @@ top_narrow_strip_crosstalk = 0; % ADCbins/event
 bot_narrow_strip_crosstalk = 0; % ADCbins/event
 
 % Streamers
-Q_thick_streamer_threshold = 50; % ADCbins
+Q_thick_streamer_threshold = 35; % ADCbins
 Q_thin_top_streamer_threshold = 15000; % ADCbins
 Q_thin_bot_streamer_threshold = 15000; % ADCbins
 % -----------------------------------------------------------
@@ -362,15 +367,8 @@ Q_thin_bot_streamer_threshold = 15000; % ADCbins
 % Scintillator Timing and Charge Derivations
 % -----------------------------------------------------------------------------
 
-% System layout:
-
-% PMT 1 ------------------------ PMT 2
-% --------------- RPC ----------------
-% PMT 3 ------------------------ PMT 4
-
 % Build matrices with leading/trailing edge times for each scintillator PMT
 % and derive simple charge proxies and mean times per side.
-
 try
     Tl_cint_OG = [l11 l12 l9 l10]; %tempos leadings  [ns] - leading times [ns]
     Tt_cint_OG = [t11 t12 t9 t10]; %tempos trailings [ns] - trailing times [ns]
@@ -385,11 +383,6 @@ Qcint_OG = [Tt_cint_OG(:,1) - Tl_cint_OG(:,1) Tt_cint_OG(:,2) - Tl_cint_OG(:,2) 
 % -----------------------------------------------------------------------------
 % RPC WIDE STRIP Timing and Charge Derivations
 % -----------------------------------------------------------------------------
-
-% Try this, if it does not work, then store the channels from 24 to 28, and print a warning
-% that the channel order is not as expected. So it was changed to the 24-28 order.
-
-% The order of the channels needs swapping, as I see from the picture and plots
 
 % Joana - TFl = [l31 l32 l30 l28 l29];
         % TFt = [t31 t32 t30 t28 t29];
@@ -845,11 +838,11 @@ Qcint_good(validEvents_coin, :) = Qcint(validEvents_coin, :);
 X_thick_strip_good = zeros(size(X_thick_strip), 'like', X_thick_strip);
 Y_thick_strip_good = zeros(size(Y_thick_strip), 'like', Y_thick_strip);
 T_thick_strip_good = zeros(size(T_thick_strip), 'like', T_thick_strip);
-Q_thick_event_good = zeros(size(Q_thick_event), 'like', Q_thick_event);
+Q_thick_strip_good = zeros(size(Q_thick_event), 'like', Q_thick_event);
 X_thick_strip_good(validEvents_coin, :) = X_thick_strip(validEvents_coin, :);
 Y_thick_strip_good(validEvents_coin, :) = Y_thick_strip(validEvents_coin, :);
 T_thick_strip_good(validEvents_coin, :) = T_thick_strip(validEvents_coin, :);
-Q_thick_event_good(validEvents_coin) = Q_thick_event(validEvents_coin);
+Q_thick_strip_good(validEvents_coin) = Q_thick_event(validEvents_coin);
 
 % Extra, only for calibration checking
 QF_good = zeros(size(QF), 'like', QF);
@@ -878,28 +871,43 @@ Q_thin_bot_event_good = sum(Qb_good, 2);
 % ------------------------------------------------------------------------
 
 % Create masks------------------------------------------------------------
+fprintf("Calculating PMT charge thresholds for run 0 based on 20th and 80th percentiles.\n");
+Q_pmt_1 = Qcint_good(:,1);
+Q_pmt_2 = Qcint_good(:,2);
+Q_pmt_3 = Qcint_good(:,3);
+Q_pmt_4 = Qcint_good(:,4);
+
+pmt_1_charge_threshold_min = prctile(Q_pmt_1(Q_pmt_1>0), percentile_pmt); % ADCbins
+pmt_1_charge_threshold_max = prctile(Q_pmt_1(Q_pmt_1>0), 100 - percentile_pmt); % ADCbins
+pmt_2_charge_threshold_min = prctile(Q_pmt_2(Q_pmt_2>0), percentile_pmt); % ADCbins
+pmt_2_charge_threshold_max = prctile(Q_pmt_2(Q_pmt_2>0), 100 - percentile_pmt); % ADCbins
+pmt_3_charge_threshold_min = prctile(Q_pmt_3(Q_pmt_3>0), percentile_pmt); % ADCbins
+pmt_3_charge_threshold_max = prctile(Q_pmt_3(Q_pmt_3>0), 100 - percentile_pmt); % ADCbins
+pmt_4_charge_threshold_min = prctile(Q_pmt_4(Q_pmt_4>0), percentile_pmt); % ADCbins
+pmt_4_charge_threshold_max = prctile(Q_pmt_4(Q_pmt_4>0), 100 - percentile_pmt); % ADCbins
+
 validEventsFiltered_range = ...
-    (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
-    (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
-    (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
-    (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
+    (Qcint(:,1) >= pmt_1_charge_threshold_min) & (Qcint(:,1) <= pmt_1_charge_threshold_max) & ...
+    (Qcint(:,2) >= pmt_2_charge_threshold_min) & (Qcint(:,2) <= pmt_2_charge_threshold_max) & ...
+    (Qcint(:,3) >= pmt_3_charge_threshold_min) & (Qcint(:,3) <= pmt_3_charge_threshold_max) & ...
+    (Qcint(:,4) >= pmt_4_charge_threshold_min) & (Qcint(:,4) <= pmt_4_charge_threshold_max);
 
 % Apply masks ------------------------------------------------------------
 
 % --- PMTs --- N x 4
 Qcint_range = zeros(size(Qcint_good), 'like', Qcint_good);
-Qcint_range(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_PMT, :);
+Qcint_range(validEventsFiltered_range, :) = Qcint_good(validEventsFiltered_range, :);
 
 % --- THICK STRIPS --- N x 1
 X_thick_strip_range = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
 Y_thick_strip_range = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
 T_thick_strip_range = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
-Q_thick_event_range = zeros(size(Q_thick_event_good), 'like', Q_thick_event_good);
+Q_thick_event_range = zeros(size(Q_thick_strip_good), 'like', Q_thick_strip_good);
 X_thick_strip_range(validEventsFiltered_range, :) = X_thick_strip_good(validEventsFiltered_range, :);
 Y_thick_strip_range(validEventsFiltered_range, :) = Y_thick_strip_good(validEventsFiltered_range, :);
 T_thick_strip_range(validEventsFiltered_range, :) = T_thick_strip_good(validEventsFiltered_range, :);
 
-Q_thick_event_range(validEventsFiltered_range) = Q_thick_event_good(validEventsFiltered_range);
+Q_thick_event_range(validEventsFiltered_range) = Q_thick_strip_good(validEventsFiltered_range);
 
 % --- THIN STRIPS --- N x 24
 Qb_range = zeros(size(Qb_good), 'like', Qb_good);
@@ -918,24 +926,14 @@ Q_thin_bot_event_range = sum(Qb_range, 2);
 % ------------------------------------------------------------------------
 
 % Create masks------------------------------------------------------------
-fprintf("Calculating PMT charge thresholds for run 0 based on 20th and 80th percentiles.\n");
-pmt_1_charge_threshold_min = prctile(Q_pmt_1(Q_pmt_1>0), percentile_pmt); % ADCbins
-pmt_1_charge_threshold_max = prctile(Q_pmt_1(Q_pmt_1>0), 100 - percentile_pmt); % ADCbins
-pmt_2_charge_threshold_min = prctile(Q_pmt_2(Q_pmt_2>0), percentile_pmt); % ADCbins
-pmt_2_charge_threshold_max = prctile(Q_pmt_2(Q_pmt_2>0), 100 - percentile_pmt); % ADCbins
-pmt_3_charge_threshold_min = prctile(Q_pmt_3(Q_pmt_3>0), percentile_pmt); % ADCbins
-pmt_3_charge_threshold_max = prctile(Q_pmt_3(Q_pmt_3>0), 100 - percentile_pmt); % ADCbins
-pmt_4_charge_threshold_min = prctile(Q_pmt_4(Q_pmt_4>0), percentile_pmt); % ADCbins
-pmt_4_charge_threshold_max = prctile(Q_pmt_4(Q_pmt_4>0), 100 - percentile_pmt); % ADCbins
-
 validEventsFiltered_PMT = ...
     (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
     (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
     (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
     (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
-validEventsFiltered_thick = (Q_thick >= thick_strip_crosstalk);
-validEventsFiltered_thin_top = (Q_thin_top >= top_narrow_strip_crosstalk);
-validEventsFiltered_thin_bot = (Q_thin_bot >= bot_narrow_strip_crosstalk);
+validEventsFiltered_thick = (Q_thick_strip_good >= thick_strip_crosstalk);
+validEventsFiltered_thin_top = (Q_thin_top_event_good >= top_narrow_strip_crosstalk);
+validEventsFiltered_thin_bot = (Q_thin_bot_event_good >= bot_narrow_strip_crosstalk);
 
 
 % Apply masks ------------------------------------------------------------
@@ -947,7 +945,7 @@ Qcint_no_crosstalk(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_
 X_thick_strip_no_crosstalk = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
 Y_thick_strip_no_crosstalk = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
 T_thick_strip_no_crosstalk = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
-Q_thick_event_no_crosstalk = zeros(size(Q_thick_event_good), 'like', Q_thick_event_good);
+Q_thick_event_no_crosstalk = zeros(size(Q_thick_strip_good), 'like', Q_thick_strip_good);
 X_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = X_thick_strip_good(validEventsFiltered_thick, :);
 Y_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = Y_thick_strip_good(validEventsFiltered_thick, :);
 T_thick_strip_no_crosstalk(validEventsFiltered_thick, :) = T_thick_strip_good(validEventsFiltered_thick, :);
@@ -984,8 +982,8 @@ q95_t  = quantile(Q_thin_top_event_good, 0.95);
 q95    = max(q95_b, q95_t);
 
 % Thick channel limits (separate scale)
-q005_thick = quantile(Q_thick_event_good, 0.005);
-q95_thick  = quantile(Q_thick_event_good, 0.95);
+q005_thick = quantile(Q_thick_strip_good, 0.005);
+q95_thick  = quantile(Q_thick_strip_good, 0.95);
 
 % Bin edges (match your “like this” snippet for thin; keep fine bins for thick)
 bin_number = 100; % number of bins
@@ -994,12 +992,12 @@ thinBotEdges  = linspace(q005, q95, bin_number); % 100 bins between 0.5% and 95%
 thickEdges    = linspace(q005_thick, q95_thick, bin_number); % 100 bins between 0.5% and 95% quantiles
 
 
-% Create a non_zero version called Q_thick_event_good_hist
+% Create a non_zero version called Q_thick_strip_good_hist
 % THICK
 Q_thick_event_hist = Q_thick_event;
 Q_thick_event_hist(Q_thick_event_hist == 0) = []; % remove zeros for histogram
-Q_thick_event_good_hist = Q_thick_event_good;
-Q_thick_event_good_hist(Q_thick_event_good_hist == 0) = []; % remove zeros for histogram
+Q_thick_strip_good_hist = Q_thick_strip_good;
+Q_thick_strip_good_hist(Q_thick_strip_good_hist == 0) = []; % remove zeros for histogram
 
 % THIN TOP
 Q_thin_bot_event_hist = Q_thin_bot_event;
@@ -1015,8 +1013,8 @@ Q_thin_top_event_good_hist(Q_thin_top_event_good_hist == 0) = []; % remove zeros
 
 
 % PMT charge quantiles
-q005_pmt = quantile(Qcint_OG(Qcint_OG>0), 0.005);
-q95_pmt  = quantile(Qcint_OG(Qcint_OG>0), 0.95);
+q005_pmt = quantile(Qcint_good(Qcint_good > 0), 0.005);
+q95_pmt  = quantile(Qcint_good(Qcint_good > 0), 0.95);
 binning_pmt = linspace(q005_pmt, q95_pmt, bin_number); % 100 bins between 0.5% and 95% quantiles
 
 
@@ -1254,10 +1252,23 @@ end
 
 figure;
 % Avoid plotting zero values in histograms, take ~= 0 values
-Q_nonzero = Q; Q_nonzero(Q_nonzero==0) = [];
-X_nonzero = X; X_nonzero(X_nonzero==0) = [];
-T_nonzero = T; T_nonzero(T_nonzero==0) = [];
-Y_nonzero = Y; Y_nonzero(Y_nonzero==0) = [];
+Q_nonzero = Q_thick_strip_OG; Q_nonzero(Q_nonzero==0) = [];
+X_nonzero = X_thick_strip_OG; X_nonzero(X_nonzero==0) = [];
+T_nonzero = T_thick_strip_OG; T_nonzero(T_nonzero==0) = [];
+Y_nonzero = Y_thick_strip_OG; Y_nonzero(Y_nonzero==0) = [];
+subplot(2,2,1); histogram(Q_nonzero, 0:0.1:200); xlabel('Q [ns]'); ylabel('# of events'); title('Q total in sum of THICK STRIPS');
+subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); ylabel('# of events'); title('X position (strip with Qmax)');
+subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
+subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
+sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime));
+
+
+figure;
+% Avoid plotting zero values in histograms, take ~= 0 values
+Q_nonzero = Q_thick_strip_good; Q_nonzero(Q_nonzero==0) = [];
+X_nonzero = X_thick_strip_good; X_nonzero(X_nonzero==0) = [];
+T_nonzero = T_thick_strip_good; T_nonzero(T_nonzero==0) = [];
+Y_nonzero = Y_thick_strip_good; Y_nonzero(Y_nonzero==0) = [];
 subplot(2,2,1); histogram(Q_nonzero, 0:0.1:200); xlabel('Q [ns]'); ylabel('# of events'); title('Q total in sum of THICK STRIPS');
 subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); ylabel('# of events'); title('X position (strip with Qmax)');
 subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
@@ -1416,15 +1427,15 @@ sgtitle(sprintf('Narrow strip charge top vs bottom (data from %s)', formatted_da
 % FIGURE 1 — Thin bottom / Thin top (hist + hist + scatter), with valid overlays
 figure;
 subplot(1,3,1);
-histogram(Q_thin_bot_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_bot_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_bot_event_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (bottom)');
 title('Q narrow bottom spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thin_top_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_top_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_top_event_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (top)');
 title('Q narrow top spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
@@ -1441,22 +1452,22 @@ sgtitle(sprintf('Charge of the event (thin only; all vs valid; run %s)', run));
 % FIGURE 2 — Thin bottom vs Thick
 figure;
 subplot(1,3,1);
-histogram(Q_thin_bot_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_bot_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_bot_event_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (bottom)');
 title('Q narrow bottom spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,2);
 histogram(Q_thick_event_hist, thickEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thick_event_good_hist, thickEdges, 'DisplayName','valid only');
+histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (thick)');
 title('Q thick spectrum (sum of Q per event)');
 xlim([q005_thick q95_thick]); legend('show');
 
 subplot(1,3,3);
 plot(Q_thin_bot_event, Q_thick_event, '.', 'DisplayName','all events'); hold on;
-plot(Q_thin_bot_event_good, Q_thick_event_good, '.', 'DisplayName','valid only');
+plot(Q_thin_bot_event_good, Q_thick_strip_good, '.', 'DisplayName','valid only');
 xlabel('Q (bottom)'); ylabel('Q (thick)');
 title('Q bottom vs Q thick');
 xlim([q005 q95]); ylim([q005_thick q95_thick]); legend('show');
@@ -1466,59 +1477,46 @@ sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid; run %s)', r
 figure;
 subplot(1,3,1);
 histogram(Q_thick_event_hist, thickEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thick_event_good_hist, thickEdges, 'DisplayName','valid only');
+histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (thick)');
 title('Q thick spectrum (sum of Q per event)');
 xlim([q005_thick q95_thick]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thin_top_event_hist, thinEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_top_event_good_hist, thinEdges, 'DisplayName','valid only');
+histogram(Q_thin_top_event_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (top)');
 title('Q narrow top spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,3);
 plot(Q_thick_event, Q_thin_top_event, '.', 'DisplayName','all events'); hold on;
-plot(Q_thick_event_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
+plot(Q_thick_strip_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
 xlabel('Q (thick)'); ylabel('Q (top)');
 title('Q thick vs Q top');
 xlim([q005_thick q95_thick]); ylim([q005 q95]); legend('show');
 sgtitle(sprintf('Charge of the event (thick vs top; all vs valid; run %s)', run));
 
 
-% PMT 2x2 charge histograms with binning_pmt and the _signal, _good, _range versions
+% PMT 2x2 charge CDFs with binning_pmt and the _signal, _good, _range versions
 figure;
-subplot(2,2,1);
-histogram(Qcint_signal(:,1), binning_pmt, 'DisplayName','all events'); hold on;
-histogram(Qcint_good(:,1), binning_pmt, 'DisplayName','valid only');
-histogram(Qcint_range(:,1), binning_pmt, 'DisplayName','in range only');
-ylabel('# of events'); xlabel('Q (pmt1)');
-title('Q pmt1 spectrum');
-xlim([min(binning_pmt) max(binning_pmt)]); legend('show');
-subplot(2,2,2);
-histogram(Qcint_signal(:,2), binning_pmt, 'DisplayName','all events'); hold on;
-histogram(Qcint_good(:,2), binning_pmt, 'DisplayName','valid only');
-histogram(Qcint_range(:,2), binning_pmt, 'DisplayName','in range only');
-ylabel('# of events'); xlabel('Q (pmt2)');
-title('Q pmt2 spectrum');
-xlim([min(binning_pmt) max(binning_pmt)]); legend('show');
-subplot(2,2,3);
-histogram(Qcint_signal(:,3), binning_pmt, 'DisplayName','all events'); hold on;
-histogram(Qcint_good(:,3), binning_pmt, 'DisplayName','valid only');
-histogram(Qcint_range(:,3), binning_pmt, 'DisplayName','in range only');
-ylabel('# of events'); xlabel('Q (pmt3)');
-title('Q pmt3 spectrum');
-xlim([min(binning_pmt) max(binning_pmt)]); legend('show');
-subplot(2,2,4);
-histogram(Qcint_signal(:,4), binning_pmt, 'DisplayName','all events'); hold on;
-histogram(Qcint_good(:,4), binning_pmt, 'DisplayName','valid only');
-histogram(Qcint_range(:,4), binning_pmt, 'DisplayName','in range only');
-ylabel('# of events'); xlabel('Q (pmt4)');
-title('Q pmt4 spectrum');
-xlim([min(binning_pmt) max(binning_pmt)]); legend('show');
-sgtitle(sprintf('PMT charge spectra (data from %s)', formatted_datetime));
+titles = {'Q pmt1 CDF','Q pmt2 CDF','Q pmt3 CDF','Q pmt4 CDF'};
 
+for k = 1:4
+    subplot(2,2,k);
+    hold on;
+    histogram(Qcint_signal(:,k), binning_pmt, 'DisplayName','all events', 'Normalization','cdf');
+    histogram(Qcint_good(:,k),   binning_pmt, 'DisplayName','valid only', 'Normalization','cdf');
+    histogram(Qcint_range(:,k),  binning_pmt, 'DisplayName','in range only', 'Normalization','cdf');
+    xlabel(sprintf('Q (pmt%d)', k));
+    ylabel('Cumulative fraction');
+    title(titles{k});
+    xlim([min(binning_pmt) max(binning_pmt)]);
+    legend('show', 'Location','southeast');
+    grid on; box on;
+end
+
+sgtitle(sprintf('PMT charge CDFs (data from %s)', formatted_datetime));
 
 
 %%
@@ -2156,21 +2154,23 @@ sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)'
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-
-
 variantSpecs = struct( ...
     'label', {'signal', 'coin', 'good', 'range', 'no_crosstalk'}, ...
     'Qcint', {Qcint_signal, Qcint_coin, Qcint_good, Qcint_range, Qcint_no_crosstalk}, ...
-    'Q_thick', {Q_thick_event_signal, Q_thick_event_coin, Q_thick_event_good, Q_thick_event_range, Q_thick_event_no_crosstalk}, ...
+    'Q_thick', {Q_thick_event_signal, Q_thick_event_coin, Q_thick_strip_good, Q_thick_event_range, Q_thick_event_no_crosstalk}, ...
     'Q_thin_top',{Q_thin_top_event_signal, Q_thin_top_event_coin, Q_thin_top_event_good, Q_thin_top_event_range, Q_thin_top_event_no_crosstalk}, ...
     'Q_thin_bot',{Q_thin_bot_event_signal, Q_thin_bot_event_coin, Q_thin_bot_event_good, Q_thin_bot_event_range, Q_thin_bot_event_no_crosstalk} );
 
 
-
 % Define threshold ranges (adjust as needed)
-thin_top_thr_vec  = linspace(0, prctile(Q_thin_top_event_good, 99.5), 100);
-thin_bot_thr_vec  = linspace(0, prctile(Q_thin_bot_event_good, 99.5), 100);
-thick_thr_vec     = linspace(0, prctile(Q_thick_event_good, 99.5), 100);
+thin_top_median = median(Q_thin_top_event_good(Q_thin_top_event_good ~= 0));
+thin_bot_median = median(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0));
+thick_median   = median(Q_thick_strip_good(Q_thick_strip_good ~= 0));
+
+quantile_binning = 70;
+thin_top_thr_vec  = linspace(0, prctile(Q_thin_top_event_good(Q_thin_top_event_good ~= 0), quantile_binning), 100);
+thin_bot_thr_vec  = linspace(0, prctile(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0), quantile_binning), 100);
+thick_thr_vec     = linspace(0, prctile(Q_thick_strip_good(Q_thick_strip_good ~= 0), quantile_binning), 100);
 
 variantLabels = {variantSpecs.label};
 nVar = numel(variantSpecs);
@@ -2219,7 +2219,10 @@ tiledlayout(1,3,'TileSpacing','compact','Padding','compact');
 
 % THIN TOP
 nexttile;
-plot(thin_top_thr_vec, eff_thin_top, 'LineWidth',1.5);
+plot(thin_top_thr_vec, eff_thin_top, 'LineWidth',1.5); hold on;
+xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+xline(thin_top_median, 'g--', 'Median Threshold'); % median line
 xlabel('Thin TOP threshold [ADC bins]');
 ylabel('Efficiency [%]');
 title('Thin TOP');
@@ -2228,7 +2231,10 @@ grid on; box on;
 
 % THICK
 nexttile;
-plot(thick_thr_vec, eff_thick, 'LineWidth',1.5);
+plot(thick_thr_vec, eff_thick, 'LineWidth',1.5); hold on;
+xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+xline(thick_median, 'g--', 'Median Threshold'); % median line
 xlabel('Thick threshold [ADC bins]');
 ylabel('Efficiency [%]');
 title('Thick');
@@ -2237,7 +2243,10 @@ grid on; box on;
 
 % THIN BOT
 nexttile;
-plot(thin_bot_thr_vec, eff_thin_bot, 'LineWidth',1.5);
+plot(thin_bot_thr_vec, eff_thin_bot, 'LineWidth',1.5); hold on;
+xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+xline(thin_bot_median, 'g--', 'Median Threshold'); % median line
 xlabel('Thin BOT threshold [ADC bins]');
 ylabel('Efficiency [%]');
 title('Thin BOT');
@@ -2250,9 +2259,9 @@ sgtitle('Efficiency vs Threshold for Different Event Classes');
 %%
 
 
-thin_top_threshold = top_narrow_strip_charge_threshold_min;
-thin_bot_threshold = bot_narrow_strip_charge_threshold_min;
-thick_threshold   = thick_strip_charge_threshold_min;
+thin_top_threshold = top_narrow_strip_crosstalk;
+thin_bot_threshold = bot_narrow_strip_crosstalk;
+thick_threshold   = thick_strip_crosstalk;
 
 % Print these three limits
 fprintf('Using thresholds for efficiency calculation:\n');
