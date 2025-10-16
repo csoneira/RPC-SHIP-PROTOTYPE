@@ -1994,7 +1994,7 @@ end
 
 % --- Plot ---
 figure('Name','Efficiency vs Thresholds');
-tiledlayout(1,3,'TileSpacing','compact','Padding','compact');
+tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
 
 % THIN TOP
 nexttile;
@@ -2031,6 +2031,43 @@ xline(thin_bot_median, 'g--', 'Median Threshold'); % median line
 xlim([0 thin_bot_thr_vec(end)]); % zoom in to the first 70% of the distribution
 xlabel('Thin BOT threshold [ADC bins]');
 ylabel('Efficiency [%]');
+title('Thin BOT');
+legend(variantLabels, 'Location','southwest');
+grid on; box on;
+
+
+% THIN TOP
+nexttile;
+histogram(Q_thin_top_v, 'BinEdges', thin_top_thr_vec, 'Normalization', 'probability'); hold on;
+xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+xline(thin_top_median, 'g--', 'Median Threshold'); % median line
+xlim([0 thin_top_thr_vec(end)]); % zoom in to the first 70% of the distribution
+xlabel('Q thin top [ADC bins]');
+title('Thin TOP');
+legend(variantLabels, 'Location','southwest');
+grid on; box on;
+
+% THICK
+nexttile;
+histogram(Q_thick_v, 'BinEdges', thick_thr_vec, 'Normalization', 'probability'); hold on;
+xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+xline(thick_median, 'g--', 'Median Threshold'); % median line
+xlim([0 thick_thr_vec(end)]); % zoom in to the first 70% of the distribution
+xlabel('Q thick [ADC bins]');
+title('Thick');
+legend(variantLabels, 'Location','southwest');
+grid on; box on;
+
+% THIN BOT
+nexttile;
+histogram(Q_thin_bot_v, 'BinEdges', thin_bot_thr_vec, 'Normalization', 'probability'); hold on;
+xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+xline(thin_bot_median, 'g--', 'Median Threshold'); % median line
+xlim([0 thin_bot_thr_vec(end)]); % zoom in to the first 70% of the distribution
+xlabel('Q thin bot [ADC bins]');
 title('Thin BOT');
 legend(variantLabels, 'Location','southwest');
 grid on; box on;

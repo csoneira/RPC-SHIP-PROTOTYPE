@@ -9,6 +9,8 @@
 % cintiladores: Tl_cint = [l11 l12 l9 l10]; Tt_cint = [t11 t12 t9 t10]; 
 % Nota: os cabos estavam trocados, por isso, Qt=Ib... e Qb=It...
 
+clear all; close all; clc;
+
 %clear all; close all; clc;
 HOME    = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/';
 SCRIPTS = '/STORED_NOT_ESSENTIAL/';
@@ -18,7 +20,7 @@ path(path,[HOME SCRIPTS 'util_matPlots']);
 
 % Select which acquisition run to process; each branch below loads time and
 % charge information for that specific dataset.
-run = 2;
+run = 1;
 
 if run == 1
     load([HOME SCRIPTS DATA 'dabc25120133744-dabc25126121423_a001_T.mat']) %run com os 4 cintiladores
@@ -182,24 +184,358 @@ fprintf('Efficiency top (good events only)    = %2.2f%%\n', eff_top_goodEventsOn
 %%
 
 
-tTH = 3; %time threshold [ns] to assume it comes from a good event; obriga a ter tempos nos 4 cint
-restrictionsForPMTs = abs(Tl_cint(:,1)-Tl_cint(:,2)) <tTH & ...
-                      abs(Tl_cint(:,1)-Tl_cint(:,3)) <tTH & ...
-                      abs(Tl_cint(:,1)-Tl_cint(:,4)) <tTH & ...
-                      abs(Tl_cint(:,2)-Tl_cint(:,3)) <tTH & ...
-                      abs(Tl_cint(:,2)-Tl_cint(:,4)) <tTH & ...
-                      abs(Tl_cint(:,3)-Tl_cint(:,4)) <tTH;
-indicesGoodEvents=find(restrictionsForPMTs);
-numberGoodEvents = length(indicesGoodEvents);
-ChargePerEvent_b_goodEventsOnly= ChargePerEvent_b(indicesGoodEvents);
-ChargePerEvent_t_goodEventsOnly= ChargePerEvent_t(indicesGoodEvents);
-numberSeenEvents=length(find(ChargePerEvent_b_goodEventsOnly >1400));
-eff_bottom_goodEventsOnly = 100*(numberSeenEvents/numberGoodEvents);
-numberSeenEvents=length(find(ChargePerEvent_t_goodEventsOnly >1400));
-eff_top_goodEventsOnly    = 100*(numberSeenEvents/numberGoodEvents);
 
-fprintf('Efficiency bottom (good events only) = %2.2f%%\n', eff_bottom_goodEventsOnly);
-fprintf('Efficiency top (good events only)    = %2.2f%%\n', eff_top_goodEventsOnly);
+
+
+% % --- Inputs you already have / compute above this block ---
+% tTH = 3; % [ns] good-event timing threshold (requires all 4 PMTs within tTH)
+
+% restrictionsForPMTs = true(size(Tl_cint,1),1);
+
+% indicesGoodEvents = find(restrictionsForPMTs);
+% numberGoodEvents  = numel(indicesGoodEvents);
+
+% if numberGoodEvents == 0
+%     warning('No good events with tTH = %.3f ns. Nothing to plot.', tTH);
+%     return;
+% end
+
+% % Charges for selected (good) events
+% Qb = ChargePerEvent_b(indicesGoodEvents);
+% Qt = ChargePerEvent_t(indicesGoodEvents);
+
+% % -------- Choose TWO different threshold vectors (linspace) --------
+% % Customize these ranges/lengths as you like:
+% minB = 0;
+% maxB = median(Qb, 'omitnan'); if ~isfinite(maxB), maxB = 1; end
+% nB   = 100;  % #points for BOTTOM thresholds
+
+% minT = 0;
+% maxT = median(Qt, 'omitnan'); if ~isfinite(maxT), maxT = 1; end
+% nT   = 120;  % #points for TOP thresholds
+
+% thresholds_b = linspace(minB, maxB, nB);  % bottom thresholds
+% thresholds_t = linspace(minT, maxT, nT);  % top thresholds
+
+% % -------- Efficiency computation --------
+% eff_bottom = zeros(size(thresholds_b));
+% for i = 1:numel(thresholds_b)
+%     thr = thresholds_b(i);
+%     eff_bottom(i) = 100 * (sum(Qb > thr) / numberGoodEvents);
+% end
+
+% eff_top = zeros(size(thresholds_t));
+% for i = 1:numel(thresholds_t)
+%     thr = thresholds_t(i);
+%     eff_top(i) = 100 * (sum(Qt > thr) / numberGoodEvents);
+% end
+
+% % -------- Plot: efficiency vs threshold (1x2 subplots) --------
+% figure('Name','Efficiency vs Charge Threshold (good events only)');
+% tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+
+% % Bottom
+% nexttile;
+% plot(thresholds_b, eff_bottom, '-o', 'MarkerSize', 3); grid on;
+% xlabel('BOTTOM charge threshold (ADCbins)');
+% ylabel('Efficiency (%)');
+% title(sprintf('BOTTOM — %d good events (tTH = %.1f ns)', numberGoodEvents, tTH));
+% ylim([0 105]);
+
+% % Top
+% nexttile;
+% plot(thresholds_t, eff_top, '-o', 'MarkerSize', 3); grid on;
+% xlabel('TOP charge threshold (ADCbins)');
+% ylabel('Efficiency (%)');
+% title(sprintf('TOP — %d good events (tTH = %.1f ns)', numberGoodEvents, tTH));
+% ylim([0 105]);
+
+
+
+
+%%
+
+
+
+
+
+% --- Inputs you already have / compute above this block ---
+tTH = 3; % [ns] good-event timing threshold (requires all 4 PMTs within tTH)
+
+restrictionsForPMTs = abs(Tl_cint(:,1)-Tl_cint(:,2)) < tTH & ...
+                      abs(Tl_cint(:,1)-Tl_cint(:,3)) < tTH & ...
+                      abs(Tl_cint(:,1)-Tl_cint(:,4)) < tTH & ...
+                      abs(Tl_cint(:,2)-Tl_cint(:,3)) < tTH & ...
+                      abs(Tl_cint(:,2)-Tl_cint(:,4)) < tTH & ...
+                      abs(Tl_cint(:,3)-Tl_cint(:,4)) < tTH;
+
+indicesGoodEvents = find(restrictionsForPMTs);
+numberGoodEvents  = numel(indicesGoodEvents);
+
+if numberGoodEvents == 0
+    warning('No good events with tTH = %.3f ns. Nothing to plot.', tTH);
+    return;
+end
+
+% Charges for selected (good) events
+Qb = ChargePerEvent_b(indicesGoodEvents);
+Qt = ChargePerEvent_t(indicesGoodEvents);
+
+
+
+% --- Robust maxima + medians ---
+medianB = median(Qb, 'omitnan');
+medianT = median(Qt, 'omitnan');
+% quantile 70
+quantileB = prctile(Qb, 90);
+quantileT = prctile(Qt, 90);
+maxB = quantileB;
+maxT = quantileT;
+
+% --- Threshold vectors (linspace over full ranges) ---
+thresholds_b = linspace(0, maxB, 100);
+thresholds_t = linspace(0, maxT, 100);
+
+% --- Efficiencies vs thresholds ---
+eff_bottom = 100 * arrayfun(@(thr) sum(Qb > thr) / numberGoodEvents, thresholds_b);
+eff_top    = 100 * arrayfun(@(thr) sum(Qt > thr) / numberGoodEvents, thresholds_t);
+
+% --- Histogram bin edges: 100 bins in [0, max] → 101 edges ---
+edgesB = linspace(0, maxB, 101);
+edgesT = linspace(0, maxT, 101);
+
+% ===================== 2×2 PLOT =====================
+fig = figure('Name','Efficiency & Charges (good events only)');
+tl = tiledlayout(fig, 2, 2, 'TileSpacing','compact','Padding','compact');
+
+% ---------- (1,1) BOTTOM: Efficiency vs Threshold ----------
+ax11 = nexttile(1);
+plot(thresholds_b, eff_bottom, '-o', 'MarkerSize', 3); grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianB, '--g', sprintf('Median = %.1f ADCbins', medianB), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+ylabel('Efficiency (%)');
+title(sprintf('BOTTOM — %d good events (tTH = %.1f ns)', numberGoodEvents, tTH));
+ylim([0 105]); xlim([0 maxB]);
+
+% ---------- (1,2) TOP: Efficiency vs Threshold ----------
+ax12 = nexttile(2);
+plot(thresholds_t, eff_top, '-o', 'MarkerSize', 3); grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianT, '--g', sprintf('Median = %.1f ADCbins', medianT), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+ylabel('Efficiency (%)');
+title(sprintf('TOP — %d good events (tTH = %.1f ns)', numberGoodEvents, tTH));
+ylim([0 105]); xlim([0 maxT]);
+
+% ---------- (2,1) BOTTOM: Charge Histogram ----------
+ax21 = nexttile(3);
+histogram(Qb, 'Normalization','probability', 'BinEdges', edgesB);
+grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianB, '--g', sprintf('Median = %.1f ADCbins', medianB), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xlabel('BOTTOM charge / threshold (ADCbins)');  % shared x meaningfully
+ylabel('Probability');
+title('BOTTOM charges (good events only)');
+xlim([0 maxB]);
+
+% ---------- (2,2) TOP: Charge Histogram ----------
+ax22 = nexttile(4);
+histogram(Qt, 'Normalization','probability', 'BinEdges', edgesT);
+grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianT, '--g', sprintf('Median = %.1f ADCbins', medianT), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xlabel('TOP charge / threshold (ADCbins)');     % shared x meaningfully
+ylabel('Probability');
+title('TOP charges (good events only)');
+xlim([0 maxT]);
+
+% --- Share x-axes WITHIN each column ---
+linkaxes([ax11, ax21], 'x');   % left column (BOTTOM)
+linkaxes([ax12, ax22], 'x');   % right column (TOP)
+
+% Optional: common x-labels for columns
+xlabel(ax21, 'BOTTOM charge / threshold (ADCbins)');
+xlabel(ax22, 'TOP charge / threshold (ADCbins)');
+
+% Optional: add a super-title
+title(tl, 'Efficiency vs Threshold and Charge Distributions (good events only)');
+
+
+
+
+%%
+
+% Caye filter ---------------------------------------------------
+
+% --- Inputs you already have / compute above this block ---
+tTH = 4; % [ns] good-event timing threshold (requires all 4 PMTs within tTH)
+lead_time_pmt_min = -120;
+lead_time_pmt_max = -70;
+trail_time_pmt_min = -50;
+trail_time_pmt_max = 200;
+time_pmt_diff_thr = 50; % ns
+
+Tl_cint_caye = Tl_cint;
+Tt_cint_caye = Tt_cint;
+
+% If any value in Tl_cint or any value in Tt_cint is outside the expected range, put it to 0
+Tl_cint_caye(Tl_cint_caye < lead_time_pmt_min | Tl_cint_caye > lead_time_pmt_max) = 0;
+Tt_cint_caye(Tt_cint_caye < trail_time_pmt_min | Tt_cint_caye > trail_time_pmt_max) = 0;
+
+Tl_cint_caye(Tt_cint_caye == 0) = 0;
+Tt_cint_caye(Tl_cint_caye == 0) = 0;
+Tl_cint_caye(Tt_cint_caye == 0) = 0;
+Tt_cint_caye(Tl_cint_caye == 0) = 0;
+
+cond_pmt_bot = ( abs(Tl_cint_caye(:,1) - Tl_cint_caye(:,2)) > time_pmt_diff_thr );
+Tl_cint_caye(cond_pmt_bot, 1) = 0;
+Tl_cint_caye(cond_pmt_bot, 2) = 0;
+
+cond_pmt_top = ( abs(Tl_cint_caye(:,3) - Tl_cint_caye(:,4)) > time_pmt_diff_thr );
+Tl_cint_caye(cond_pmt_top, 3) = 0;
+Tl_cint_caye(cond_pmt_top, 4) = 0;
+
+Tl_cint_caye(Tt_cint_caye == 0) = 0;
+Tt_cint_caye(Tl_cint_caye == 0) = 0;
+Tl_cint_caye(Tt_cint_caye == 0) = 0;
+Tt_cint_caye(Tl_cint_caye == 0) = 0;
+
+restrictionsForPMTs_comp = abs(Tl_cint_caye(:,1)-Tl_cint_caye(:,2)) > tTH | ...
+                        abs(Tl_cint_caye(:,1)-Tl_cint_caye(:,3)) > tTH | ...
+                        abs(Tl_cint_caye(:,1)-Tl_cint_caye(:,4)) > tTH | ...
+                        abs(Tl_cint_caye(:,2)-Tl_cint_caye(:,3)) > tTH | ...
+                        abs(Tl_cint_caye(:,2)-Tl_cint_caye(:,4)) > tTH | ...
+                        abs(Tl_cint_caye(:,3)-Tl_cint_caye(:,4)) > tTH;
+
+% Take the complementary mask
+restrictionsForPMTs_caye = ~restrictionsForPMTs_comp;
+
+% Put to zero the Tl_cint and Tt_cint where restrictionsForPMTs is false
+Tl_cint_caye(~restrictionsForPMTs_caye, :) = 0;
+Tt_cint_caye(~restrictionsForPMTs_caye, :) = 0;
+
+% Update the whole row
+Tl_cint_caye(Tt_cint_caye == 0) = 0;
+Tt_cint_caye(Tl_cint_caye == 0) = 0;
+Tl_cint_caye(Tt_cint_caye == 0) = 0;
+Tt_cint_caye(Tl_cint_caye == 0) = 0;
+
+restrictionsForPMTs_caye_2 = abs(Tl_cint_caye(:,1)-Tl_cint_caye(:,2)) < tTH & ...
+                      abs(Tl_cint_caye(:,1)-Tl_cint_caye(:,3)) < tTH & ...
+                      abs(Tl_cint_caye(:,1)-Tl_cint_caye(:,4)) < tTH & ...
+                      abs(Tl_cint_caye(:,2)-Tl_cint_caye(:,3)) < tTH & ...
+                      abs(Tl_cint_caye(:,2)-Tl_cint_caye(:,4)) < tTH & ...
+                      abs(Tl_cint_caye(:,3)-Tl_cint_caye(:,4)) < tTH;
+
+indicesGoodEvents = find(restrictionsForPMTs_caye_2);
+numberGoodEvents  = numel(indicesGoodEvents);
+
+if numberGoodEvents == 0
+    warning('No good events with tTH = %.3f ns. Nothing to plot.', tTH);
+    return;
+end
+
+% Charges for selected (good) events
+Qb = ChargePerEvent_b(indicesGoodEvents);
+Qt = ChargePerEvent_t(indicesGoodEvents);
+
+
+% --- Robust maxima + medians ---
+medianB = median(Qb, 'omitnan');
+medianT = median(Qt, 'omitnan');
+% quantile 70
+quantileB = prctile(Qb, 90);
+quantileT = prctile(Qt, 90);
+maxB = quantileB;
+maxT = quantileT;
+
+% --- Threshold vectors (linspace over full ranges) ---
+thresholds_b = linspace(0, maxB, 100);
+thresholds_t = linspace(0, maxT, 100);
+
+% --- Efficiencies vs thresholds ---
+eff_bottom = 100 * arrayfun(@(thr) sum(Qb > thr) / numberGoodEvents, thresholds_b);
+eff_top    = 100 * arrayfun(@(thr) sum(Qt > thr) / numberGoodEvents, thresholds_t);
+
+% --- Histogram bin edges: 100 bins in [0, max] → 101 edges ---
+edgesB = linspace(0, maxB, 101);
+edgesT = linspace(0, maxT, 101);
+
+% ===================== 2×2 PLOT =====================
+fig = figure('Name','Caye Efficiency & Charges (good events only)');
+tl = tiledlayout(fig, 2, 2, 'TileSpacing','compact','Padding','compact');
+
+% ---------- (1,1) BOTTOM: Efficiency vs Threshold ----------
+ax11 = nexttile(1);
+plot(thresholds_b, eff_bottom, '-o', 'MarkerSize', 3); grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianB, '--g', sprintf('Median = %.1f ADCbins', medianB), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+ylabel('Efficiency (%)');
+title(sprintf('BOTTOM — %d good events (tTH = %.1f ns)', numberGoodEvents, tTH));
+ylim([0 105]); xlim([0 maxB]);
+
+% ---------- (1,2) TOP: Efficiency vs Threshold ----------
+ax12 = nexttile(2);
+plot(thresholds_t, eff_top, '-o', 'MarkerSize', 3); grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianT, '--g', sprintf('Median = %.1f ADCbins', medianT), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+ylabel('Efficiency (%)');
+title(sprintf('TOP — %d good events (tTH = %.1f ns)', numberGoodEvents, tTH));
+ylim([0 105]); xlim([0 maxT]);
+
+% ---------- (2,1) BOTTOM: Charge Histogram ----------
+ax21 = nexttile(3);
+histogram(Qb, 'Normalization','probability', 'BinEdges', edgesB);
+grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianB, '--g', sprintf('Median = %.1f ADCbins', medianB), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xlabel('BOTTOM charge / threshold (ADCbins)');  % shared x meaningfully
+ylabel('Probability');
+title('BOTTOM charges (good events only)');
+xlim([0 maxB]);
+
+% ---------- (2,2) TOP: Charge Histogram ----------
+ax22 = nexttile(4);
+histogram(Qt, 'Normalization','probability', 'BinEdges', edgesT);
+grid on; hold on;
+xline(1400, '--r', 'Joana threshold = 1400 ADCbins', ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xline(medianT, '--g', sprintf('Median = %.1f ADCbins', medianT), ...
+      'LabelVerticalAlignment','middle', 'LabelHorizontalAlignment','center');
+xlabel('TOP charge / threshold (ADCbins)');     % shared x meaningfully
+ylabel('Probability');
+title('TOP charges (good events only)');
+xlim([0 maxT]);
+
+% --- Share x-axes WITHIN each column ---
+linkaxes([ax11, ax21], 'x');   % left column (BOTTOM)
+linkaxes([ax12, ax22], 'x');   % right column (TOP)
+
+% Optional: common x-labels for columns
+xlabel(ax21, 'BOTTOM charge / threshold (ADCbins)');
+xlabel(ax22, 'TOP charge / threshold (ADCbins)');
+
+% Optional: add a super-title
+title(tl, 'Efficiency vs Threshold and Charge Distributions (good events only)');
+
+
+
+return;
+
+
 
 
 
