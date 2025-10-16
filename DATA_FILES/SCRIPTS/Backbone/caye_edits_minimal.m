@@ -671,11 +671,7 @@ Q_thin_bot_event = sum(Qb, 2); % total charge in the 5 narrow strips on the bott
 
 
 
-
 %%
-
-
-
 
 
 % ---------------------------------------------------------------------
@@ -994,20 +990,20 @@ thickEdges    = linspace(q005_thick, q95_thick, bin_number); % 100 bins between 
 
 % Create a non_zero version called Q_thick_strip_good_hist
 % THICK
-Q_thick_strip_hist = Q_thick_event;
-Q_thick_strip_hist(Q_thick_strip_hist == 0) = []; % remove zeros for histogram
+Q_thick_strip_signal_hist = Q_thick_strip_signal;
+Q_thick_strip_signal_hist(Q_thick_strip_signal_hist == 0) = []; % remove zeros for histogram
 Q_thick_strip_good_hist = Q_thick_strip_good;
 Q_thick_strip_good_hist(Q_thick_strip_good_hist == 0) = []; % remove zeros for histogram
 
 % THIN TOP
-Q_thin_bot_event_hist = Q_thin_bot_event;
-Q_thin_bot_event_hist(Q_thin_bot_event_hist == 0) = []; % remove zeros for histogram
+Q_thin_bot_event_signal_hist = Q_thin_bot_event_signal;
+Q_thin_bot_event_signal_hist(Q_thin_bot_event_signal_hist == 0) = []; % remove zeros for histogram
 Q_thin_bot_event_good_hist = Q_thin_bot_event_good;
 Q_thin_bot_event_good_hist(Q_thin_bot_event_good_hist == 0) = []; % remove zeros for histogram
 
 % THIN BOTTOM
-Q_thin_top_event_hist = Q_thin_top_event;
-Q_thin_top_event_hist(Q_thin_top_event_hist == 0) = []; % remove zeros for histogram
+Q_thin_top_event_signal_hist = Q_thin_top_event_signal;
+Q_thin_top_event_signal_hist(Q_thin_top_event_signal_hist == 0) = []; % remove zeros for histogram
 Q_thin_top_event_good_hist = Q_thin_top_event_good;
 Q_thin_top_event_good_hist(Q_thin_top_event_good_hist == 0) = []; % remove zeros for histogram
 
@@ -1427,21 +1423,21 @@ sgtitle(sprintf('Narrow strip charge top vs bottom (data from %s)', formatted_da
 % FIGURE 1 — Thin bottom / Thin top (hist + hist + scatter), with valid overlays
 figure;
 subplot(1,3,1);
-histogram(Q_thin_bot_event_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (bottom)');
 title('Q narrow bottom spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thin_top_event_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_top_event_signal_hist, thinTopEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (top)');
 title('Q narrow top spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,3);
-plot(Q_thin_bot_event, Q_thin_top_event, '.', 'DisplayName','all events'); hold on;
+plot(Q_thin_bot_event_signal, Q_thin_top_event_signal, '.', 'DisplayName','all events'); hold on;
 plot(Q_thin_bot_event_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
 plot([q005 q95],[q005 q95],'--','Color',[1 0.5 0],'LineWidth',2.5,'DisplayName','y = x');
 xlabel('Q (bottom)'); ylabel('Q (top)');
@@ -1452,21 +1448,21 @@ sgtitle(sprintf('Charge of the event (thin only; all vs valid; run %s)', run));
 % FIGURE 2 — Thin bottom vs Thick
 figure;
 subplot(1,3,1);
-histogram(Q_thin_bot_event_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (bottom)');
 title('Q narrow bottom spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thick_strip_hist, thickEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thick_strip_signal_hist, thickEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (thick)');
 title('Q thick spectrum (sum of Q per event)');
 xlim([q005_thick q95_thick]); legend('show');
 
 subplot(1,3,3);
-plot(Q_thin_bot_event, Q_thick_event, '.', 'DisplayName','all events'); hold on;
+plot(Q_thin_bot_event_signal, Q_thick_strip_signal, '.', 'DisplayName','all events'); hold on;
 plot(Q_thin_bot_event_good, Q_thick_strip_good, '.', 'DisplayName','valid only');
 xlabel('Q (bottom)'); ylabel('Q (thick)');
 title('Q bottom vs Q thick');
@@ -1476,21 +1472,21 @@ sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid; run %s)', r
 % FIGURE 3 — Thick vs Thin top
 figure;
 subplot(1,3,1);
-histogram(Q_thick_strip_hist, thickEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thick_strip_signal_hist, thickEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (thick)');
 title('Q thick spectrum (sum of Q per event)');
 xlim([q005_thick q95_thick]); legend('show');
 
 subplot(1,3,2);
-histogram(Q_thin_top_event_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+histogram(Q_thin_top_event_signal_hist, thinTopEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
 ylabel('# of events'); xlabel('Q (top)');
 title('Q narrow top spectrum (sum of Q per event)');
 xlim([q005 q95]); legend('show');
 
 subplot(1,3,3);
-plot(Q_thick_event, Q_thin_top_event, '.', 'DisplayName','all events'); hold on;
+plot(Q_thick_strip_signal, Q_thin_top_event_signal, '.', 'DisplayName','all events'); hold on;
 plot(Q_thick_strip_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
 xlabel('Q (thick)'); ylabel('Q (top)');
 title('Q thick vs Q top');
@@ -1946,9 +1942,10 @@ thin_bot_median = median(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0));
 thick_median   = median(Q_thick_strip_good(Q_thick_strip_good ~= 0));
 
 quantile_binning = 70;
-thin_top_thr_vec  = linspace(0, prctile(Q_thin_top_event_good(Q_thin_top_event_good ~= 0), quantile_binning), 100);
-thin_bot_thr_vec  = linspace(0, prctile(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0), quantile_binning), 100);
-thick_thr_vec     = linspace(0, prctile(Q_thick_strip_good(Q_thick_strip_good ~= 0), quantile_binning), 100);
+number_of_bins = 50;
+thin_top_thr_vec  = linspace(0, prctile(Q_thin_top_event_good(Q_thin_top_event_good ~= 0), quantile_binning), number_of_bins);
+thin_bot_thr_vec  = linspace(0, prctile(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0), quantile_binning), number_of_bins);
+thick_thr_vec     = linspace(0, prctile(Q_thick_strip_good(Q_thick_strip_good ~= 0), quantile_binning), number_of_bins);
 
 variantLabels = {variantSpecs.label};
 nVar = numel(variantSpecs);
@@ -2038,38 +2035,59 @@ grid on; box on;
 
 % THIN TOP
 nexttile;
-histogram(Q_thin_top_v, 'BinEdges', thin_top_thr_vec, 'Normalization', 'probability'); hold on;
-xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
-xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
-xline(thin_top_median, 'g--', 'Median Threshold'); % median line
-xlim([0 thin_top_thr_vec(end)]); % zoom in to the first 70% of the distribution
+hold on;
+for v = 1:nVar
+    Q_thin_top_v = variantSpecs(v).Q_thin_top;
+    Q_thin_top_v_non_zero = Q_thin_top_v(Q_thin_top_v > 0);
+    histogram(Q_thin_top_v_non_zero, 'BinEdges', thin_top_thr_vec, ...
+        'Normalization', 'probability', 'DisplayName', variantLabels{v}, 'FaceAlpha', 0.5);
+end
+xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
+xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
+xline(thin_top_median, 'g--', 'Median Threshold');
+xlim([0 thin_top_thr_vec(end)]);
 xlabel('Q thin top [ADC bins]');
+ylabel('Probability');
 title('Thin TOP');
-legend(variantLabels, 'Location','southwest');
+legend('show', 'Location','best');
 grid on; box on;
 
 % THICK
 nexttile;
-histogram(Q_thick_v, 'BinEdges', thick_thr_vec, 'Normalization', 'probability'); hold on;
-xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
-xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
-xline(thick_median, 'g--', 'Median Threshold'); % median line
-xlim([0 thick_thr_vec(end)]); % zoom in to the first 70% of the distribution
+hold on;
+for v = 1:nVar
+    Q_thick_v = variantSpecs(v).Q_thick;
+    Q_thick_v_non_zero = Q_thick_v(Q_thick_v > 0);
+    histogram(Q_thick_v_non_zero, 'BinEdges', thick_thr_vec, ...
+        'Normalization', 'probability', 'DisplayName', variantLabels{v}, 'FaceAlpha', 0.5);
+end
+xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold');
+xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
+xline(thick_median, 'g--', 'Median Threshold');
+xlim([0 thick_thr_vec(end)]);
 xlabel('Q thick [ADC bins]');
+ylabel('Probability');
 title('Thick');
-legend(variantLabels, 'Location','southwest');
+legend('show', 'Location','best');
 grid on; box on;
 
 % THIN BOT
 nexttile;
-histogram(Q_thin_bot_v, 'BinEdges', thin_bot_thr_vec, 'Normalization', 'probability'); hold on;
-xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
-xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
-xline(thin_bot_median, 'g--', 'Median Threshold'); % median line
-xlim([0 thin_bot_thr_vec(end)]); % zoom in to the first 70% of the distribution
+hold on;
+for v = 1:nVar
+    Q_thin_bot_v = variantSpecs(v).Q_thin_bot;
+    Q_thin_bot_v_non_zero = Q_thin_bot_v(Q_thin_bot_v > 0);
+    histogram(Q_thin_bot_v_non_zero, 'BinEdges', thin_bot_thr_vec, ...
+        'Normalization', 'probability', 'DisplayName', variantLabels{v}, 'FaceAlpha', 0.5);
+end
+xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
+xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
+xline(thin_bot_median, 'g--', 'Median Threshold');
+xlim([0 thin_bot_thr_vec(end)]);
 xlabel('Q thin bot [ADC bins]');
+ylabel('Probability');
 title('Thin BOT');
-legend(variantLabels, 'Location','southwest');
+legend('show', 'Location','best');
 grid on; box on;
 
 sgtitle('Efficiency vs Threshold for Different Event Classes');

@@ -385,6 +385,14 @@ time_pmt_diff_thr = 50; % ns
 Tl_cint_caye = Tl_cint;
 Tt_cint_caye = Tt_cint;
 
+% If Tl_cint_caye or Tt_cint_caye or ChargePerEvent_b or ChargePerEvent_t are NaN, in any row, put the whole row to 0
+rowsWithNaN = any(isnan(Tl_cint_caye), 2) | any(isnan(Tt_cint_caye), 2) | ...
+              isnan(ChargePerEvent_b) | isnan(ChargePerEvent_t);
+Tl_cint_caye(rowsWithNaN, :) = 0;
+Tt_cint_caye(rowsWithNaN, :) = 0;
+ChargePerEvent_b(rowsWithNaN) = 0;
+ChargePerEvent_t(rowsWithNaN) = 0;
+
 % If any value in Tl_cint or any value in Tt_cint is outside the expected range, put it to 0
 Tl_cint_caye(Tl_cint_caye < lead_time_pmt_min | Tl_cint_caye > lead_time_pmt_max) = 0;
 Tt_cint_caye(Tt_cint_caye < trail_time_pmt_min | Tt_cint_caye > trail_time_pmt_max) = 0;
