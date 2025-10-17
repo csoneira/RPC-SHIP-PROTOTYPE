@@ -48,8 +48,8 @@ close all; clc;
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-test = true;
-run = 2;
+test = false;
+run = 0;
 
 if test
     if run == 1
@@ -65,6 +65,14 @@ if test
         error('For test mode, set run to 1, 2, or 3.');
     end
 end
+
+
+% Limit the events for testing purposes
+limit = true;
+limit_number_of_events = 5000;
+
+% Position from narrow strips. Computationally expensive.
+position_from_narrow_strips = false;
 
 % ---------------------------------------------------------------------
 
@@ -340,6 +348,10 @@ bot_narrow_strip_crosstalk = 2500; % ADCbins/event
 Q_thick_streamer_threshold = 35; % ADCbins
 Q_thin_top_streamer_threshold = 15000; % ADCbins
 Q_thin_bot_streamer_threshold = 15000; % ADCbins
+
+% Final plot
+number_of_bins_final_charge_and_eff_plots = 100;
+
 % -----------------------------------------------------------
 % -----------------------------------------------------------
 
@@ -420,20 +432,6 @@ Q_thin_bot_event_OG = sum(Qb_OG, 2); % total charge in the 5 narrow strips on th
 %%
 
 % Ancillary
-
-fprintf('Note there are negative values in the charge proxies Qt and Qb due to baseline fluctuations.\n');
-
-Qt_OG_negative = Qt_OG(Qt_OG < 1000);
-Qb_OG_negative = Qb_OG(Qb_OG < 1000);
-Q_thin_top_event_OG_negative = sum(Qt_OG_negative, 2);
-Q_thin_bot_event_OG_negative = sum(Qb_OG_negative, 2);
-
-% Histogram them, thinner bars
-figure; histogram(Q_thin_top_event_OG_negative, 'BinWidth', 10); 
-xlabel('Charge (ADC bins)'); ylabel('Probability'); title('Negative Charges (Thin)'); hold on;
-histogram(Q_thin_bot_event_OG_negative, 'BinWidth', 10);
-
-%%
 
 % Sum 10 to all Qt_OG and Qb_OG to avoid negative values
 Qt_test = Qt_OG + charge_top_pedestal;
@@ -1519,7 +1517,6 @@ sgtitle(sprintf('PMT charge (data from %s)', formatted_datetime));
 % Position from narrow strips (24 strips, no timing, only charge)
 % -------------------------------------------------------------------------
 
-position_from_narrow_strips = true;
 if position_from_narrow_strips
 
 
@@ -1537,7 +1534,6 @@ if position_from_narrow_strips
     X_thick_for_position = X_thick_strip_signal; % discrete (1..5)
     T_thick_for_position = T_thick_strip_signal; % mean(Tfl,Tbl)
     Y_thick_for_position = Y_thick_strip_signal; % (Tfl - Tbl)/2 in ns
-
 
     charge_thin_top_total = sum(charge_thin_top_for_position, 2);
     charge_thin_bot_total = sum(charge_thin_bot_for_position, 2);
@@ -1965,7 +1961,7 @@ thin_bot_median = median(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0));
 thick_median   = median(Q_thick_strip_good(Q_thick_strip_good ~= 0), 'omitnan'); % avoid nan
 
 quantile_binning = 70;
-number_of_bins = 20;
+number_of_bins = number_of_bins_final_charge_and_eff_plots;
 thin_top_thr_vec  = linspace(0, prctile(Q_thin_top_event_good(Q_thin_top_event_good ~= 0), quantile_binning), number_of_bins);
 thin_bot_thr_vec  = linspace(0, prctile(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0), quantile_binning), number_of_bins);
 thick_thr_vec     = linspace(0, prctile(Q_thick_strip_good(Q_thick_strip_good ~= 0), quantile_binning), number_of_bins);
