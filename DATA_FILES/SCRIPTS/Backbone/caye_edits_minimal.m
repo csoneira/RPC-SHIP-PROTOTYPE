@@ -339,8 +339,8 @@ end
 % NARROW
 charge_narrow_strip_min = 0;
 charge_narrow_strip_max = 30000;
-charge_top_pedestal = 10;
-charge_bot_pedestal = 10;
+charge_top_pedestal = 100;
+charge_bot_pedestal = 100;
 
 % Crosstalk
 thick_strip_crosstalk = 5; % ADCbins
@@ -481,14 +481,8 @@ Qb_OG = Qb_OG + charge_bot_pedestal;
 % Build matrices with leading/trailing edge times for each scintillator PMT
 % and derive simple charge proxies and mean times per side.
 
-try
-    Tl_cint = [l11 l12 l9 l10]; %tempos leadings  [ns] - leading times [ns]
-    Tt_cint = [t11 t12 t9 t10]; %tempos trailings [ns] - trailing times [ns]
-catch
-    warning('Variables 9/10/11/12 not found; THIS EXITS THE CODE.');
-    return;
-end
-
+Tl_cint = Tl_cint_OG;
+Tt_cint = Tt_cint_OG;
 
 % Count the number of events that not all Tl_cint(:,1:4) are zero
 rawEvents = sum(any(Tl_cint(:,1:4) ~= 0, 2));
@@ -603,18 +597,10 @@ Qcint(Qcint(:,4) == 0, 3) = 0;  % if col2 is 0 → set col1 to 0 (same rows)
 
 % Try this, if it does not work, then store the channels from 24 to 28, and print a warning
 % that the channel order is not as expected. So it was changed to the 24-28 order.
-
-try
-    TFl = [l32 l31 l30 l29 l28];    % tempos leadings front [ns]; chs [32,28] -> 5 strips gordas front
-    TFt = [t32 t31 t30 t29 t28];    % tempos trailings front [ns]
-catch
-    warning('Variables l31/l32/l30/l28/l29 not found; using alternative channel order 24–28.');
-    TFl = [l28 l27 l26 l25 l24];
-    TFt = [t28 t27 t26 t25 t24];
-end
-
-TBl = [l1 l2 l3 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
-TBt = [t1 t2 t3 t4 t5]; %trailing times back [ns]
+TFl = TFl_OG; % tempos leadings front [ns]; chs [32,28] -> 5 strips gordas front
+TFt = TFt_OG; % tempos trailings front [ns]
+TBl = TBl_OG; %leading times back [ns]; channels [1,5] -> 5 wide back strips
+TBt = TBt_OG; %trailing times back [ns]
 
 % Filter out-of-bounds times
 TFl(TFl < lead_time_wide_strip_min | TFl > lead_time_wide_strip_max) = 0;
@@ -677,26 +663,8 @@ rawEvents = size(TFl,1);
 % RPC charges for the five NARROW STRIPS, which do not carry timing info.
 % -----------------------------------------------------------------------------
 
-% Convert charge arrays from cell traces to double matrices (after cable swap).
-% nota: os cabos estavam trocados, por isso, Qt=Ib e Qb=It; note: the cables were swapped, so Qt=Ib and Qb=It
-
-v = cast([Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb],"double");
-w = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt],"double");
-
-% if run == 1 || run == 2 || run == 3
-%     Qt = v;
-%     Qb = w;
-% elseif run == 0
-%     Qt = w; % top narrow strips charge proxy
-%     Qb = v; % bottom narrow strips charge proxy
-% end
-
-Qt = v; % top narrow strips charge proxy
-Qb = w; % bottom narrow strips charge proxy
-
-% Pedestal addition
-Qt = Qt + charge_top_pedestal;
-Qb = Qb + charge_bot_pedestal;
+Qt = Qt_OG; % top narrow strips charge proxy
+Qb = Qb_OG; % bottom narrow strips charge proxy
 
 % Filter out-of-bounds charges
 Qt(Qt < charge_narrow_strip_min | Qt > charge_narrow_strip_max) = 0;
@@ -1936,9 +1904,9 @@ fprintf('Percentage of streamers (Q > threshold) in Thick RPC: %.2f%%\n', percen
 fprintf('Percentage of streamers (Q > threshold) in Thin RPC BOTTOM: %.2f%%\n', percentage_streamer_thin_bot);
 
 % Take only positive charges for the plots in a new vector that does not replace the original
-Q_thick_plot = Q_thick(Q_thick > 0);
-Q_thin_top_plot = Q_thin_top(Q_thin_top > 0);
-Q_thin_bot_plot = Q_thin_bot(Q_thin_bot > 0);
+Q_thick_plot = Q_thick(isfinite(Q_thick) & Q_thick > 0);
+Q_thin_top_plot = Q_thin_top(isfinite(Q_thin_top) & Q_thin_top > 0);
+Q_thin_bot_plot = Q_thin_bot(isfinite(Q_thin_bot) & Q_thin_bot > 0);
 
 % the streamer % in the histogram title with no decimals
 figure;
@@ -1961,6 +1929,31 @@ sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)'
 
 %%
 
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+% Charge main statistics calculation
+% ---------------------------------------------------------------------
+% ---------------------------------------------------------------------
+
+% Mean
+charge_thin_top_mean = mean(Q_thin_top_plot);
+charge_thin_bot_mean = mean(Q_thin_bot_plot);
+charge_thick_mean = mean(Q_thick_plot);
+
+% Median
+charge_thin_top_median = median(Q_thin_top_plot);
+charge_thin_bot_median = median(Q_thin_bot_plot);
+charge_thick_median = median(Q_thick_plot);
+
+% Maximum
+scale_maximum = 100;
+charge_thin_top_max = mode(scale*round(Q_thin_top_plot/scale));
+charge_thin_bot_max = mode(scale*round(Q_thin_bot_plot/scale));
+charge_thick_max = mode(scale*round(Q_thick_plot/scale));
+
+
+%%
+
 
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
@@ -1979,10 +1972,10 @@ variantSpecs = struct( ...
 % Define threshold ranges (adjust as needed)
 thin_top_median = median(Q_thin_top_event_good(Q_thin_top_event_good ~= 0));
 thin_bot_median = median(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0));
-thick_median   = median(Q_thick_strip_good(Q_thick_strip_good ~= 0));
+thick_median   = median(Q_thick_strip_good(Q_thick_strip_good ~= 0), 'omitnan'); % avoid nan
 
 quantile_binning = 70;
-number_of_bins = 50;
+number_of_bins = 20;
 thin_top_thr_vec  = linspace(0, prctile(Q_thin_top_event_good(Q_thin_top_event_good ~= 0), quantile_binning), number_of_bins);
 thin_bot_thr_vec  = linspace(0, prctile(Q_thin_bot_event_good(Q_thin_bot_event_good ~= 0), quantile_binning), number_of_bins);
 thick_thr_vec     = linspace(0, prctile(Q_thick_strip_good(Q_thick_strip_good ~= 0), quantile_binning), number_of_bins);
@@ -2076,11 +2069,14 @@ grid on; box on;
 % THIN TOP
 nexttile;
 hold on;
+colors = lines(nVar); % per-variant colors
 for v = 1:nVar
     Q_thin_top_v = variantSpecs(v).Q_thin_top;
     Q_thin_top_v_non_zero = Q_thin_top_v(Q_thin_top_v > 0);
+    if isempty(Q_thin_top_v_non_zero), continue; end
     histogram(Q_thin_top_v_non_zero, 'BinEdges', thin_top_thr_vec, ...
-        'Normalization', 'probability', 'DisplayName', variantLabels{v}, 'FaceAlpha', 0.5);
+        'Normalization', 'count', 'DisplayStyle', 'stairs', ...
+        'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabels{v});
 end
 xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
 xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
@@ -2098,8 +2094,10 @@ hold on;
 for v = 1:nVar
     Q_thick_v = variantSpecs(v).Q_thick;
     Q_thick_v_non_zero = Q_thick_v(Q_thick_v > 0);
+    if isempty(Q_thick_v_non_zero), continue; end
     histogram(Q_thick_v_non_zero, 'BinEdges', thick_thr_vec, ...
-        'Normalization', 'probability', 'DisplayName', variantLabels{v}, 'FaceAlpha', 0.5);
+        'Normalization', 'count', 'DisplayStyle', 'stairs', ...
+        'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabels{v}); % outline only
 end
 xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold');
 xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
@@ -2117,8 +2115,10 @@ hold on;
 for v = 1:nVar
     Q_thin_bot_v = variantSpecs(v).Q_thin_bot;
     Q_thin_bot_v_non_zero = Q_thin_bot_v(Q_thin_bot_v > 0);
+    if isempty(Q_thin_bot_v_non_zero), continue; end
     histogram(Q_thin_bot_v_non_zero, 'BinEdges', thin_bot_thr_vec, ...
-        'Normalization', 'probability', 'DisplayName', variantLabels{v}, 'FaceAlpha', 0.5);
+        'Normalization', 'count', 'DisplayStyle', 'stairs', ...
+        'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabels{v});
 end
 xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
 xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
@@ -2222,11 +2222,11 @@ getUnc = @(lab, field) accum(strcmp({accum.label}, lab)).(strrep(field,'eff_','u
 
 % Build detector rows in required order
 detectors = { ...
-    'PMT_top',         'eff_pmt_top',  percentage_streamer_pmt_top;  ...
-    'RPC_thin_top',    'eff_thin_top', percentage_streamer_thin_top; ...
-    'RPC_thick_center','eff_thick',    percentage_streamer_thick;    ...
-    'RPC_thin_bottom', 'eff_thin_bot', percentage_streamer_thin_bot; ...
-    'PMT_bottom',      'eff_pmt_bot',  percentage_streamer_pmt_bot   ...
+    'PMT_top',         'eff_pmt_top',  percentage_streamer_pmt_top, 0, 0, 0,  ...
+    'RPC_thin_top',    'eff_thin_top', percentage_streamer_thin_top, charge_thin_top_mean, charge_thin_top_median, charge_thin_top_max; ...
+    'RPC_thick_center','eff_thick',    percentage_streamer_thick, charge_thick_mean, charge_thick_median, charge_thick_max; ...
+    'RPC_thin_bottom', 'eff_thin_bot', percentage_streamer_thin_bot, charge_thin_bot_mean, charge_thin_bot_median, charge_thin_bot_max; ...
+    'PMT_bottom',      'eff_pmt_bot',  percentage_streamer_pmt_bot, 0, 0, 0 ...
 };
 
 % Interleaved columns: [Detector] [OG, OG_unc] [valid_OG, valid_OG_unc] [valid, valid_unc] [range, range_unc] [StreamerPct]
@@ -2256,6 +2256,9 @@ for c = 1:nVar
     varNames{end+1} = [variantOrder{c} '_unc'];
 end
 varNames{end+1} = 'StreamerPct';
+varNames{end+1} = 'MeanCharge';
+varNames{end+1} = 'MedianCharge';
+varNames{end+1} = 'MaxCharge';
 
 detTable = cell2table(detRows, 'VariableNames', varNames);
 
