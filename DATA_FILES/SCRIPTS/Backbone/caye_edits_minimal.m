@@ -49,7 +49,7 @@ close all; clc;
 % ---------------------------------------------------------------------
 
 test = true;
-run = 1;
+run = 2;
 
 if test
     if run == 1
@@ -84,7 +84,7 @@ HOME    = '/home/csoneira/WORK/LIP_stuff/';
 SCRIPTS = 'JOAO_SETUP/STORED_NOT_ESSENTIAL/';
 DATA    = 'matFiles/time/';
 DATA_Q    = 'matFiles/charge/';
-path(path,[HOME SCRIPTS 'util_matPlots']);
+path(path,[HOME SCRIPTS 'util_matPlots/']);
 
 summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/';
 path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/util_matPlots');
@@ -277,13 +277,6 @@ fprintf('  Variables skipped:           %d\n', numel(skipped_names));
 fprintf('=====================================================\n');
 
 
-
-
-
-
-
-
-
 %%
 
 
@@ -302,10 +295,6 @@ if run ~= 1 && run ~= 2 && run ~= 3
     run = 0;
 end
 
-percentile_pmt = 25;
-percentile_narrow = 1;
-percentile_thick = 1;
-percentiles = true;
 
 % PMTs
 lead_time_pmt_min = -120;
@@ -314,8 +303,8 @@ trail_time_pmt_min = -50;
 trail_time_pmt_max = 200;
 
 time_pmt_diff_thr = 50; % ns
-
 tTH = 4; %time threshold [ns] to assume it comes from a good event; obriga a ter tempos nos 4 cint JOANA HAD 3 ns
+percentile_pmt = 25; % To calculate the range PTM
 
 % WIDE
 lead_time_wide_strip_min = -200;
@@ -392,16 +381,17 @@ Qcint_OG = [Tt_cint_OG(:,1) - Tl_cint_OG(:,1) Tt_cint_OG(:,2) - Tl_cint_OG(:,2) 
         % TBt = [t2 t1 t3 t5 t4];
 
 try
-    TFl_OG = [l32 l31 l30 l29 l28];    % tempos leadings front [ns]; chs [32,28] -> 5 strips gordas front
-    TFt_OG = [t32 t31 t30 t29 t28];    % tempos trailings front [ns]
+    TFl_OG = [l30 l31 l32 l29 l28];    % tempos leadings front [ns]; chs [32,28] -> 5 strips gordas front
+    TFt_OG = [t30 t31 t32 t29 t28];    % tempos trailings front [ns]
+    TBl_OG = [l3 l2 l1 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
+    TBt_OG = [t3 t2 t1 t4 t5]; %trailing times back [ns]
 catch
     warning('Variables l31/l32/l30/l28/l29 not found; using alternative channel order 24–28.');
     TFl_OG = [l28 l27 l26 l25 l24];
     TFt_OG = [t28 t27 t26 t25 t24];
+    TBl_OG = [l1 l2 l3 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
+    TBt_OG = [t1 t2 t3 t4 t5]; %trailing times back [ns]
 end
-
-TBl_OG = [l1 l2 l3 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
-TBt_OG = [t1 t2 t3 t4 t5]; %trailing times back [ns]
 
 % Charge proxies per strip (front/back)
 QF_OG  = TFt_OG - TFl_OG;
@@ -1947,9 +1937,9 @@ charge_thick_median = median(Q_thick_plot);
 
 % Maximum
 scale_maximum = 100;
-charge_thin_top_max = mode(scale*round(Q_thin_top_plot/scale));
-charge_thin_bot_max = mode(scale*round(Q_thin_bot_plot/scale));
-charge_thick_max = mode(scale*round(Q_thick_plot/scale));
+charge_thin_top_max = mode(scale_maximum*round(Q_thin_top_plot/scale_maximum));
+charge_thin_bot_max = mode(scale_maximum*round(Q_thin_bot_plot/scale_maximum));
+charge_thick_max = mode(scale_maximum*round(Q_thick_plot/scale_maximum));
 
 
 %%
@@ -2220,54 +2210,64 @@ variantOrder = {'signal', 'coin', 'good', 'range', 'no_crosstalk'};
 getEff = @(lab, field) accum(strcmp({accum.label}, lab)).(field);
 getUnc = @(lab, field) accum(strcmp({accum.label}, lab)).(strrep(field,'eff_','unc_'));
 
-% Build detector rows in required order
 detectors = { ...
-    'PMT_top',         'eff_pmt_top',  percentage_streamer_pmt_top, 0, 0, 0,  ...
-    'RPC_thin_top',    'eff_thin_top', percentage_streamer_thin_top, charge_thin_top_mean, charge_thin_top_median, charge_thin_top_max; ...
-    'RPC_thick_center','eff_thick',    percentage_streamer_thick, charge_thick_mean, charge_thick_median, charge_thick_max; ...
-    'RPC_thin_bottom', 'eff_thin_bot', percentage_streamer_thin_bot, charge_thin_bot_mean, charge_thin_bot_median, charge_thin_bot_max; ...
-    'PMT_bottom',      'eff_pmt_bot',  percentage_streamer_pmt_bot, 0, 0, 0 ...
+    'PMT_top',          'eff_pmt_top',   NaN,                           NaN,                    NaN,                     NaN; ...
+    'RPC_thin_top',     'eff_thin_top',  percentage_streamer_thin_top,  charge_thin_top_mean,   charge_thin_top_median,  charge_thin_top_max; ...
+    'RPC_thick_center', 'eff_thick',     percentage_streamer_thick,     charge_thick_mean,      charge_thick_median,     charge_thick_max; ...
+    'RPC_thin_bottom',  'eff_thin_bot',  percentage_streamer_thin_bot,  charge_thin_bot_mean,   charge_thin_bot_median,  charge_thin_bot_max; ...
+    'PMT_bottom',       'eff_pmt_bot',   NaN,                           NaN,                    NaN,                     NaN ...
 };
 
-% Interleaved columns: [Detector] [OG, OG_unc] [valid_OG, valid_OG_unc] [valid, valid_unc] [range, range_unc] [StreamerPct]
 nDet = size(detectors,1);
 nVar = numel(variantOrder);
-detRows = cell(nDet, 1 + 2*nVar + 1);
+
+% Allocate with 3 extra columns for Mean/Median/Max (prev was +1 for StreamerPct)
+detRows = cell(nDet, 1 + 2*nVar + 4);
 
 for i = 1:nDet
-    detName   = detectors{i,1};
-    effField  = detectors{i,2};
-    streamerP = detectors{i,3};
+    detName    = detectors{i,1};
+    effField   = detectors{i,2};
+    streamerP  = detectors{i,3};
+    meanQ      = detectors{i,4};
+    medianQ    = detectors{i,5};
+    maxQ       = detectors{i,6};
 
     detRows{i,1} = detName;
+
+    % Interleaved [eff, unc] for each variant
     col = 2;
     for c = 1:nVar
         lab = variantOrder{c};
-        detRows{i,col}   = getEff(lab, effField); col = col + 1;
-        detRows{i,col}   = getUnc(lab, effField); col = col + 1;
+        detRows{i,col} = getEff(lab, effField); col = col + 1;
+        detRows{i,col} = getUnc(lab, effField); col = col + 1;
     end
-    detRows{i, 1 + 2*nVar + 1} = streamerP;  % StreamerPct
+
+    % Tail columns
+    detRows{i, 1 + 2*nVar + 1} = streamerP; % StreamerPct
+    detRows{i, 1 + 2*nVar + 2} = meanQ;     % MeanCharge
+    detRows{i, 1 + 2*nVar + 3} = medianQ;   % MedianCharge
+    detRows{i, 1 + 2*nVar + 4} = maxQ;      % MaxCharge
 end
 
-% Build variable names interleaving efficiency and its uncertainty
+% Column names
 varNames = {'Detector'};
 for c = 1:nVar
     varNames{end+1} = variantOrder{c};
     varNames{end+1} = [variantOrder{c} '_unc'];
 end
-varNames{end+1} = 'StreamerPct';
-varNames{end+1} = 'MeanCharge';
-varNames{end+1} = 'MedianCharge';
-varNames{end+1} = 'MaxCharge';
+varNames = [varNames, {'StreamerPct','MeanCharge','MedianCharge','MaxCharge'}];
 
 detTable = cell2table(detRows, 'VariableNames', varNames);
 
-% Round to 1 decimal place
+% Round efficiencies/uncertainties; leave charges as-is (or round if you prefer)
 for c = 1:nVar
     detTable{:, 1 + 2*(c-1) + 1} = round(detTable{:, 1 + 2*(c-1) + 1}, 1);
     detTable{:, 1 + 2*(c-1) + 2} = round(detTable{:, 1 + 2*(c-1) + 2}, 1);
 end
 detTable.StreamerPct = round(detTable.StreamerPct, 1);
+detTable.MeanCharge   = round(detTable.MeanCharge);
+detTable.MedianCharge = round(detTable.MedianCharge);
+detTable.MaxCharge    = round(detTable.MaxCharge);
 
 % Pretty print
 fprintf('\n==== Efficiency Summary (values in %%) ====\n');
