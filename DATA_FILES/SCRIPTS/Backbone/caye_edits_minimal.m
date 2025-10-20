@@ -49,7 +49,12 @@ close all; clc;
 % ---------------------------------------------------------------------
 
 test = true;
-run = 2;
+run = 5;
+
+% if run is not 1,2,3, then set run to 0
+if run ~= 1 && run ~= 2 && run ~= 3
+    run = 0;
+end
 
 if test
     if run == 1
@@ -61,11 +66,13 @@ if test
     elseif run == 3
         input_dir = 'dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s';
         data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s";
+    elseif run == 5
+        input_dir = 'dabc25291140248_RUN_5_2025-10-20_11h51m27s';
+        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/" + input_dir;
     else
         error('For test mode, set run to 1, 2, or 3.');
     end
 end
-
 
 % Limit the events for testing purposes
 limit = true;
@@ -292,65 +299,104 @@ fprintf('=====================================================\n');
 % ---------------------------------------------------------------------
 % Parameters and Thresholds
 % ---------------------------------------------------------------------
-% ---------------------------------------------------------------------
+% --------------------------------------------------------------------
 
-% -----------------------------------------------------------
-% Select run number and percentile thresholds for charge cuts
-% -----------------------------------------------------------
+% Load per-run parameters from configuration so edits live in one place.
+thisFile = mfilename('fullpath');
+if isempty(thisFile)
+    if usejava('desktop')
+        thisFile = matlab.desktop.editor.getActiveFilename;
+    else
+        thisFile = which('caye_edits_minimal');
+    end
+end
+config_file = fullfile(fileparts(thisFile), 'run_parameters_config.csv');
+if ~exist(config_file, 'file')
+    error('Parameter config not found: %s', config_file);
+end
 
-% if run is not 1,2,3, then set run to 0
-if run ~= 1 && run ~= 2 && run ~= 3
-    run = 0;
+opts = detectImportOptions(config_file, 'TextType','string', 'PreserveVariableNames', true);
+config_table = readtable(config_file, opts);
+if ~ismember('parameter', config_table.Properties.VariableNames)
+    error('Parameter config must include a ''parameter'' column.');
+end
+
+run_field = sprintf('run%d', run);
+has_default = ismember('default', config_table.Properties.VariableNames);
+if ~ismember(run_field, config_table.Properties.VariableNames)
+    if has_default
+        run_field = 'default';
+    else
+        error('No configuration column for run %d and no default column provided.', run);
+    end
+end
+
+if iscell(config_table.parameter)
+    param_names = config_table.parameter;
+else
+    param_names = cellstr(config_table.parameter);
+end
+
+param_values = cell(size(param_names));
+for idx = 1:numel(param_names)
+    selected_value = config_table.(run_field)(idx);
+    if (ismissing(selected_value) || (isstring(selected_value) && strlength(strtrim(selected_value)) == 0)) && has_default
+        selected_value = config_table.default(idx);
+    end
+    if ismissing(selected_value)
+        error('Missing value for parameter %s in column %s.', param_names{idx}, run_field);
+    end
+    param_values{idx} = parseParameterValue(selected_value);
+end
+
+param_map = containers.Map(param_names, param_values);
+getParam = @(name) param_map(name);
+
+if run >= 4 && ~strcmp(run_field, 'default')
+    fprintf('Using configuration column %s for run %d\n', run_field, run);
+elseif strcmp(run_field, 'default')
+    fprintf('Using default parameter configuration for run %d\n', run);
 end
 
 
 % PMTs
-lead_time_pmt_min = -120;
-lead_time_pmt_max = -70;
-trail_time_pmt_min = -50;
-trail_time_pmt_max = 200;
+lead_time_pmt_min = getParam('lead_time_pmt_min');
+lead_time_pmt_max = getParam('lead_time_pmt_max');
+trail_time_pmt_min = getParam('trail_time_pmt_min');
+trail_time_pmt_max = getParam('trail_time_pmt_max');
 
-time_pmt_diff_thr = 50; % ns
-tTH = 4; %time threshold [ns] to assume it comes from a good event; obriga a ter tempos nos 4 cint JOANA HAD 3 ns
-percentile_pmt = 25; % To calculate the range PTM
+time_pmt_diff_thr = getParam('time_pmt_diff_thr'); % ns
+tTH = getParam('tTH'); % time threshold [ns] to assume it comes from a good event
+percentile_pmt = getParam('percentile_pmt'); % To calculate the range PTM
 
 % WIDE
-lead_time_wide_strip_min = -200;
-lead_time_wide_strip_max = -50;
-trail_time_wide_strip_min = -150;
-trail_time_wide_strip_max = 300;
+lead_time_wide_strip_min = getParam('lead_time_wide_strip_min');
+lead_time_wide_strip_max = getParam('lead_time_wide_strip_max');
+trail_time_wide_strip_min = getParam('trail_time_wide_strip_min');
+trail_time_wide_strip_max = getParam('trail_time_wide_strip_max');
 
-charge_wide_strip_diff_thr = 25;
-
-if run == 1 || run == 2 || run == 3
-    % Joana runs (previous to June 2025)
-    QF_offsets = [82, 75, 82, 80, 75]; % from selfTrigger
-    QB_offsets = [82, 84, 81, 83, 81];
-else
-    % October run (from October 2025 to beyond)
-    fprintf('Using October 2025 offsets\n');
-    QF_offsets = [90, 83, 70, 86, 81]; % from selfTrigger
-    QB_offsets = [87, 88, 70, 87, 87];
-end
+charge_wide_strip_diff_thr = getParam('charge_wide_strip_diff_thr');
+QF_offsets = getParam('QF_offsets'); % from selfTrigger
+QB_offsets = getParam('QB_offsets');
 
 % NARROW
-charge_narrow_strip_min = 0;
-charge_narrow_strip_max = 30000;
-charge_top_pedestal = 100;
-charge_bot_pedestal = 100;
+charge_narrow_strip_min = getParam('charge_narrow_strip_min');
+charge_narrow_strip_max = getParam('charge_narrow_strip_max');
+charge_top_pedestal = getParam('charge_top_pedestal');
+charge_bot_pedestal = getParam('charge_bot_pedestal');
 
 % Crosstalk
-thick_strip_crosstalk = 5; % ADCbins
-top_narrow_strip_crosstalk = 1500; % ADCbins/event
-bot_narrow_strip_crosstalk = 2500; % ADCbins/event
+thick_strip_crosstalk = getParam('thick_strip_crosstalk'); % ADCbins
+top_narrow_strip_crosstalk = getParam('top_narrow_strip_crosstalk'); % ADCbins/event
+bot_narrow_strip_crosstalk = getParam('bot_narrow_strip_crosstalk'); % ADCbins/event
 
 % Streamers
-Q_thick_streamer_threshold = 35; % ADCbins
-Q_thin_top_streamer_threshold = 15000; % ADCbins
-Q_thin_bot_streamer_threshold = 15000; % ADCbins
+Q_thick_streamer_threshold = getParam('Q_thick_streamer_threshold'); % ADCbins
+Q_thin_top_streamer_threshold = getParam('Q_thin_top_streamer_threshold'); % ADCbins
+Q_thin_bot_streamer_threshold = getParam('Q_thin_bot_streamer_threshold'); % ADCbins
 
 % Final plot
-number_of_bins_final_charge_and_eff_plots = 100;
+number_of_bins_final_charge_and_eff_plots = getParam('number_of_bins_final_charge_and_eff_plots');
 
 % -----------------------------------------------------------
 % -----------------------------------------------------------
@@ -2493,6 +2539,59 @@ function combine_images_to_pdf(pngFiles, pdfPath, exportOpts)
             exportgraphics(comboFig, pdfPath, exportOpts{:}, 'Append', true);
         end
         close(comboFig);
+    end
+end
+
+function value = parseParameterValue(rawValue)
+    if iscell(rawValue)
+        if isempty(rawValue)
+            value = [];
+            return;
+        end
+        rawValue = rawValue{1};
+    end
+
+    if ismissing(rawValue)
+        value = [];
+        return;
+    end
+
+    if isnumeric(rawValue)
+        value = double(rawValue);
+        return;
+    end
+
+    if isstring(rawValue)
+        textValue = strtrim(rawValue);
+    elseif ischar(rawValue)
+        textValue = strtrim(string(rawValue));
+    else
+        value = rawValue;
+        return;
+    end
+
+    if strlength(textValue) == 0
+        value = [];
+        return;
+    end
+
+    textChar = char(textValue);
+    if numel(textChar) >= 2 && textChar(1) == '[' && textChar(end) == ']'
+        textChar = textChar(2:end-1);
+    end
+    textChar = strrep(textChar, ',', ' ');
+
+    numericValue = str2num(textChar); %#ok<ST2NM>
+    if ~isempty(numericValue)
+        value = numericValue;
+        return;
+    end
+
+    scalarValue = str2double(textChar);
+    if ~isnan(scalarValue)
+        value = scalarValue;
+    else
+        value = char(textValue);
     end
 end
 
