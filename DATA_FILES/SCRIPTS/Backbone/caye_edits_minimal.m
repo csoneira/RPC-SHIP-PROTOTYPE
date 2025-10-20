@@ -1703,15 +1703,6 @@ if position_from_narrow_strips
     % (1b) DIAGONAL INFERIOR COMPARISON PLOT (TOP vs BOTTOM)
     %      3x3 matrix: variables = {mu, sigma, chi^2}
     %      Diagonal: hist overlays (top & bottom). Lower triangle: scatter (bottom vs top).
-    % ===============================================================
-    varsTop = {mu_top, sigma_top, chi_top};
-    varsBot = {mu_bot, sigma_bot, chi_bot};
-    labels3 = {'\mu','\sigma','\chi^2'};
-
-    % ===============================================================
-    % (1b) DIAGONAL INFERIOR COMPARISON PLOT (TOP vs BOTTOM)
-    %      3x3 matrix: variables = {mu, sigma, chi^2}
-    %      Diagonal: hist overlays (top & bottom). Lower triangle: scatter (bottom vs top).
     %      Colors: TOP=blue, BOTTOM=orange
     % ===============================================================
     varsTop = {mu_top, sigma_top, chi_top};
@@ -1876,9 +1867,41 @@ if position_from_narrow_strips
     [~, idx_min] = min(diffs, [], 2);
     Y_thin_top_final = Y_cands(sub2ind(size(Y_cands), (1:nPair)', idx_min)); % [1..120]
 
+    %%
+
+
     % ---- PLOTS: original thin vs thick (top row), final thin vs thick (bottom row) ----
     commonColor = [0.2 0.8 0.2];
     lims = [1, 24*5];
+
+    % mm conversions
+    to_mm = @(ax) (ax/120 - 0.5) * 300;  % 1..120 → -150..150 mm
+    to_ax = @(mm) (mm/300 + 0.5) * 120;  % -150..150 mm → 1..120
+
+    % Optional rectangle in mm
+    base_mm   = 20;
+    height_mm = 80;
+    center_mm = [-80, -27];
+
+    base_left_mm   = center_mm(1) - base_mm/2;
+    base_right_mm  = center_mm(1) + base_mm/2;
+    height_bottom_mm = center_mm(2) - height_mm/2;
+    height_top_mm    = center_mm(2) + height_mm/2;
+
+    % Convert to axes coordinates
+    base_left_ax   = to_ax(base_left_mm);
+    base_right_ax  = to_ax(base_right_mm);
+    height_bottom_ax = to_ax(height_bottom_mm);
+    height_top_ax    = to_ax(height_top_mm);
+
+    base_ax = base_right_ax - base_left_ax;
+    height_ax = height_top_ax - height_bottom_ax;
+    center_ax = [(base_left_ax + base_right_ax)/2, (height_bottom_ax + height_top_ax)/2];
+
+    fprintf('Rectangle in mm: center=(%.1f, %.1f), base=%.1f, height=%.1f\n', ...
+            center_mm(1), center_mm(2), base_mm, height_mm);
+    fprintf('Rectangle in axes: center=(%.1f, %.1f), base=%.1f, height=%.1f\n', ...
+            center_ax(1), center_ax(2), base_ax, height_ax);
 
     figure('Name','Original thin vs thick (top row) → Final thin vs thick (bottom row)');
     tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
@@ -1894,6 +1917,8 @@ if position_from_narrow_strips
         yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
+    rectangle('Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+              'EdgeColor', 'r', 'LineWidth', 2);
     xlabel('THIN X_{bot} (original, wrapped to each period) [1–120]');
     ylabel('THICK Y [1–120]');
     xlim(lims); ylim(lims); grid off; box on; axis square;
@@ -1909,6 +1934,8 @@ if position_from_narrow_strips
         yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
+    rectangle('Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+              'EdgeColor', 'r', 'LineWidth', 2);
     xlabel('THICK X [1–120]');
     ylabel('THIN Y_{top} (original, wrapped to each period) [1–120]');
     xlim(lims); ylim(lims); grid off; box on; axis square;
@@ -1922,6 +1949,8 @@ if position_from_narrow_strips
         yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
+    rectangle('Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+              'EdgeColor', 'r', 'LineWidth', 2);
     xlabel('THIN X_{bot} (final, unwrapped) [1–120]');
     ylabel('THICK Y [1–120]');
     xlim(lims); ylim(lims); grid off; box on; axis square;
@@ -1935,18 +1964,19 @@ if position_from_narrow_strips
         yline(k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline((k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
+    rectangle('Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+              'EdgeColor', 'r', 'LineWidth', 2);
     xlabel('THICK X [1–120]');
     ylabel('THIN Y_{top} (final, unwrapped) [1–120]');
     xlim(lims); ylim(lims); grid off; box on; axis square;
 
     sgtitle(sprintf('Original thin vs thick → Final thin vs thick (run %s)', run));
 
+    %%
 
     % ===============================================================
     % (4) FINAL X–Y MAP (in mm) USING FINAL UNWRAPPED VALUES
     % ===============================================================
-    % mm conversions
-    to_mm = @(ax) (ax/120 - 0.5) * 300;  % 1..120 → -150..150 mm
 
     X_final_ax = ensure_col(X_thin_bot_final);
     Y_final_ax = ensure_col(Y_thin_top_final);
@@ -1954,11 +1984,6 @@ if position_from_narrow_strips
 
     X_final_mm = to_mm(X_final_ax(valid));
     Y_final_mm = to_mm(Y_final_ax(valid));
-
-    % Optional rectangle in mm
-    base_mm   = 20;
-    height_mm = 80;
-    center_mm = [-80, -27];
 
     figure('Name','Final XY map');
     scatter(X_final_mm, Y_final_mm, 6, 'filled', 'MarkerFaceAlpha',0.4); hold on;
