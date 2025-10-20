@@ -48,8 +48,23 @@ close all; clc;
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-test = true;
-run = 5;
+if ~exist('test','var') || isempty(test)
+    test = true;
+end
+if ischar(test) || isstring(test)
+    test = strcmpi(string(test), "true");
+end
+test = logical(test);
+
+if ~exist('run','var') || isempty(run)
+    run = 5;
+end
+if isstring(run) || ischar(run)
+    run = str2double(run);
+end
+if isnan(run)
+    run = 0;
+end
 
 if test
     if run == 1
@@ -206,7 +221,11 @@ formatted_datetime_tex = strrep(formatted_datetime, '_', '\_'); % Escape undersc
 fprintf("The time of the dataset is: %s\n", formatted_datetime);
 
 execution_datetime = datestr(now, 'yyyy_mm_dd-HH.MM.SS');
-pdfFileName = sprintf('caye_plots_%s_exec_%s.pdf', formatted_datetime, execution_datetime);
+if run ~= 0
+    pdfFileName = sprintf('RUN_%d_%s_exec_%s.pdf', run, formatted_datetime, execution_datetime);
+else
+    pdfFileName = sprintf('results_%s_exec_%s.pdf', formatted_datetime, execution_datetime);
+end
 pdfPath = fullfile(save_plots_dir, pdfFileName);
 fprintf("PDF will be saved to: %s\n", pdfPath);
 
@@ -2117,6 +2136,7 @@ charge_thick_median = median(Q_thick_charge_params);
 scale_maximum = 100;
 charge_thin_top_max = mode(scale_maximum*round(Q_thin_top_charge_params/scale_maximum));
 charge_thin_bot_max = mode(scale_maximum*round(Q_thin_bot_charge_params/scale_maximum));
+scale_maximum = 10;
 charge_thick_max = mode(scale_maximum*round(Q_thick_charge_params/scale_maximum));
 
 
@@ -2318,9 +2338,9 @@ sgtitle('Efficiency vs Threshold for Different Event Classes');
 %%
 
 
-thin_top_threshold = top_narrow_strip_crosstalk;
-thin_bot_threshold = bot_narrow_strip_crosstalk;
-thick_threshold   = thick_strip_crosstalk;
+thin_top_threshold = 0;
+thin_bot_threshold = 0;
+thick_threshold   = 0;
 
 % Print these three limits
 fprintf('Using thresholds for efficiency calculation:\n');
@@ -2461,72 +2481,103 @@ detTable.MeanCharge   = round(detTable.MeanCharge);
 detTable.MedianCharge = round(detTable.MedianCharge);
 detTable.MaxCharge    = round(detTable.MaxCharge);
 
-% Pretty print
-fprintf('\n==== Efficiency Summary (values in %%) ====\n');
 
-% Header
-fprintf('%-17s', 'Detector');
+%%
+
+% ===================== Pretty print (RPCs only) =====================
+
+% Keep only the RPC rows
+rpcNames = {'RPC_thin_top','RPC_thick_center','RPC_thin_bottom'};
+idxRPC   = ismember(detTable.Detector, rpcNames);
+detRPC   = detTable(idxRPC, :);
+
+% -------- Efficiency Summary (values in %) --------
+fprintf('\n==== Efficiency Summary (RPCs only; values in %%) ====\n');
+
+% Build headers: Detector + one column per variant (value (unc))
+colw_det = 17;
+colw_var = 16;   % fits strings like "100.0 (10.0)"
+fprintf('%-*s', colw_det, 'Detector');
 for c = 1:nVar
-    fprintf(' %12s %12s', varNames{1 + 2*(c-1) + 1}, varNames{1 + 2*(c-1) + 2});
+    fprintf(' %-*s', colw_var, variantOrder{c});
 end
+fprintf('\n');
 
 % Separator
-sepLen = 17 + (12+1)*2*nVar + 3 + 12;
-fprintf('%s\n', repmat('-',1, max(86, sepLen)));
+sepLen = colw_det + (colw_var+1)*nVar;
+fprintf('%s\n', repmat('-',1, sepLen));
 
-% Rows
-for i = 1:size(detTable,1)
-    fprintf('%-17s', detTable.Detector{i});
+% Rows: value (unc)
+for i = 1:height(detRPC)
+    fprintf('%-*s', colw_det, detRPC.Detector{i});
     for c = 1:nVar
-        effVal = detTable{ i, 1 + 2*(c-1) + 1 };
-        uncVal = detTable{ i, 1 + 2*(c-1) + 2 };
-        fprintf(' %12.1f %12.1f', effVal, uncVal);
+        effVal = detRPC{ i, 1 + 2*(c-1) + 1 };
+        uncVal = detRPC{ i, 1 + 2*(c-1) + 2 };
+
+        if isnan(effVal)
+            cellStr = 'NaN';
+        else
+            if isnan(uncVal)
+                cellStr = sprintf('%.1f', effVal);
+            else
+                cellStr = sprintf('%.1f (%.1f)', effVal, uncVal);
+            end
+        end
+        % print each variant cell
+        fprintf(' %-*s', colw_var, cellStr);
     end
     fprintf('\n');
 end
-fprintf('%s\n', repmat('=',1, max(86, sepLen)));
+fprintf('%s\n', repmat('=',1, sepLen));
 
+% -------- Charge Summary (ADCbins; streamer in %) --------
+fprintf('\n==== Charge Summary (RPCs only; ADC bins, streamer in %%) ====\n');
 
-% ---- Additional pretty print: charge summary (Mean, Median, Max, Streamer%) ----
-fprintf('\n==== Charge Summary (values in ADC bins, streamer in %%) ====\n');
 % Header
-fprintf('%-17s %12s %12s %12s %12s\n', 'Detector', 'Mean', 'Median', 'Max', 'StreamerPct');
-% Separator (match column widths)
-sepLen2 = 17 + 4*13;
-fprintf('%s\n', repmat('-', 1, sepLen2));
+fprintf('%-*s %-12s %-12s %-12s %-12s\n', colw_det, 'Detector', 'Mean', 'Median', 'Max', 'StreamerPct');
 
-% Rows: print integers for charges, one decimal for streamer pct
-for i = 1:size(detTable,1)
-    detName = detTable.Detector{i};
-    meanQ   = detTable.MeanCharge(i);
-    medQ    = detTable.MedianCharge(i);
-    maxQ    = detTable.MaxCharge(i);
-    spct    = detTable.StreamerPct(i);
+% Separator
+sepLen2 = colw_det + 4*(12+1);
+fprintf('%s\n', repmat('-',1, sepLen2));
 
-    % Handle NaNs gracefully: print 'NaN' instead of numeric formatting if needed
+% Rows: integers for charges, one decimal for streamer pct
+for i = 1:height(detRPC)
+    detName = detRPC.Detector{i};
+    meanQ   = detRPC.MeanCharge(i);
+    medQ    = detRPC.MedianCharge(i);
+    maxQ    = detRPC.MaxCharge(i);
+    spct    = detRPC.StreamerPct(i);
+
     if isnan(meanQ), meanStr = 'NaN'; else meanStr = sprintf('%12.0f', meanQ); end
     if isnan(medQ),  medStr  = 'NaN'; else medStr  = sprintf('%12.0f', medQ);  end
     if isnan(maxQ),  maxStr  = 'NaN'; else maxStr  = sprintf('%12.0f', maxQ);  end
-    if isnan(spct),  spStr   = '   NaN%%'; else spStr   = sprintf('%11.1f%%', spct); end
+    if isnan(spct),  spStr   = '   NaN%%'; else spStr = sprintf('%11.1f%%', spct); end
 
-    fprintf('%-17s %s %s %s %s\n', detName, meanStr, medStr, maxStr, spStr);
+    fprintf('%-*s %s %s %s %s\n', colw_det, detName, meanStr, medStr, maxStr, spStr);
 end
 fprintf('%s\n', repmat('=',1, sepLen2));
 
+%%
+
+% ---------------------------------------------------------------------
 
 % CSV output
-outCsv = fullfile(summary_output_dir, ...
-    sprintf('efficiency_summary_%s_exec_%s.csv', formatted_datetime, execution_datetime));
+if run ~= 0
+    summaryFileName = sprintf('RUN_%d_summary_%s_exec_%s.csv', run, formatted_datetime, execution_datetime);
+else
+    summaryFileName = sprintf('summary_%s_exec_%s.csv', formatted_datetime, execution_datetime);
+end
+outCsv = fullfile(summary_output_dir, summaryFileName);
 
 fid = fopen(outCsv, 'w');
 % Update header comment with new column ordering
 fprintf(fid, '# total_raw_events: %d\n', total_raw_events);
 fprintf(fid, '# percentage_good_events_in_pmts: %.4f\n', percentage_good_events_in_pmts);
+fprintf(fid, '# run_number: %d\n', run);
 fprintf(fid, '%s\n', strjoin(varNames, ', '));
 fclose(fid);
 
 writetable(detTable, outCsv, 'WriteMode','append');
-
 
 
 % Print for verification

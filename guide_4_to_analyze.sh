@@ -1,21 +1,19 @@
 #!/bin/bash
 
-echo "Starting test, copying test and joined directories"
-# cp -r /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/PROCESSING/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s
-cp -r /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/JOINED_OUTPUT/dabc25281080959_JOINED_2025-10-15_08h15m12s /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED
-
 set -euo pipefail
 
-# Create a usage function
 usage() {
-    echo "Usage: $0 [--help|-h] [--save] [--save-dir <path>]"
-    echo ""
-    echo "This script analyzes the unpacked HLD files."
-    echo ""
-    echo "Arguments:"
-    echo "  --help, -h    Show this help message"
-    echo "  --save        Save the generated plots (default: do not save)"
-    echo "  --save-dir <path>  Directory to save plots (default: DATA_FILES/DATA/PDF)"
+    cat <<EOF
+Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <1-5>]
+
+This script analyzes the unpacked HLD files.
+
+Arguments:
+  --help, -h           Show this help message
+  --save               Save the generated plots (default: do not save)
+  --save-dir <path>    Directory to save plots (default: DATA_FILES/DATA/PDF)
+  --run, -r <1-5>      Analyze predefined test run number (enables test mode)
+EOF
     exit 1
 }
 
@@ -67,11 +65,8 @@ cd "$PROJECT_ROOT"
 DEFAULT_SAVE_DIR="$PROJECT_ROOT/DATA_FILES/DATA/PDF"
 SAVE_FLAG=false
 SAVE_DIR="$DEFAULT_SAVE_DIR"
-
-usage() {
-    echo "Usage: $0 [--save] [--save-dir <path>]" >&2
-    exit 1
-}
+RUN_OVERRIDE=""
+SELECTED_INPUT=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -83,6 +78,15 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 ]] || usage
             SAVE_DIR="$2"
             SAVE_FLAG=true
+            shift 2
+            ;;
+        -r|--run)
+            [[ $# -ge 2 ]] || usage
+            RUN_OVERRIDE="$2"
+            if ! [[ "$RUN_OVERRIDE" =~ ^[1-5]$ ]]; then
+                echo "Invalid run number: $RUN_OVERRIDE (expected 1-5)" >&2
+                exit 1
+            fi
             shift 2
             ;;
         --help|-h)
@@ -133,72 +137,82 @@ to_epoch() {
 
 # --- checks ------------------------------------------------------------------
 
-[[ -d "$MST_SAVES_DIR" ]] || err "MST_saves directory does not exist: $MST_SAVES_DIR"
+if [[ -z "$RUN_OVERRIDE" ]]; then
+  echo "Starting test, copying test and joined directories"
+  # cp -r /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/PROCESSING/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s
+  cp -r /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/JOINED_OUTPUT/dabc25281080959_JOINED_2025-10-15_08h15m12s /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED
 
-mkdir -p "$UNPACKED_DIR" "$PROCESSING_DIR"
+  [[ -d "$MST_SAVES_DIR" ]] || err "MST_saves directory does not exist: $MST_SAVES_DIR"
 
-# --- 1) Move everything from MST_saves -> UNPACKED/UNPROCESSED --------------
+  mkdir -p "$UNPACKED_DIR" "$PROCESSING_DIR"
 
-shopt -s nullglob dotglob
-moved_any=false
-for entry in "$MST_SAVES_DIR"/*; do
-  base="$(basename "$entry")"
-  target="$UNPACKED_DIR/$base"
+  # --- 1) Move everything from MST_saves -> UNPACKED/UNPROCESSED --------------
 
-  if [[ -e "$target" ]]; then
-    warn "Target already exists in UNPROCESSED, skipping: $base"
-    continue
+  shopt -s nullglob dotglob
+  moved_any=false
+  for entry in "$MST_SAVES_DIR"/*; do
+    base="$(basename "$entry")"
+    target="$UNPACKED_DIR/$base"
+
+    if [[ -e "$target" ]]; then
+      warn "Target already exists in UNPROCESSED, skipping: $base"
+      continue
+    fi
+
+    if mv "$entry" "$target"; then
+      moved_any=true
+    else
+      warn "Failed to move: $entry"
+    fi
+  done
+  shopt -u nullglob dotglob
+
+  # Not a hard error if nothing moved; there may already be backlog in UNPROCESSED
+  if [[ "$moved_any" == false ]]; then
+    echo "Info: nothing moved from MST_saves (possibly empty or all names already present)."
   fi
 
-  if mv "$entry" "$target"; then
-    moved_any=true
+  # --- 2) Select the oldest directory in UNPACKED/UNPROCESSED by embedded timestamp
+
+  mapfile -t candidates < <(find "$UNPACKED_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    err "No directories found in UNPACKED/UNPROCESSED."
+  fi
+
+  oldest_epoch=""
+  oldest_name=""
+
+  for base in "${candidates[@]}"; do
+    epoch="$(to_epoch "$base")"
+    if [[ -z "$epoch" ]]; then
+      warn "Skipping (no timestamp suffix): $base"
+      continue
+    fi
+    if [[ -z "$oldest_epoch" || "$epoch" -lt "$oldest_epoch" ]]; then
+      oldest_epoch="$epoch"
+      oldest_name="$base"
+    fi
+  done
+
+  if [[ -z "$oldest_name" ]]; then
+    err "No directories with a valid _YYYY-MM-DD_HHhMMmSSs suffix found in UNPROCESSED."
+  fi
+
+  echo "Selected oldest directory: $oldest_name (epoch $oldest_epoch)"
+
+  SOURCE_DIR="$UNPACKED_DIR/$oldest_name"
+  TARGET_DIR="$PROCESSING_DIR/$oldest_name"
+
+  if [[ -e "$TARGET_DIR" ]]; then
+    warn "Target already exists in PROCESSING, skipping move: $TARGET_DIR"
   else
-    warn "Failed to move: $entry"
+    mv "$SOURCE_DIR" "$TARGET_DIR" || err "Failed to move directory to PROCESSING."
   fi
-done
-shopt -u nullglob dotglob
 
-# Not a hard error if nothing moved; there may already be backlog in UNPROCESSED
-if [[ "$moved_any" == false ]]; then
-  echo "Info: nothing moved from MST_saves (possibly empty or all names already present)."
-fi
-
-# --- 2) Select the oldest directory in UNPACKED/UNPROCESSED by embedded timestamp
-
-mapfile -t candidates < <(find "$UNPACKED_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
-
-if [[ ${#candidates[@]} -eq 0 ]]; then
-  err "No directories found in UNPACKED/UNPROCESSED."
-fi
-
-oldest_epoch=""
-oldest_name=""
-
-for base in "${candidates[@]}"; do
-  epoch="$(to_epoch "$base")"
-  if [[ -z "$epoch" ]]; then
-    warn "Skipping (no timestamp suffix): $base"
-    continue
-  fi
-  if [[ -z "$oldest_epoch" || "$epoch" -lt "$oldest_epoch" ]]; then
-    oldest_epoch="$epoch"
-    oldest_name="$base"
-  fi
-done
-
-if [[ -z "$oldest_name" ]]; then
-  err "No directories with a valid _YYYY-MM-DD_HHhMMmSSs suffix found in UNPROCESSED."
-fi
-
-echo "Selected oldest directory: $oldest_name (epoch $oldest_epoch)"
-
-SOURCE_DIR="$UNPACKED_DIR/$oldest_name"
-TARGET_DIR="$PROCESSING_DIR/$oldest_name"
-
-if [[ -e "$TARGET_DIR" ]]; then
-  warn "Target already exists in PROCESSING, skipping move: $TARGET_DIR"
+  SELECTED_INPUT="$oldest_name"
 else
-  mv "$SOURCE_DIR" "$TARGET_DIR" || err "Failed to move directory to PROCESSING."
+  echo "Run override provided: analyzing predefined run ${RUN_OVERRIDE}."
 fi
 
 # --- 3) Run MATLAB on the selected directory ---------------------------------
@@ -208,14 +222,25 @@ MATLAB_SCRIPT="run('DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m')"
 # Default SAVE_FLAG to false if unset
 SAVE_FLAG="${SAVE_FLAG:-false}"
 
+if [[ -z "$RUN_OVERRIDE" && -z "$SELECTED_INPUT" ]]; then
+  err "No input directory selected for analysis."
+fi
+
+if [[ -n "$RUN_OVERRIDE" ]]; then
+  MATLAB_PREFIX="test=true; run=${RUN_OVERRIDE};"
+else
+  ESCAPED_INPUT="${SELECTED_INPUT//\'/\'\'}"
+  MATLAB_PREFIX="test=false; run=0; input_dir='${ESCAPED_INPUT}';"
+fi
+
 if command -v matlab >/dev/null 2>&1; then
   if [[ "$SAVE_FLAG" == "true" ]]; then
     : "${SAVE_DIR:?SAVE_FLAG=true but SAVE_DIR not set}"
     # Escape single quotes for MATLAB string literal
     ESCAPED_DIR="${SAVE_DIR//\'/\'\'}"
-    matlab -batch "save_plots=true; save_plots_dir='${ESCAPED_DIR}'; input_dir='${oldest_name}'; ${MATLAB_SCRIPT}"
+    matlab -batch "${MATLAB_PREFIX} save_plots=true; save_plots_dir='${ESCAPED_DIR}'; ${MATLAB_SCRIPT}"
   else
-    matlab -batch "input_dir='${oldest_name}'; ${MATLAB_SCRIPT}"
+    matlab -batch "${MATLAB_PREFIX} ${MATLAB_SCRIPT}"
   fi
 else
   err "matlab not found in PATH."

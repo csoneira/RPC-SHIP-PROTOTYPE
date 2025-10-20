@@ -33,12 +33,11 @@ with run_path.open(newline="", encoding="utf-8") as run_file:
             continue  # Ignore empty IDs or malformed windows.
         runs.append((run_id, start, end))
 
-with db_path.open(newline="", encoding="utf-8") as db_file, \
-     out_path.open("w", newline="", encoding="utf-8") as out_file:
-    reader = csv.DictReader(db_file)
-    writer = csv.writer(out_file)
-    writer.writerow(["filename", "timestamp_utc", "run_id"])
+matches = {}
+seen_files = set()
 
+with db_path.open(newline="", encoding="utf-8") as db_file:
+    reader = csv.DictReader(db_file)
     for row in reader:
         filename = (row.get("filename") or "").strip()
         if not filename:
@@ -56,9 +55,20 @@ with db_path.open(newline="", encoding="utf-8") as db_file, \
                 match_id = run_id
                 break
 
-        if match_id:
+        if match_id and filename not in seen_files:
+            timestamp_str = parsed_time.strftime("%Y-%m-%d %H:%M:%S")
+            run_entries = matches.setdefault(match_id, {})
+            run_entries[filename] = timestamp_str
+            seen_files.add(filename)
+
+with out_path.open("w", newline="", encoding="utf-8") as out_file:
+    writer = csv.writer(out_file)
+    writer.writerow(["filename", "timestamp_utc", "run_id"])
+
+    for run_id in sorted(matches):
+        for filename in sorted(matches[run_id]):
             writer.writerow([
                 filename,
-                parsed_time.strftime("%Y-%m-%d %H:%M:%S"),
-                match_id,
+                matches[run_id][filename],
+                run_id,
             ])
