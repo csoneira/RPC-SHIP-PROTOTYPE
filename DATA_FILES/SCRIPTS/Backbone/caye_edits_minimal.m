@@ -48,8 +48,8 @@ close all; clc;
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-test = false;
-run = 0;
+test = true;
+run = 2;
 
 if test
     if run == 1
@@ -72,7 +72,7 @@ limit = true;
 limit_number_of_events = 5000;
 
 % Position from narrow strips. Computationally expensive.
-position_from_narrow_strips = false;
+position_from_narrow_strips = true;
 
 % ---------------------------------------------------------------------
 
@@ -1519,21 +1519,21 @@ sgtitle(sprintf('PMT charge (data from %s)', formatted_datetime));
 
 if position_from_narrow_strips
 
+    % Use no-crosstalk quantities for position calculation
+    charge_thin_top_for_position = Qt_no_crosstalk;
+    charge_thin_bot_for_position = Qb_no_crosstalk;
+    charge_thick_for_position = Q_thick_strip_no_crosstalk;
+    X_thick_for_position = X_thick_strip_no_crosstalk; % discrete (1..5)
+    T_thick_for_position = T_thick_strip_no_crosstalk; % mean(Tfl,Tbl)
+    Y_thick_for_position = Y_thick_strip_no_crosstalk; % (Tfl - Tbl)/2 in ns
 
-    % charge_thin_top_for_position = Qt_no_crosstalk;
-    % charge_thin_bot_for_position = Qb_no_crosstalk;
-    % charge_thick_for_position = Q_thick_strip_no_crosstalk;
-    % X_thick_for_position = X_thick_strip_no_crosstalk; % discrete (1..5)
-    % T_thick_for_position = T_thick_strip_no_crosstalk; % mean(Tfl,Tbl)
-    % Y_thick_for_position = Y_thick_strip_no_crosstalk; % (Tfl - Tbl)/2 in ns
-
-    fprintf('Position from narrow strips: using raw Qt, Qb, Q_thick_strip (with no coincidence)\n');
-    charge_thin_top_for_position = Qt_signal;
-    charge_thin_bot_for_position = Qb_signal;
-    charge_thick_for_position = Q_thick_strip_signal;
-    X_thick_for_position = X_thick_strip_signal; % discrete (1..5)
-    T_thick_for_position = T_thick_strip_signal; % mean(Tfl,Tbl)
-    Y_thick_for_position = Y_thick_strip_signal; % (Tfl - Tbl)/2 in ns
+    % fprintf('Position from narrow strips: using raw Qt, Qb, Q_thick_strip (with no coincidence)\n');
+    % charge_thin_top_for_position = Qt_signal;
+    % charge_thin_bot_for_position = Qb_signal;
+    % charge_thick_for_position = Q_thick_strip_signal;
+    % X_thick_for_position = X_thick_strip_signal; % discrete (1..5)
+    % T_thick_for_position = T_thick_strip_signal; % mean(Tfl,Tbl)
+    % Y_thick_for_position = Y_thick_strip_signal; % (Tfl - Tbl)/2 in ns
 
     charge_thin_top_total = sum(charge_thin_top_for_position, 2);
     charge_thin_bot_total = sum(charge_thin_bot_for_position, 2);
@@ -1921,21 +1921,26 @@ sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)'
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
+% Create a version with vvalues larger than crosstalk and smaller than streamer
+Q_thin_top_charge_params = Q_thin_top_plot(Q_thin_top_plot > top_narrow_strip_crosstalk & Q_thin_top_plot < Q_thin_top_streamer_threshold);
+Q_thin_bot_charge_params = Q_thin_bot_plot(Q_thin_bot_plot > bot_narrow_strip_crosstalk & Q_thin_bot_plot < Q_thin_bot_streamer_threshold);
+Q_thick_charge_params = Q_thick_plot(Q_thick_plot > thick_strip_crosstalk & Q_thick_plot < Q_thick_streamer_threshold);
+
 % Mean
-charge_thin_top_mean = mean(Q_thin_top_plot);
-charge_thin_bot_mean = mean(Q_thin_bot_plot);
-charge_thick_mean = mean(Q_thick_plot);
+charge_thin_top_mean = mean(Q_thin_top_charge_params);
+charge_thin_bot_mean = mean(Q_thin_bot_charge_params);
+charge_thick_mean = mean(Q_thick_charge_params);
 
 % Median
-charge_thin_top_median = median(Q_thin_top_plot);
-charge_thin_bot_median = median(Q_thin_bot_plot);
-charge_thick_median = median(Q_thick_plot);
+charge_thin_top_median = median(Q_thin_top_charge_params);
+charge_thin_bot_median = median(Q_thin_bot_charge_params);
+charge_thick_median = median(Q_thick_charge_params);
 
 % Maximum
 scale_maximum = 100;
-charge_thin_top_max = mode(scale_maximum*round(Q_thin_top_plot/scale_maximum));
-charge_thin_bot_max = mode(scale_maximum*round(Q_thin_bot_plot/scale_maximum));
-charge_thick_max = mode(scale_maximum*round(Q_thick_plot/scale_maximum));
+charge_thin_top_max = mode(scale_maximum*round(Q_thin_top_charge_params/scale_maximum));
+charge_thin_bot_max = mode(scale_maximum*round(Q_thin_bot_charge_params/scale_maximum));
+charge_thick_max = mode(scale_maximum*round(Q_thick_charge_params/scale_maximum));
 
 
 %%
@@ -2273,7 +2278,6 @@ fprintf('%-17s', 'Detector');
 for c = 1:nVar
     fprintf(' %12s %12s', varNames{1 + 2*(c-1) + 1}, varNames{1 + 2*(c-1) + 2});
 end
-fprintf(' | %12s\n', 'StreamerPct');
 
 % Separator
 sepLen = 17 + (12+1)*2*nVar + 3 + 12;
@@ -2287,9 +2291,37 @@ for i = 1:size(detTable,1)
         uncVal = detTable{ i, 1 + 2*(c-1) + 2 };
         fprintf(' %12.1f %12.1f', effVal, uncVal);
     end
-    fprintf(' | %11.1f%%\n', detTable.StreamerPct(i));
+    fprintf('\n');
 end
 fprintf('%s\n', repmat('=',1, max(86, sepLen)));
+
+
+% ---- Additional pretty print: charge summary (Mean, Median, Max, Streamer%) ----
+fprintf('\n==== Charge Summary (values in ADC bins, streamer in %%) ====\n');
+% Header
+fprintf('%-17s %12s %12s %12s %12s\n', 'Detector', 'Mean', 'Median', 'Max', 'StreamerPct');
+% Separator (match column widths)
+sepLen2 = 17 + 4*13;
+fprintf('%s\n', repmat('-', 1, sepLen2));
+
+% Rows: print integers for charges, one decimal for streamer pct
+for i = 1:size(detTable,1)
+    detName = detTable.Detector{i};
+    meanQ   = detTable.MeanCharge(i);
+    medQ    = detTable.MedianCharge(i);
+    maxQ    = detTable.MaxCharge(i);
+    spct    = detTable.StreamerPct(i);
+
+    % Handle NaNs gracefully: print 'NaN' instead of numeric formatting if needed
+    if isnan(meanQ), meanStr = 'NaN'; else meanStr = sprintf('%12.0f', meanQ); end
+    if isnan(medQ),  medStr  = 'NaN'; else medStr  = sprintf('%12.0f', medQ);  end
+    if isnan(maxQ),  maxStr  = 'NaN'; else maxStr  = sprintf('%12.0f', maxQ);  end
+    if isnan(spct),  spStr   = '   NaN%%'; else spStr   = sprintf('%11.1f%%', spct); end
+
+    fprintf('%-17s %s %s %s %s\n', detName, meanStr, medStr, maxStr, spStr);
+end
+fprintf('%s\n', repmat('=',1, sepLen2));
+
 
 % CSV output
 outCsv = fullfile(summary_output_dir, ...
