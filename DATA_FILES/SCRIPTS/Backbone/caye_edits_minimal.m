@@ -108,7 +108,7 @@ if test
         input_dir = 'dabc25282152204_RUN_4_2025-10-20_16h00m00s';
         data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/" + input_dir;
     elseif run == 5
-        input_dir = 'dabc25291140248_RUN_5_2025-10-20_11h51m27s';
+        input_dir = 'dabc25291140248_RUN_5_2025-10-20_16h00m00s';
         data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/" + input_dir;
     else
         error('For test mode, set run to 1, 2, 3, 4, or 5.');
@@ -2189,6 +2189,21 @@ charge_thin_bot_max = mode(scale_maximum*round(Q_thin_bot_charge_params/scale_ma
 scale_maximum = 10;
 charge_thick_max = mode(scale_maximum*round(Q_thick_charge_params/scale_maximum));
 
+
+% I want you to save in a csv the charge bin center and the count in each bin for thick_strips between 0 and 100, and use
+% a bin width of 2 ADC bins. The csv should have two columns: "Charge_bin_center" and "Count".
+bin_edges = 0:0.5:100;
+[counts, edges] = histcounts(Q_thick_plot, bin_edges);
+bin_centers = edges(1:end-1) + diff(edges)/2;
+charge_histogram_table = table(bin_centers', counts', 'VariableNames', {'Charge_bin_center', 'Count'});
+
+outdir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/CHARGES/';
+if ~exist(outdir, 'dir')
+    mkdir(outdir);
+end
+
+outfile = sprintf('%sthick_strip_charge_histogram_run_%d.csv', outdir, run);
+writetable(charge_histogram_table, outfile);
 
 %%
 

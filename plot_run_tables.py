@@ -12,6 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 
 TABLE_DIR = Path("DATA_FILES/DATA/TABLES")
+CHARGE_DIR = Path("DATA_FILES/DATA/CHARGES")
 FILENAME_PATTERN = re.compile(
     r"^RUN_(?P<run>\d+)_summary_.*_exec_(?P<exec>\d{4}_\d{2}_\d{2}-\d{2}\.\d{2}\.\d{2})\.csv$"
 )
@@ -142,6 +143,42 @@ def load_run_tables(run_files: list[RunFile]) -> tuple[pd.DataFrame, pd.DataFram
     metadata_frame["exec_time"] = pd.to_datetime(metadata_frame["exec_time"])
 
     return table_frame, metadata_frame
+
+
+def load_charge_histograms(
+    run_files: list[RunFile], charge_dir: Path = CHARGE_DIR
+) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    for run_file in run_files:
+        file_path = charge_dir / f"thick_strip_charge_histogram_run_{run_file.run}.csv"
+        if not file_path.exists():
+            print(
+                f"Charge histogram missing for run {run_file.run}: {file_path.name} not found."
+            )
+            continue
+        try:
+            data = pd.read_csv(file_path)
+        except Exception as exc:  # pragma: no cover - just in case
+            print(f"Failed to read {file_path.name}: {exc}")
+            continue
+        required_cols = {"Charge_bin_center", "Count"}
+        if not required_cols.issubset(data.columns):
+            print(
+                f"Skipping {file_path.name}: expected columns {sorted(required_cols)}."
+            )
+            continue
+        frame = data.loc[:, ["Charge_bin_center", "Count"]].copy()
+        frame["run"] = run_file.run
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame(columns=["Charge_bin_center", "Count", "run"])
+    combined = (
+        pd.concat(frames, ignore_index=True)
+        .dropna(subset=["Charge_bin_center", "Count", "run"])
+        .sort_values(["run", "Charge_bin_center"])
+        .reset_index(drop=True)
+    )
+    return combined
 
 
 def _filter_detectors(
@@ -334,6 +371,74 @@ def plot_streamer_and_charges(
     plt.close(fig)
 
 
+def _edges_from_sorted(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    if values.size == 0:
+        return np.array([])
+    if values.size == 1:
+        step = 1.0
+        return np.array([values[0] - step / 2, values[0] + step / 2])
+    deltas = np.diff(values)
+    start = values[0] - deltas[0] / 2
+    end = values[-1] + deltas[-1] / 2
+    mids = (values[:-1] + values[1:]) / 2
+    return np.concatenate(([start], mids, [end]))
+
+
+def plot_charge_heatmap(
+    hist_frame: pd.DataFrame,
+    pdf: PdfPages,
+) -> None:
+    if hist_frame.empty:
+        print("No charge histogram data available; skipping charge heatmap.")
+        return
+
+    pivot = (
+        hist_frame.pivot_table(
+            index="Charge_bin_center",
+            columns="run",
+            values="Count",
+            aggfunc="sum",
+        )
+        .sort_index()
+        .sort_index(axis=1)
+    )
+    if pivot.empty:
+        print("Charge histogram pivot is empty; skipping charge heatmap.")
+        return
+
+    runs = pivot.columns.to_numpy()
+    bin_centers = pivot.index.to_numpy()
+    counts = pivot.to_numpy(dtype=float)
+    counts = np.nan_to_num(counts, nan=0.0)
+    column_sums = counts.sum(axis=0, keepdims=True)
+    column_sums[column_sums == 0] = 1.0
+    counts = counts / column_sums
+
+    run_edges = _edges_from_sorted(runs)
+    bin_edges = _edges_from_sorted(bin_centers)
+    if run_edges.size == 0 or bin_edges.size == 0:
+        print("Unable to derive edges for charge heatmap; skipping.")
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    mesh = ax.pcolormesh(run_edges, bin_edges, counts, shading="auto", cmap="viridis")
+    cbar = fig.colorbar(mesh, ax=ax, pad=0.02)
+    cbar.set_label("Normalized bin occupancy")
+
+    ax.set_xlabel("Run")
+    ax.set_ylabel("Charge bin center (ADC bins)")
+    ax.set_title("Thick strip charge histogram across runs")
+    ax.set_xticks(runs)
+    ax.set_xticklabels([str(r) for r in runs])
+    ax.set_ylim(bin_edges[0], bin_edges[-1])
+    ax.grid(False)
+
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
 def main() -> None:
     args = parse_args()
     run_files = find_latest_run_files(args.directory)
@@ -342,6 +447,7 @@ def main() -> None:
         print(f"  Run {item.run}: {item.path.name} (exec {item.exec_time.isoformat(sep=' ')})")
     table_frame, metadata_frame = load_run_tables(run_files)
     table_frame, detectors = _filter_detectors(table_frame, args.detectors)
+    charge_hist_frame = load_charge_histograms(run_files)
 
     if not metadata_frame.empty:
         print("\nRun metadata:")
@@ -355,6 +461,7 @@ def main() -> None:
     with PdfPages(args.output) as pdf:
         plot_efficiency_grid(table_frame, detectors, pdf)
         plot_streamer_and_charges(table_frame, detectors, pdf)
+        plot_charge_heatmap(charge_hist_frame, pdf)
     print(f"\nSaved figures to {args.output}")
 
 
