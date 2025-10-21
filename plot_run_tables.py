@@ -1,0 +1,362 @@
+from __future__ import annotations
+
+import argparse
+import re
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from matplotlib.backends.backend_pdf import PdfPages
+import numpy as np
+
+TABLE_DIR = Path("DATA_FILES/DATA/TABLES")
+FILENAME_PATTERN = re.compile(
+    r"^RUN_(?P<run>\d+)_summary_.*_exec_(?P<exec>\d{4}_\d{2}_\d{2}-\d{2}\.\d{2}\.\d{2})\.csv$"
+)
+
+
+@dataclass(frozen=True)
+class RunFile:
+    run: int
+    exec_time: datetime
+    path: Path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Plot summary metrics from RUN_* CSV files, selecting the most recent "
+            "execution for each run."
+        )
+    )
+    parser.add_argument(
+        "-d",
+        "--directory",
+        type=Path,
+        default=TABLE_DIR,
+        help="Directory containing RUN_* summary CSV files.",
+    )
+    parser.add_argument(
+        "--detectors",
+        nargs="+",
+        help="Explicit list of detectors to plot. Defaults to detectors starting with 'RPC_'.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("run_summary_plots.pdf"),
+        help="Destination PDF path. Defaults to run_summary_plots.pdf.",
+    )
+    return parser.parse_args()
+
+
+def _parse_exec_timestamp(value: str) -> datetime:
+    return datetime.strptime(value, "%Y_%m_%d-%H.%M.%S")
+
+
+def find_latest_run_files(directory: Path) -> list[RunFile]:
+    latest: dict[int, RunFile] = {}
+    for path in directory.glob("RUN_*_exec_*.csv"):
+        match = FILENAME_PATTERN.match(path.name)
+        if not match:
+            continue
+        run = int(match.group("run"))
+        exec_time = _parse_exec_timestamp(match.group("exec"))
+        current = latest.get(run)
+        if current is None or exec_time > current.exec_time:
+            latest[run] = RunFile(run=run, exec_time=exec_time, path=path)
+    if not latest:
+        raise FileNotFoundError(f"No RUN_* CSV files found in {directory}.")
+    return [latest[run] for run in sorted(latest)]
+
+
+def _convert_value(raw: str) -> float | int | str | None:
+    raw = raw.strip()
+    if not raw:
+        return None
+    if raw.lower() == "nan":
+        return float("nan")
+    try:
+        number = float(raw)
+        if number.is_integer():
+            return int(number)
+        return number
+    except ValueError:
+        return raw
+
+
+def _read_metadata(path: Path) -> dict[str, float | int | str | None]:
+    metadata: dict[str, float | int | str | None] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.startswith("#"):
+                break
+            content = line[1:].strip()
+            if ":" not in content:
+                continue
+            key, value = content.split(":", maxsplit=1)
+            converted = _convert_value(value)
+            metadata[key.strip()] = converted
+    return metadata
+
+
+def load_run_tables(run_files: list[RunFile]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    table_frames: list[pd.DataFrame] = []
+    metadata_records: list[dict[str, float | int | str | None]] = []
+
+    for run_file in run_files:
+        metadata = _read_metadata(run_file.path)
+        metadata["run"] = run_file.run
+        metadata["exec_time"] = run_file.exec_time
+        metadata_records.append(metadata)
+
+        data = pd.read_csv(run_file.path, comment="#")
+        data.columns = data.columns.str.strip()
+        if "Detector" not in data.columns:
+            raise ValueError(f"'Detector' column not found in {run_file.path.name}")
+
+        data["run"] = run_file.run
+        data["exec_time"] = run_file.exec_time
+
+        for column in data.columns:
+            if column in {"Detector"}:
+                continue
+            data[column] = pd.to_numeric(data[column], errors="coerce")
+
+        table_frames.append(data)
+
+    table_frame = (
+        pd.concat(table_frames, ignore_index=True)
+        .sort_values(["run", "Detector"])
+        .reset_index(drop=True)
+    )
+    table_frame["exec_time"] = pd.to_datetime(table_frame["exec_time"])
+
+    metadata_frame = (
+        pd.DataFrame(metadata_records)
+        .sort_values("run")
+        .reset_index(drop=True)
+    )
+    metadata_frame["exec_time"] = pd.to_datetime(metadata_frame["exec_time"])
+
+    return table_frame, metadata_frame
+
+
+def _filter_detectors(
+    table_frame: pd.DataFrame, detectors: list[str] | None
+) -> tuple[pd.DataFrame, list[str]]:
+    all_detectors = sorted(table_frame["Detector"].dropna().unique())
+    if detectors:
+        missing = sorted(set(detectors) - set(all_detectors))
+        if missing:
+            raise ValueError(f"Requested detectors not found: {', '.join(missing)}")
+        selected = detectors
+    else:
+        selected = [det for det in all_detectors if det.startswith("RPC_")]
+        if not selected:
+            selected = all_detectors
+    filtered = table_frame[table_frame["Detector"].isin(selected)].copy()
+    if filtered.empty:
+        raise ValueError("No data remaining after filtering detectors.")
+    return filtered, selected
+
+
+def plot_efficiency_grid(
+    table_frame: pd.DataFrame,
+    detectors: list[str],
+    pdf: PdfPages,
+) -> None:
+    metrics = [
+        ("signal", "signal_unc"),
+        ("coin", "coin_unc"),
+        ("good", "good_unc"),
+        ("range", "range_unc"),
+        ("no_crosstalk", "no_crosstalk_unc"),
+    ]
+    available_metrics = [m for m in metrics if m[0] in table_frame.columns]
+    if not available_metrics:
+        print("No efficiency metrics found; skipping efficiency grid.")
+        return
+
+    nrows = len(detectors)
+    ncols = len(available_metrics)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(4 * ncols, 3 * nrows),
+        sharex=True,
+    )
+    axes_matrix: np.ndarray
+    if nrows == 1 and ncols == 1:
+        axes_matrix = np.array([[axes]])  # type: ignore[assignment]
+    elif nrows == 1 or ncols == 1:
+        axes_matrix = np.atleast_2d(axes)
+    else:
+        axes_matrix = axes
+
+    for row_idx, detector in enumerate(detectors):
+        det_data = table_frame.loc[table_frame["Detector"] == detector]
+        det_data = det_data.sort_values("run")
+        for col_idx, (metric, metric_unc) in enumerate(available_metrics):
+            axis = axes_matrix[row_idx, col_idx]
+            values = det_data[["run", metric]].dropna()
+            if values.empty:
+                axis.set_visible(False)
+                continue
+            runs = values["run"].to_numpy()
+            measurement = values[metric].to_numpy()
+            yerr = None
+            if metric_unc in det_data.columns:
+                unc_values = det_data[["run", metric_unc]].dropna()
+                if not unc_values.empty:
+                    yerr = unc_values.set_index("run").reindex(runs)[metric_unc].to_numpy()
+            axis.errorbar(
+                runs,
+                measurement,
+                yerr=yerr,
+                fmt="-o",
+                color="C0",
+                capsize=3,
+            )
+            if row_idx == 0:
+                axis.set_title(metric.replace("_", " ").title())
+            if col_idx == 0:
+                axis.set_ylabel(detector)
+            axis.set_ylim(0, 100)
+            if runs.size > 0:
+                xticks = sorted(np.unique(runs.astype(int)))
+                axis.set_xticks(xticks)
+            axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+            if row_idx == nrows - 1:
+                axis.set_xlabel("Run")
+
+    fig.suptitle("Detector efficiencies with uncertainties", y=0.995)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
+def plot_streamer_and_charges(
+    table_frame: pd.DataFrame,
+    detectors: list[str],
+    pdf: PdfPages,
+) -> None:
+    nrows = len(detectors)
+    fig, axes = plt.subplots(
+        nrows,
+        2,
+        figsize=(10, 3 * nrows),
+        sharex="col",
+    )
+    axes_matrix: np.ndarray
+    if nrows == 1:
+        axes_matrix = np.array([axes])
+    else:
+        axes_matrix = axes
+
+    charge_metrics = ["MeanCharge", "MedianCharge", "MaxCharge"]
+
+    for row_idx, detector in enumerate(detectors):
+        axis_stream = axes_matrix[row_idx, 0]
+        axis_charge = axes_matrix[row_idx, 1]
+
+        det_data = (
+            table_frame.loc[table_frame["Detector"] == detector]
+            .sort_values("run")
+        )
+
+        run_values = det_data["run"].dropna().astype(int)
+        xticks = sorted(np.unique(run_values))
+
+        stream_series = det_data.set_index("run")["StreamerPct"].dropna().sort_index()
+        if not stream_series.empty:
+            stream_series.index = stream_series.index.astype(int)
+            axis_stream.plot(stream_series.index, stream_series.values, "-o", color="C3")
+        else:
+            axis_stream.text(
+                0.5,
+                0.5,
+                "StreamerPct not available",
+                transform=axis_stream.transAxes,
+                ha="center",
+                va="center",
+            )
+        axis_stream.set_ylabel(detector)
+        if xticks:
+            axis_stream.set_xticks(xticks)
+        axis_stream.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+        if row_idx == nrows - 1:
+            axis_stream.set_xlabel("Run")
+
+        plotted = False
+        for idx, metric in enumerate(charge_metrics):
+            if metric not in det_data.columns:
+                continue
+            metric_series = det_data.set_index("run")[metric].dropna().sort_index()
+            if metric_series.empty:
+                continue
+            metric_series.index = metric_series.index.astype(int)
+            axis_charge.plot(
+                metric_series.index,
+                metric_series.values,
+                "-o",
+                label=metric,
+                color=f"C{idx}",
+            )
+            plotted = True
+        if plotted:
+            axis_charge.legend()
+            if row_idx == 0:
+                axis_charge.set_ylabel("Charge (a.u.)")
+        else:
+            axis_charge.text(
+                0.5,
+                0.5,
+                "Charge metrics not available",
+                transform=axis_charge.transAxes,
+                ha="center",
+                va="center",
+            )
+        if xticks:
+            axis_charge.set_xticks(xticks)
+        axis_charge.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+        if row_idx == nrows - 1:
+            axis_charge.set_xlabel("Run")
+
+    axes_matrix[0, 0].set_title("StreamerPct vs Run")
+    axes_matrix[0, 1].set_title("Charge metrics vs Run")
+
+    fig.suptitle("Additional run metrics per detector", y=0.995)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
+def main() -> None:
+    args = parse_args()
+    run_files = find_latest_run_files(args.directory)
+    print("Selected files:")
+    for item in run_files:
+        print(f"  Run {item.run}: {item.path.name} (exec {item.exec_time.isoformat(sep=' ')})")
+    table_frame, metadata_frame = load_run_tables(run_files)
+    table_frame, detectors = _filter_detectors(table_frame, args.detectors)
+
+    if not metadata_frame.empty:
+        print("\nRun metadata:")
+        meta_to_show = metadata_frame.copy()
+        meta_to_show["exec_time"] = meta_to_show["exec_time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        formatted = meta_to_show.set_index("run").apply(
+            lambda col: col.map(lambda v: f"{v:.4g}" if isinstance(v, float) else v)
+        )
+        print(formatted.to_string())
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with PdfPages(args.output) as pdf:
+        plot_efficiency_grid(table_frame, detectors, pdf)
+        plot_streamer_and_charges(table_frame, detectors, pdf)
+    print(f"\nSaved figures to {args.output}")
+
+
+if __name__ == "__main__":
+    main()

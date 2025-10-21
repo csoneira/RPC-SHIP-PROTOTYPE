@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <1-5>]
+Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <1-5>] [--no-plot]
 
 This script analyzes the unpacked HLD files.
 
@@ -12,6 +12,7 @@ Arguments:
   --help, -h           Show this help message
   --save               Save the generated plots (default: do not save)
   --save-dir <path>    Directory to save plots (default: DATA_FILES/DATA/PDF)
+  --no-plot            Skip all figure generation (only produce CSV output)
   --run, -r <1-5>      Analyze predefined test run number (enables test mode)
 EOF
     exit 1
@@ -64,6 +65,7 @@ cd "$PROJECT_ROOT"
 
 DEFAULT_SAVE_DIR="$PROJECT_ROOT/DATA_FILES/DATA/PDF"
 SAVE_FLAG=false
+NO_PLOT_FLAG=false
 SAVE_DIR="$DEFAULT_SAVE_DIR"
 RUN_OVERRIDE=""
 SELECTED_INPUT=""
@@ -79,6 +81,10 @@ while [[ $# -gt 0 ]]; do
             SAVE_DIR="$2"
             SAVE_FLAG=true
             shift 2
+            ;;
+        --no-plot)
+            NO_PLOT_FLAG=true
+            shift
             ;;
         -r|--run)
             [[ $# -ge 2 ]] || usage
@@ -98,6 +104,38 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$NO_PLOT_FLAG" == "true" ]]; then
+    SAVE_FLAG=false
+fi
+
+
+MATLAB_SCRIPT="feval('run','DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m');"
+MATLAB_WRAP="try, ${MATLAB_SCRIPT} catch ME, disp(getReport(ME,'extended')); exit(1); end"
+
+if [[ -n "$RUN_OVERRIDE" ]]; then
+  echo "Run override provided: analyzing predefined run ${RUN_OVERRIDE}."
+  MATLAB_PREFIX="test=true; run=${RUN_OVERRIDE};"
+  SAVE_FLAG="${SAVE_FLAG:-false}"
+
+  if [[ "$NO_PLOT_FLAG" == "true" ]]; then
+    MATLAB_PREFIX+=" no_plot=true; caye_cli_args={'--no-plot'};"
+  fi
+
+  if command -v matlab >/dev/null 2>&1; then
+    if [[ "$SAVE_FLAG" == "true" ]]; then
+      : "${SAVE_DIR:?SAVE_FLAG=true but SAVE_DIR not set}"
+      ESCAPED_DIR="${SAVE_DIR//\'/\'\'}"
+      MATLAB_CMD="${MATLAB_PREFIX} save_plots=true; save_plots_dir='${ESCAPED_DIR}'; ${MATLAB_WRAP}"
+    else
+      MATLAB_CMD="${MATLAB_PREFIX} ${MATLAB_WRAP}"
+    fi
+    matlab -batch "${MATLAB_CMD}"
+  else
+    err "matlab not found in PATH."
+  fi
+  exit 0
+fi
 
 
 
@@ -216,9 +254,6 @@ else
 fi
 
 # --- 3) Run MATLAB on the selected directory ---------------------------------
-
-MATLAB_SCRIPT="run('DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m')"
-
 # Default SAVE_FLAG to false if unset
 SAVE_FLAG="${SAVE_FLAG:-false}"
 
@@ -233,15 +268,20 @@ else
   MATLAB_PREFIX="test=false; run=0; input_dir='${ESCAPED_INPUT}';"
 fi
 
+if [[ "$NO_PLOT_FLAG" == "true" ]]; then
+  MATLAB_PREFIX+=" no_plot=true; caye_cli_args={'--no-plot'};"
+fi
+
 if command -v matlab >/dev/null 2>&1; then
   if [[ "$SAVE_FLAG" == "true" ]]; then
     : "${SAVE_DIR:?SAVE_FLAG=true but SAVE_DIR not set}"
     # Escape single quotes for MATLAB string literal
     ESCAPED_DIR="${SAVE_DIR//\'/\'\'}"
-    matlab -batch "${MATLAB_PREFIX} save_plots=true; save_plots_dir='${ESCAPED_DIR}'; ${MATLAB_SCRIPT}"
+    MATLAB_CMD="${MATLAB_PREFIX} save_plots=true; save_plots_dir='${ESCAPED_DIR}'; ${MATLAB_WRAP}"
   else
-    matlab -batch "${MATLAB_PREFIX} ${MATLAB_SCRIPT}"
+    MATLAB_CMD="${MATLAB_PREFIX} ${MATLAB_WRAP}"
   fi
+  matlab -batch "${MATLAB_CMD}"
 else
   err "matlab not found in PATH."
 fi

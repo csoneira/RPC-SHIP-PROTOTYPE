@@ -27,6 +27,31 @@
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
+% Print terminal warning to indicate the matlab script starts
+fprintf('Starting MATLAB script\n');
+
+% ---------------------------------------------------------------------
+% Command-line flag parsing
+% ---------------------------------------------------------------------
+
+cli_args = collect_cli_args();
+no_plot_flag = any(strcmpi(cli_args, '--no-plot'));
+
+if evalin('base', 'exist(''no_plot'', ''var'')')
+    base_no_plot = evalin('base', 'no_plot');
+    if ischar(base_no_plot) || isstring(base_no_plot)
+        base_no_plot = strcmpi(string(base_no_plot), "true");
+    end
+    if isnumeric(base_no_plot)
+        base_no_plot = logical(base_no_plot);
+    end
+    if islogical(base_no_plot)
+        no_plot_flag = no_plot_flag || base_no_plot;
+    end
+end
+
+should_plot = ~no_plot_flag;
+
 save_plots_dir_default = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/PDF';
 if ~exist('save_plots','var')
     save_plots = false;
@@ -34,8 +59,11 @@ end
 if ~exist('save_plots_dir','var') || isempty(save_plots_dir)
     save_plots_dir = save_plots_dir_default;
 end
+if no_plot_flag
+    save_plots = false;
+end
 
-clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp;
+clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag;
 close all; clc;
 
 
@@ -57,7 +85,7 @@ end
 test = logical(test);
 
 if ~exist('run','var') || isempty(run)
-    run = 5;
+    run = 4;
 end
 if isstring(run) || ischar(run)
     run = str2double(run);
@@ -523,9 +551,11 @@ Q_thin_bot_event_test = sum(Qb_test, 2);
 % Create with linspace edges from 0 to 50000
 edges = linspace(0, 50000, 150);
 
-figure; histogram(Q_thin_top_event_test, edges, 'Normalization', 'probability'); 
-xlabel('Charge (ADC bins)'); ylabel('Probability'); title('Positive Charges (Thin)'); hold on;
-histogram(Q_thin_bot_event_test, edges, 'Normalization', 'probability');
+if should_plot
+    figure; histogram(Q_thin_top_event_test, edges, 'Normalization', 'probability');
+    xlabel('Charge (ADC bins)'); ylabel('Probability'); title('Positive Charges (Thin)'); hold on;
+    histogram(Q_thin_bot_event_test, edges, 'Normalization', 'probability');
+end
 
 %%
 
@@ -598,17 +628,19 @@ for i = 1:length(tTH_values)
     percent_good_events(i) = 100 * length(find(restrictionsForPMTs_test)) / rawEvents;
 end
 
-figure;
-plot(tTH_values, percent_good_events, '-o'); hold on;
-% vertical line at tTH, orange dashed, thicker
-xline(tTH, '--', 'tTH chosen', ...
-      'Color', [1 0.5 0], ...
-      'LineWidth', 1.8, ...
-      'LabelVerticalAlignment', 'middle', ...
-      'LabelHorizontalAlignment', 'center');
-xlabel('tTH [ns]');
-ylabel('% of good events');
-title('Good events vs tTH');
+if should_plot
+    figure;
+    plot(tTH_values, percent_good_events, '-o'); hold on;
+    % vertical line at tTH, orange dashed, thicker
+    xline(tTH, '--', 'tTH chosen', ...
+          'Color', [1 0.5 0], ...
+          'LineWidth', 1.8, ...
+          'LabelVerticalAlignment', 'middle', ...
+          'LabelHorizontalAlignment', 'center');
+    xlabel('tTH [ns]');
+    ylabel('% of good events');
+    title('Good events vs tTH');
+end
 
 
 % ---------- PMT timing consistency ----------
@@ -1139,82 +1171,89 @@ charge_limits_pmt     = [q005_pmt q95_pmt];
 % Plot scatter plots of Tl_cint i vs Tl_cint j for all PMT pairs to verify the
 % coincidence cut. In the same figure the 6 pairs
 
-figure;
-subplot(2,2,1); plot(Tl_cint_OG(:,1), Tt_cint_OG(:,1),'.'); hold on; plot(Tl_cint(:,1), Tt_cint(:,1),'.');
-xlabel('Tl_cint1');ylabel('Tt_cint1'); title('Time lead vs trail PMT1');
-xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
-xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
-yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
-subplot(2,2,2); plot(Tl_cint_OG(:,2), Tt_cint_OG(:,2),'.'); hold on; plot(Tl_cint(:,2), Tt_cint(:,2),'.');
-xlabel('Tl_cint2'); ylabel('Tt_cint2'); title('Time lead vs trail PMT2');
-xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
-xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
-yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
-subplot(2,2,3); plot(Tl_cint_OG(:,3), Tt_cint_OG(:,3),'.'); hold on; plot(Tl_cint(:,3), Tt_cint(:,3),'.');
-xlabel('Tl_cint3'); ylabel('Tt_cint3'); title('Time lead vs trail PMT3');
-xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
-xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
-yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
-subplot(2,2,4); plot(Tl_cint_OG(:,4), Tt_cint_OG(:,4),'.'); hold on; plot(Tl_cint(:,4), Tt_cint(:,4),'.');
-xlabel('Tl_cint4'); ylabel('Tt_cint4'); title('Time lead vs trail PMT4');
-xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
-sgtitle(sprintf('PMT time lead vs trail (data from %s)', formatted_datetime_tex));
-xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
-yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
-
+if should_plot
+    figure;
+    subplot(2,2,1); plot(Tl_cint_OG(:,1), Tt_cint_OG(:,1),'.'); hold on; plot(Tl_cint(:,1), Tt_cint(:,1),'.');
+    xlabel('Tl_cint1');ylabel('Tt_cint1'); title('Time lead vs trail PMT1');
+    xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
+    xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
+    yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
+    subplot(2,2,2); plot(Tl_cint_OG(:,2), Tt_cint_OG(:,2),'.'); hold on; plot(Tl_cint(:,2), Tt_cint(:,2),'.');
+    xlabel('Tl_cint2'); ylabel('Tt_cint2'); title('Time lead vs trail PMT2');
+    xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
+    xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
+    yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
+    subplot(2,2,3); plot(Tl_cint_OG(:,3), Tt_cint_OG(:,3),'.'); hold on; plot(Tl_cint(:,3), Tt_cint(:,3),'.');
+    xlabel('Tl_cint3'); ylabel('Tt_cint3'); title('Time lead vs trail PMT3');
+    xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
+    xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
+    yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
+    subplot(2,2,4); plot(Tl_cint_OG(:,4), Tt_cint_OG(:,4),'.'); hold on; plot(Tl_cint(:,4), Tt_cint(:,4),'.');
+    xlabel('Tl_cint4'); ylabel('Tt_cint4'); title('Time lead vs trail PMT4');
+    xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
+    sgtitle(sprintf('PMT time lead vs trail (data from %s)', formatted_datetime_tex));
+    xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
+    yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
+end
 
 % Now plot the charge correlations for the same PMT pairs
-figure;
-subplot(1,2,1); plot(Qcint_OG(:,1), Qcint_OG(:,2), '.'); hold on; plot(Qcint(:,1), Qcint(:,2), '.');
-xlabel('Qcint1'); ylabel('Qcint2'); title('Charge PMT1 vs PMT2');
-xlim(charge_limits_pmt); ylim(charge_limits_pmt);
-subplot(1,2,2); plot(Qcint_OG(:,3), Qcint_OG(:,4), '.'); hold on; plot(Qcint(:,3), Qcint(:,4), '.');
-xlabel('Qcint3'); ylabel('Qcint4'); title('Charge PMT3 vs PMT4');
-xlim(charge_limits_pmt); ylim(charge_limits_pmt);
+if should_plot
+    figure;
+    subplot(1,2,1); plot(Qcint_OG(:,1), Qcint_OG(:,2), '.'); hold on; plot(Qcint(:,1), Qcint(:,2), '.');
+    xlabel('Qcint1'); ylabel('Qcint2'); title('Charge PMT1 vs PMT2');
+    xlim(charge_limits_pmt); ylim(charge_limits_pmt);
+    subplot(1,2,2); plot(Qcint_OG(:,3), Qcint_OG(:,4), '.'); hold on; plot(Qcint(:,3), Qcint(:,4), '.');
+    xlabel('Qcint3'); ylabel('Qcint4'); title('Charge PMT3 vs PMT4');
+    xlim(charge_limits_pmt); ylim(charge_limits_pmt);
+end
 sgtitle(sprintf('PMT charge correlations (data from %s)', formatted_datetime_tex));
 
 
 % Finally, plot the Tl_cint i vs Tl_cint j scatter plots for all PMT pairs
-figure;
-subplot(1,2,1); plot(Tl_cint_OG(:,1), Tl_cint_OG(:,2),'.'); hold on; plot(Tl_cint(:,1), Tl_cint(:,2),'.');
-xlabel('Tl_cint1'); ylabel('Tl_cint2'); title('Time lead PMT1 vs PMT2');
-xlim(lead_time_limits_pmt); ylim(lead_time_limits_pmt);
-refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
-subplot(1,2,2); plot(Tl_cint_OG(:,3), Tl_cint_OG(:,4),'.'); hold on; plot(Tl_cint(:,3), Tl_cint(:,4),'.');
-xlabel('Tl_cint3'); ylabel('Tl_cint4'); title('Time lead PMT3 vs PMT4');
-xlim(lead_time_limits_pmt); ylim(lead_time_limits_pmt);
-sgtitle(sprintf('PMT time coincidences (data from %s)', formatted_datetime_tex));
-refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
+if should_plot
+    figure;
+    subplot(1,2,1); plot(Tl_cint_OG(:,1), Tl_cint_OG(:,2),'.'); hold on; plot(Tl_cint(:,1), Tl_cint(:,2),'.');
+    xlabel('Tl_cint1'); ylabel('Tl_cint2'); title('Time lead PMT1 vs PMT2');
+    xlim(lead_time_limits_pmt); ylim(lead_time_limits_pmt);
+    refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
+    subplot(1,2,2); plot(Tl_cint_OG(:,3), Tl_cint_OG(:,4),'.'); hold on; plot(Tl_cint(:,3), Tl_cint(:,4),'.');
+    xlabel('Tl_cint3'); ylabel('Tl_cint4'); title('Time lead PMT3 vs PMT4');
+    xlim(lead_time_limits_pmt); ylim(lead_time_limits_pmt);
+    sgtitle(sprintf('PMT time coincidences (data from %s)', formatted_datetime_tex));
+    refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
+end
 
 
 % Histograms of Tl for each strip to see the distribution of the difference
 % Normalized histograms of the time lead differences for each PMT pair to verify the
-figure;
-subplot(1,2,1);
-% Do not histogram zero values
-valid_diff_top = Tl_cint_OG(:,1) - Tl_cint_OG(:,2);
-valid_diff_top(valid_diff_top == 0) = [];
-histogram(valid_diff_top, 300, 'Normalization', 'probability');
-hold on;
-valid_diff = Tl_cint(:,1) - Tl_cint(:,2);
-valid_diff(valid_diff == 0) = [];
-histogram(valid_diff, 100, 'Normalization', 'probability');
-title('PMT 1 and 2 (BOT) time lead differences');
-xlabel('Time lead PMT 1 - PMT 2 [ns]'); ylabel('Counts');
-xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
-subplot(1,2,2);
-% Do not histogram zero values
-valid_diff_top = Tl_cint_OG(:,3) - Tl_cint_OG(:,4);
-valid_diff_top(valid_diff_top == 0) = [];
-histogram(valid_diff_top, 300, 'Normalization', 'probability');
-hold on;
-valid_diff = Tl_cint(:,3) - Tl_cint(:,4);
-valid_diff(valid_diff == 0) = [];
-histogram(valid_diff, 100, 'Normalization', 'probability');
-title('PMT 3 and 4 (BOT) time lead differences');
-xlabel('Time lead PMT 3 - PMT 4 [ns]'); ylabel('Counts');
-sgtitle(sprintf('Histograms of time lead differences for PMTs (data from %s)', formatted_datetime_tex));
-xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
+if should_plot
+    figure;
+    subplot(1,2,1);
+    % Do not histogram zero values
+    valid_diff_top = Tl_cint_OG(:,1) - Tl_cint_OG(:,2);
+    valid_diff_top(valid_diff_top == 0) = [];
+    histogram(valid_diff_top, 300, 'Normalization', 'probability');
+    hold on;
+    valid_diff = Tl_cint(:,1) - Tl_cint(:,2);
+    valid_diff(valid_diff == 0) = [];
+    histogram(valid_diff, 100, 'Normalization', 'probability');
+    title('PMT 1 and 2 (BOT) time lead differences');
+    xlabel('Time lead PMT 1 - PMT 2 [ns]'); ylabel('Counts');
+    xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
+    subplot(1,2,2);
+    % Do not histogram zero values
+    valid_diff_top = Tl_cint_OG(:,3) - Tl_cint_OG(:,4);
+    valid_diff_top(valid_diff_top == 0) = [];
+    histogram(valid_diff_top, 300, 'Normalization', 'probability');
+    hold on;
+    valid_diff = Tl_cint(:,3) - Tl_cint(:,4);
+    valid_diff(valid_diff == 0) = [];
+    histogram(valid_diff, 100, 'Normalization', 'probability');
+    title('PMT 3 and 4 (BOT) time lead differences');
+    xlabel('Time lead PMT 3 - PMT 4 [ns]'); ylabel('Counts');
+    sgtitle(sprintf('Histograms of time lead differences for PMTs (data from %s)', formatted_datetime_tex));
+    xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
+end
 
 
 
@@ -1227,61 +1266,64 @@ xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
 % TBl, TBt
 
 % Similar scatter subplot plots for the wide strips to verify no obvious problems.
-figure;
-xlimits_1 = [t_lead_left t_lead_right];
-ylimits_1 = [t_trail_left t_trail_right];
-subplot(2,5,1); plot(TFl_OG(:,1), TFt_OG(:,1),'.'); hold on; plot(TFl(:,1), TFt(:,1),'.');
-xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip1');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,2); plot(TFl_OG(:,2), TFt_OG(:,2),'.'); hold on; plot(TFl(:,2), TFt(:,2),'.');
-xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip2');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,3); plot(TFl_OG(:,3), TFt_OG(:,3),'.'); hold on; plot(TFl(:,3), TFt(:,3),'.');
-xlabel('TFl'); ylabel('TFt'); title('Time lead Front vs back strip3');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,4); plot(TFl_OG(:,4), TFt_OG(:,4),'.'); hold on; plot(TFl(:,4), TFt(:,4),'.');
-xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip4');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,5); plot(TFl_OG(:,5), TFt_OG(:,5),'.'); hold on; plot(TFl(:,5), TFt(:,5),'.');
-xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip5');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,6); plot(TBl_OG(:,1), TBt_OG(:,1),'.'); hold on; plot(TBl(:,1), TBt(:,1),'.');
-xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip1');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,7); plot(TBl_OG(:,2), TBt_OG(:,2),'.'); hold on; plot(TBl(:,2), TBt(:,2),'.');
-xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip2');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,8); plot(TBl_OG(:,3), TBt_OG(:,3),'.'); hold on; plot(TBl(:,3), TBt(:,3),'.');
-xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip3');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,9); plot(TBl_OG(:,4), TBt_OG(:,4),'.'); hold on; plot(TBl(:,4), TBt(:,4),'.');
-xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip4');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
-subplot(2,5,10); plot(TBl_OG(:,5), TBt_OG(:,5),'.'); hold on; plot(TBl(:,5), TBt(:,5),'.');
-xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip5');
-xlim(xlimits_1); ylim(ylimits_1);
-sgtitle(sprintf('Thick strip time lead vs trail (data from %s)', formatted_datetime_tex));
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+if should_plot
+    figure;
+    xlimits_1 = [t_lead_left t_lead_right];
+    ylimits_1 = [t_trail_left t_trail_right];
+    subplot(2,5,1); plot(TFl_OG(:,1), TFt_OG(:,1),'.'); hold on; plot(TFl(:,1), TFt(:,1),'.');
+    xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip1');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,2); plot(TFl_OG(:,2), TFt_OG(:,2),'.'); hold on; plot(TFl(:,2), TFt(:,2),'.');
+    xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip2');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,3); plot(TFl_OG(:,3), TFt_OG(:,3),'.'); hold on; plot(TFl(:,3), TFt(:,3),'.');
+    xlabel('TFl'); ylabel('TFt'); title('Time lead Front vs back strip3');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,4); plot(TFl_OG(:,4), TFt_OG(:,4),'.'); hold on; plot(TFl(:,4), TFt(:,4),'.');
+    xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip4');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,5); plot(TFl_OG(:,5), TFt_OG(:,5),'.'); hold on; plot(TFl(:,5), TFt(:,5),'.');
+    xlabel('TFl'); ylabel('TFt'); title('Front, Time lead vs trail strip5');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,6); plot(TBl_OG(:,1), TBt_OG(:,1),'.'); hold on; plot(TBl(:,1), TBt(:,1),'.');
+    xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip1');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,7); plot(TBl_OG(:,2), TBt_OG(:,2),'.'); hold on; plot(TBl(:,2), TBt(:,2),'.');
+    xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip2');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,8); plot(TBl_OG(:,3), TBt_OG(:,3),'.'); hold on; plot(TBl(:,3), TBt(:,3),'.');
+    xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip3');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,9); plot(TBl_OG(:,4), TBt_OG(:,4),'.'); hold on; plot(TBl(:,4), TBt(:,4),'.');
+    xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip4');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    subplot(2,5,10); plot(TBl_OG(:,5), TBt_OG(:,5),'.'); hold on; plot(TBl(:,5), TBt(:,5),'.');
+    xlabel('TBl'); ylabel('TBt'); title('Back, Time lead vs trail strip5');
+    xlim(xlimits_1); ylim(ylimits_1);
+    sgtitle(sprintf('Thick strip time lead vs trail (data from %s)', formatted_datetime_tex));
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+end
 
+if should_plot
 
 figure;
 xlimits_1 = [t_lead_left t_lead_right];
@@ -1471,6 +1513,8 @@ end
 
 sgtitle(sprintf('All 2D scatter combinations (zeros removed) — run %s', run));
 
+end
+
 
 
 % -----------------------------------------------------------------------------
@@ -1481,6 +1525,8 @@ sgtitle(sprintf('All 2D scatter combinations (zeros removed) — run %s', run));
 % and 3 the top charges are much lower, as expected. Calculating how much could give an idea
 % of the relative gain of the top and bottom sides of the RPC and hence an idea on the
 % real HV difference between both sides.
+
+if should_plot
 
 figure;
 subplot(4,6,1); plot(Qt(:,1), Qb(:,1),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip I');
@@ -1629,6 +1675,8 @@ end
 
 sgtitle(sprintf('PMT charge (data from %s)', formatted_datetime_tex));
 
+end
+
 
 %%
 
@@ -1636,7 +1684,7 @@ sgtitle(sprintf('PMT charge (data from %s)', formatted_datetime_tex));
 % Position from narrow strips (24 strips, no timing, only charge)
 % -------------------------------------------------------------------------
 
-if position_from_narrow_strips
+if position_from_narrow_strips && should_plot
 
     % Use no-crosstalk quantities for position calculation
     charge_thin_top_for_position = Qt_no_crosstalk;
@@ -2090,23 +2138,25 @@ Q_thick_plot = Q_thick(isfinite(Q_thick) & Q_thick > 0);
 Q_thin_top_plot = Q_thin_top(isfinite(Q_thin_top) & Q_thin_top > 0);
 Q_thin_bot_plot = Q_thin_bot(isfinite(Q_thin_bot) & Q_thin_bot > 0);
 
-% the streamer % in the histogram title with no decimals
-figure;
-subplot(2,3,1); histogram(Q_thick_plot, 0:1:200); set(gca, 'YScale', 'log'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thick RPC Q, streamer <%d%%> (run %s)', round(percentage_streamer_thick), run));
-hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
-subplot(2,3,2); histogram(Q_thin_top_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC TOP Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_top), run));
-hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
-subplot(2,3,3); histogram(Q_thin_bot_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC BOTTOM Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_bot), run));
-hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
+if should_plot
+    % the streamer % in the histogram title with no decimals
+    figure;
+    subplot(2,3,1); histogram(Q_thick_plot, 0:1:200); set(gca, 'YScale', 'log'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thick RPC Q, streamer <%d%%> (run %s)', round(percentage_streamer_thick), run));
+    hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
+    subplot(2,3,2); histogram(Q_thin_top_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC TOP Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_top), run));
+    hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
+    subplot(2,3,3); histogram(Q_thin_bot_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC BOTTOM Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_bot), run));
+    hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
 
-subplot(2,3,4); histogram(Q_thick_plot, 0:2:200, 'Normalization', 'cdf'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thick RPC Q CDF');
-hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
-subplot(2,3,5); histogram(Q_thin_top_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC TOP Q CDF');
-hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
-subplot(2,3,6); histogram(Q_thin_bot_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC BOTTOM Q CDF');
-hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
+    subplot(2,3,4); histogram(Q_thick_plot, 0:2:200, 'Normalization', 'cdf'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thick RPC Q CDF');
+    hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
+    subplot(2,3,5); histogram(Q_thin_top_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC TOP Q CDF');
+    hold on; xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
+    subplot(2,3,6); histogram(Q_thin_bot_plot, 0:500:10E4, 'Normalization', 'cdf'); xlabel('Q_{thin\_bot\_event} [ADC bins]'); ylabel('Cumulative Distribution'); title('Thin RPC BOTTOM Q CDF');
+    hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
 
-sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)', formatted_datetime_tex));
+    sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)', formatted_datetime_tex));
+end
 
 
 %%
@@ -2213,126 +2263,180 @@ end
 
 
 % --- Plot ---
-figure('Name','Efficiency vs Thresholds');
-tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
+if should_plot
+    figure('Name','Efficiency vs Thresholds');
+    tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
 
-% THIN TOP
-nexttile;
-plot(thin_top_thr_vec, eff_thin_top, 'LineWidth',1.5); hold on;
-xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
-xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
-xline(thin_top_median, 'g--', 'Median Threshold'); % median line
-xlim([0 thin_top_thr_vec(end)]); % zoom in to the first 70% of the distribution
-ylim([0 100]);
-xlabel('Thin TOP threshold [ADC bins]');
-ylabel('Efficiency [%]');
-title('Thin TOP');
-legend(variantLabelsDisplay, 'Location','southwest');
-grid on; box on;
+    % THIN TOP
+    nexttile;
+    plot(thin_top_thr_vec, eff_thin_top, 'LineWidth',1.5); hold on;
+    xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+    xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+    xline(thin_top_median, 'g--', 'Median Threshold'); % median line
+    xlim([0 thin_top_thr_vec(end)]); % zoom in to the first 70% of the distribution
+    ylim([0 100]);
+    xlabel('Thin TOP threshold [ADC bins]');
+    ylabel('Efficiency [%]');
+    title('Thin TOP');
+    legend(variantLabelsDisplay, 'Location','southwest');
+    grid on; box on;
 
-% THICK
-nexttile;
-plot(thick_thr_vec, eff_thick, 'LineWidth',1.5); hold on;
-xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
-xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
-xline(thick_median, 'g--', 'Median Threshold'); % median line
-xlim([0 thick_thr_vec(end)]); % zoom in to the first 70% of the distribution
-ylim([0 100]);
-xlabel('Thick threshold [ADC bins]');
-ylabel('Efficiency [%]');
-title('Thick');
-legend(variantLabelsDisplay, 'Location','southwest');
-grid on; box on;
+    % THICK
+    nexttile;
+    plot(thick_thr_vec, eff_thick, 'LineWidth',1.5); hold on;
+    xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+    xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+    xline(thick_median, 'g--', 'Median Threshold'); % median line
+    xlim([0 thick_thr_vec(end)]); % zoom in to the first 70% of the distribution
+    ylim([0 100]);
+    xlabel('Thick threshold [ADC bins]');
+    ylabel('Efficiency [%]');
+    title('Thick');
+    legend(variantLabelsDisplay, 'Location','southwest');
+    grid on; box on;
 
-% THIN BOT
-nexttile;
-plot(thin_bot_thr_vec, eff_thin_bot, 'LineWidth',1.5); hold on;
-xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
-xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
-xline(thin_bot_median, 'g--', 'Median Threshold'); % median line
-xlim([0 thin_bot_thr_vec(end)]); % zoom in to the first 70% of the distribution
-ylim([0 100]);
-xlabel('Thin BOT threshold [ADC bins]');
-ylabel('Efficiency [%]');
-title('Thin BOT');
-legend(variantLabelsDisplay, 'Location','southwest');
-grid on; box on;
+    % THIN BOT
+    nexttile;
+    plot(thin_bot_thr_vec, eff_thin_bot, 'LineWidth',1.5); hold on;
+    xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+    xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+    xline(thin_bot_median, 'g--', 'Median Threshold'); % median line
+    xlim([0 thin_bot_thr_vec(end)]); % zoom in to the first 70% of the distribution
+    ylim([0 100]);
+    xlabel('Thin BOT threshold [ADC bins]');
+    ylabel('Efficiency [%]');
+    title('Thin BOT');
+    legend(variantLabelsDisplay, 'Location','southwest');
+    grid on; box on;
 
 
-% THIN TOP
-nexttile;
-hold on;
-colors = lines(nVar); % per-variant colors
-for v = 1:nVar
-    Q_thin_top_v = variantSpecs(v).Q_thin_top;
-    Q_thin_top_v_non_zero = Q_thin_top_v(Q_thin_top_v > 0);
-    if isempty(Q_thin_top_v_non_zero), continue; end
-    histogram(Q_thin_top_v_non_zero, 'BinEdges', thin_top_thr_vec, ...
-        'Normalization', 'count', 'DisplayStyle', 'stairs', ...
-        'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabelsDisplay{v});
+    % THIN TOP
+    nexttile;
+    hold on;
+    colors = lines(nVar); % per-variant colors
+    for v = 1:nVar
+        Q_thin_top_v = variantSpecs(v).Q_thin_top;
+        Q_thin_top_v_non_zero = Q_thin_top_v(Q_thin_top_v > 0);
+        if isempty(Q_thin_top_v_non_zero), continue; end
+        histogram(Q_thin_top_v_non_zero, 'BinEdges', thin_top_thr_vec, ...
+            'Normalization', 'count', 'DisplayStyle', 'stairs', ...
+            'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabelsDisplay{v});
+    end
+    h1 = xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
+    set(get(get(h1,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h2 = xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
+    set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h3 = xline(thin_top_median, 'g--', 'Median Threshold');
+    set(get(get(h3,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    xlim([0 thin_top_thr_vec(end)]);
+    xlabel('Q thin top [ADC bins]');
+    ylabel('Counts');
+    title('Thin TOP');
+    legend('show', 'Location','best');
+    grid on; box on;
+
+    % THICK
+    nexttile;
+    hold on;
+    for v = 1:nVar
+        Q_thick_v = variantSpecs(v).Q_thick;
+        Q_thick_v_non_zero = Q_thick_v(Q_thick_v > 0);
+        if isempty(Q_thick_v_non_zero), continue; end
+        histogram(Q_thick_v_non_zero, 'BinEdges', thick_thr_vec, ...
+            'Normalization', 'count', 'DisplayStyle', 'stairs', ...
+            'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabelsDisplay{v}); % outline only
+    end
+    legend('show', 'Location','best');
+    xlabel('Q thick [ADC bins]');
+    ylabel('Counts');
+    title('Thick');
+    h1 = xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold');
+    set(get(get(h1,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h2 = xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
+    set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h3 = xline(thick_median, 'g--', 'Median Threshold');
+    set(get(get(h3,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    xlim([0 thick_thr_vec(end)]);
+    grid on; box on;
+
+    % THIN BOT
+    nexttile;
+    hold on;
+    for v = 1:nVar
+        Q_thin_bot_v = variantSpecs(v).Q_thin_bot;
+        Q_thin_bot_v_non_zero = Q_thin_bot_v(Q_thin_bot_v > 0);
+        if isempty(Q_thin_bot_v_non_zero), continue; end
+        histogram(Q_thin_bot_v_non_zero, 'BinEdges', thin_bot_thr_vec, ...
+            'Normalization', 'count', 'DisplayStyle', 'stairs', ...
+            'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabelsDisplay{v});
+    end
+    legend('show', 'Location','best');
+    xlabel('Q thin bot [ADC bins]');
+    ylabel('Counts');
+    h1 = xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
+    set(get(get(h1,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h2 = xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
+    set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h3 = xline(thin_bot_median, 'g--', 'Median Threshold');
+    set(get(get(h3,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    xlim([0 thin_bot_thr_vec(end)]);
+    title('Thin BOT');
+    grid on; box on;
+
+    sgtitle('Efficiency vs Threshold for Different Event Classes');
 end
-h1 = xline(top_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
-set(get(get(h1,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-h2 = xline(Q_thin_top_streamer_threshold, 'r--', 'Streamer Threshold');
-set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-h3 = xline(thin_top_median, 'g--', 'Median Threshold');
-set(get(get(h3,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-xlim([0 thin_top_thr_vec(end)]);
-xlabel('Q thin top [ADC bins]');
-ylabel('Counts');
-title('Thin TOP');
-legend('show', 'Location','best');
-grid on; box on;
 
-% THICK
-nexttile;
-hold on;
-for v = 1:nVar
-    Q_thick_v = variantSpecs(v).Q_thick;
-    Q_thick_v_non_zero = Q_thick_v(Q_thick_v > 0);
-    if isempty(Q_thick_v_non_zero), continue; end
-    histogram(Q_thick_v_non_zero, 'BinEdges', thick_thr_vec, ...
-        'Normalization', 'count', 'DisplayStyle', 'stairs', ...
-        'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabelsDisplay{v}); % outline only
+
+%%
+
+
+% --- Plot ---
+if should_plot
+    figure('Name','Efficiency vs Thresholds');
+    tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+
+    % THICK
+    nexttile;
+    plot(thick_thr_vec, eff_thick, 'LineWidth',1.5); hold on;
+    xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold'); % Crosstalk xline
+    xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold'); % Streamer line
+    xline(thick_median, 'g--', 'Median Threshold'); % median line
+    xlim([0 thick_thr_vec(end)]); % zoom in to the first 70% of the distribution
+    ylim([0 100]);
+    xlabel('Thick threshold [ADC bins]');
+    ylabel('Efficiency [%]');
+    title('Thick');
+    legend(variantLabelsDisplay, 'Location','southwest');
+    grid on; box on;
+
+
+    % THICK
+    nexttile;
+    hold on;
+    for v = 1:nVar
+        Q_thick_v = variantSpecs(v).Q_thick;
+        Q_thick_v_non_zero = Q_thick_v(Q_thick_v > 0);
+        if isempty(Q_thick_v_non_zero), continue; end
+        histogram(Q_thick_v_non_zero, 'BinEdges', thick_thr_vec, ...
+            'Normalization', 'count', 'DisplayStyle', 'stairs', ...
+            'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabelsDisplay{v}); % outline only
+    end
+    legend('show', 'Location','best');
+    xlabel('Q thick [ADC bins]');
+    ylabel('Counts');
+    title('Thick');
+    h1 = xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold');
+    set(get(get(h1,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h2 = xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
+    set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    h3 = xline(thick_median, 'g--', 'Median Threshold');
+    set(get(get(h3,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+    xlim([0 thick_thr_vec(end)]);
+    grid on; box on;
+
+
+    sgtitle('Efficiency vs Threshold for Different Event Classes');
 end
-legend('show', 'Location','best');
-xlabel('Q thick [ADC bins]');
-ylabel('Counts');
-title('Thick');
-h1 = xline(thick_strip_crosstalk, 'w--', 'Crosstalk Threshold');
-set(get(get(h1,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-h2 = xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
-set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-h3 = xline(thick_median, 'g--', 'Median Threshold');
-set(get(get(h3,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-xlim([0 thick_thr_vec(end)]);
-grid on; box on;
-
-% THIN BOT
-nexttile;
-hold on;
-for v = 1:nVar
-    Q_thin_bot_v = variantSpecs(v).Q_thin_bot;
-    Q_thin_bot_v_non_zero = Q_thin_bot_v(Q_thin_bot_v > 0);
-    if isempty(Q_thin_bot_v_non_zero), continue; end
-    histogram(Q_thin_bot_v_non_zero, 'BinEdges', thin_bot_thr_vec, ...
-        'Normalization', 'count', 'DisplayStyle', 'stairs', ...
-        'EdgeColor', colors(v,:), 'LineWidth', 1.2, 'DisplayName', variantLabelsDisplay{v});
-end
-legend('show', 'Location','best');
-xlabel('Q thin bot [ADC bins]');
-ylabel('Counts');
-h1 = xline(bot_narrow_strip_crosstalk, 'w--', 'Crosstalk Threshold');
-set(get(get(h1,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-h2 = xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold');
-set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-h3 = xline(thin_bot_median, 'g--', 'Median Threshold');
-set(get(get(h3,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-xlim([0 thin_bot_thr_vec(end)]);
-title('Thin BOT');
-grid on; box on;
-
-sgtitle('Efficiency vs Threshold for Different Event Classes');
 
 
 %%
@@ -2579,12 +2683,17 @@ fclose(fid);
 
 writetable(detTable, outCsv, 'WriteMode','append');
 
+if ~should_plot
+    fprintf('No-plot flag enabled; CSV saved to %s. Exiting before plot generation.\n', outCsv);
+    return;
+end
+
 
 % Print for verification
 fprintf('Save plots directory: %s\n', save_plots_dir);
 fprintf('PDF file name: %s\n', pdfFileName);
 
-if save_plots
+if should_plot && save_plots
     try
         if ~exist(save_plots_dir, 'dir'), mkdir(save_plots_dir); end
         [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName);
@@ -2594,7 +2703,7 @@ if save_plots
             fprintf('No figures generated to save.\n');
         end
     catch saveErr
-        warning('Failed to save figures: %s', saveErr.message);
+        warning('Failed to save figures.');
     end
 end
 
@@ -2800,6 +2909,70 @@ function cleanup_temp_directory(tempDir)
             rmdir(tempDir, 's');
         catch cleanupErr
             warning('Failed to remove temporary directory %s: %s', tempDir, cleanupErr.message);
+        end
+    end
+end
+
+
+function args = collect_cli_args()
+    args = {};
+
+    % Gather from base workspace variables if present
+    candidateVars = {'caye_cli_args', 'cli_args', 'argv', 'args', 'commandLineArgs'};
+    for i = 1:numel(candidateVars)
+        name = candidateVars{i};
+        try
+            existsFlag = evalin('base', sprintf('exist(''%s'',''var'')', name));
+        catch
+            existsFlag = 0;
+        end
+        if existsFlag
+            rawValue = evalin('base', name);
+            args = [args, normalize_cli_arg_value(rawValue)]; %#ok<AGROW>
+        end
+    end
+
+    % Environment variables
+    envVars = {'CAYE_EDITS_ARGS', 'MATLAB_ARGS'};
+    for i = 1:numel(envVars)
+        envStr = getenv(envVars{i});
+        if ~isempty(envStr)
+            envTokens = strsplit(strtrim(envStr));
+            args = [args, envTokens(~cellfun(@isempty, envTokens))]; %#ok<AGROW>
+        end
+    end
+
+    % Remove empties and duplicates, preserve order
+    args = args(~cellfun(@isempty, args));
+    if ~isempty(args)
+        [~, uniqueIdx] = unique(args, 'stable');
+        args = args(sort(uniqueIdx));
+    end
+end
+
+
+function out = normalize_cli_arg_value(value)
+    if iscell(value)
+        out = normalize_cellstr(value);
+    elseif isstring(value)
+        out = cellstr(value(:));
+    elseif ischar(value)
+        out = {value};
+    else
+        out = {};
+    end
+    out = out(~cellfun(@isempty, out));
+end
+
+
+function out = normalize_cellstr(value)
+    out = {};
+    for k = 1:numel(value)
+        v = value{k};
+        if isstring(v)
+            out = [out, cellstr(v(:))]; %#ok<AGROW>
+        elseif ischar(v)
+            out{end+1} = v; %#ok<AGROW>
         end
     end
 end
