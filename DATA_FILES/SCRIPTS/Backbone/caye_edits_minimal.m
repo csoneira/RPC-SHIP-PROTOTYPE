@@ -866,6 +866,17 @@ validEvents_signal = (Qcint_OG(:,1) ~= 0) & (Qcint_OG(:,2) ~= 0) & (Qcint_OG(:,3
 Qcint_signal = zeros(size(Qcint_OG), 'like', Qcint_OG);
 Qcint_signal(validEvents_signal, :) = Qcint_OG(validEvents_signal, :);
 
+T_cint_1_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_2_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_3_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_4_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_1_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 1);
+T_cint_2_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 2);
+T_cint_3_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 3);
+T_cint_4_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 4);
+T_cint_top_signal = (T_cint_3_signal + T_cint_4_signal) / 2;
+T_cint_bot_signal = (T_cint_1_signal + T_cint_2_signal) / 2;
+
 % --- THICK (event-level) --- N x 1
 X_thick_strip_signal = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
 Y_thick_strip_signal = zeros(size(Y_thick_strip_OG), 'like', Y_thick_strip_OG);
@@ -902,6 +913,17 @@ validEvents_coin = (Qcint(:,1) ~= 0) & (Qcint(:,2) ~= 0) & (Qcint(:,3) ~= 0) & (
 Qcint_coin = zeros(size(Qcint_OG), 'like', Qcint_OG);
 Qcint_coin(validEvents_coin, :) = Qcint_OG(validEvents_coin, :);
 
+T_cint_1_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_2_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_3_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_4_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
+T_cint_1_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 1);
+T_cint_2_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 2);
+T_cint_3_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 3);
+T_cint_4_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 4);
+T_cint_top_coin = (T_cint_3_coin + T_cint_4_coin) / 2;
+T_cint_bot_coin = (T_cint_1_coin + T_cint_2_coin) / 2;
+
 % --- THICK (event-level) --- N x 1
 X_thick_strip_coin = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
 Y_thick_strip_coin = zeros(size(Y_thick_strip_OG), 'like', Y_thick_strip_OG);
@@ -929,40 +951,51 @@ Q_thin_bot_event_coin = sum(Qb_coin, 2);
 % ---------------------------------------------------------------------
 
 % Create masks---------------------------------------------------------
-% Same as before, validEvents_coin = (Qcint(:,1) ~= 0) & (Qcint(:,2) ~= 0) & (Qcint(:,3) ~= 0) & (Qcint(:,4) ~= 0);
+validEvents_good = validEvents_coin; % Same as before
 
 
 % Apply masks ---------------------------------------------------------
 
 % --- PMTs --- N x 4
 Qcint_good = zeros(size(Qcint), 'like', Qcint);
-Qcint_good(validEvents_coin, :) = Qcint(validEvents_coin, :);
+Qcint_good(validEvents_good, :) = Qcint(validEvents_good, :);
+
+T_cint_1_good = zeros(size(Tl_cint(:,1)), 'like', Tl_cint(:,1));
+T_cint_2_good = zeros(size(Tl_cint(:,2)), 'like', Tl_cint(:,2));
+T_cint_3_good = zeros(size(Tl_cint(:,3)), 'like', Tl_cint(:,3));
+T_cint_4_good = zeros(size(Tl_cint(:,4)), 'like', Tl_cint(:,4));
+T_cint_1_good(validEvents_good) = Tl_cint(validEvents_good, 1);
+T_cint_2_good(validEvents_good) = Tl_cint(validEvents_good, 2);
+T_cint_3_good(validEvents_good) = Tl_cint(validEvents_good, 3);
+T_cint_4_good(validEvents_good) = Tl_cint(validEvents_good, 4);
+T_cint_top_good = (T_cint_3_good + T_cint_4_good) / 2;
+T_cint_bot_good = (T_cint_1_good + T_cint_2_good) / 2;
 
 % --- THICK ---
 X_thick_strip_good = zeros(size(X_thick_strip), 'like', X_thick_strip);
 Y_thick_strip_good = zeros(size(Y_thick_strip), 'like', Y_thick_strip);
 T_thick_strip_good = zeros(size(T_thick_strip), 'like', T_thick_strip);
 Q_thick_strip_good = zeros(size(Q_thick_event), 'like', Q_thick_event);
-X_thick_strip_good(validEvents_coin, :) = X_thick_strip(validEvents_coin, :);
-Y_thick_strip_good(validEvents_coin, :) = Y_thick_strip(validEvents_coin, :);
-T_thick_strip_good(validEvents_coin, :) = T_thick_strip(validEvents_coin, :);
-Q_thick_strip_good(validEvents_coin) = Q_thick_event(validEvents_coin);
+X_thick_strip_good(validEvents_good, :) = X_thick_strip(validEvents_good, :);
+Y_thick_strip_good(validEvents_good, :) = Y_thick_strip(validEvents_good, :);
+T_thick_strip_good(validEvents_good, :) = T_thick_strip(validEvents_good, :);
+Q_thick_strip_good(validEvents_good) = Q_thick_event(validEvents_good);
 
 % Extra, only for calibration checking
 QF_good = zeros(size(QF), 'like', QF);
 QB_good = zeros(size(QB), 'like', QB);
 QF_p_good = zeros(size(QF_p), 'like', QF_p);
 QB_p_good = zeros(size(QB_p), 'like', QB_p);
-QF_good(validEvents_coin, :) = QF(validEvents_coin, :);
-QB_good(validEvents_coin, :) = QB(validEvents_coin, :);
-QF_p_good(validEvents_coin, :) = QF_p(validEvents_coin, :);
-QB_p_good(validEvents_coin, :) = QB_p(validEvents_coin, :);
+QF_good(validEvents_good, :) = QF(validEvents_good, :);
+QB_good(validEvents_good, :) = QB(validEvents_good, :);
+QF_p_good(validEvents_good, :) = QF_p(validEvents_good, :);
+QB_p_good(validEvents_good, :) = QB_p(validEvents_good, :);
 
 % --- THIN STRIPS ---
 Qb_good = zeros(size(Qb), 'like', Qb);
 Qt_good = zeros(size(Qt), 'like', Qt);
-Qb_good(validEvents_coin, :) = Qb(validEvents_coin, :);
-Qt_good(validEvents_coin, :) = Qt(validEvents_coin, :);
+Qb_good(validEvents_good, :) = Qb(validEvents_good, :);
+Qt_good(validEvents_good, :) = Qt(validEvents_good, :);
 
 % Totals per event --- N x 1
 Q_thin_top_event_good = sum(Qt_good, 2);
@@ -990,7 +1023,7 @@ pmt_3_charge_threshold_max = prctile(Q_pmt_3(Q_pmt_3>0), 100 - percentile_pmt); 
 pmt_4_charge_threshold_min = prctile(Q_pmt_4(Q_pmt_4>0), percentile_pmt); % ADCbins
 pmt_4_charge_threshold_max = prctile(Q_pmt_4(Q_pmt_4>0), 100 - percentile_pmt); % ADCbins
 
-validEventsFiltered_range = ...
+validEvents_range = ...
     (Qcint(:,1) >= pmt_1_charge_threshold_min) & (Qcint(:,1) <= pmt_1_charge_threshold_max) & ...
     (Qcint(:,2) >= pmt_2_charge_threshold_min) & (Qcint(:,2) <= pmt_2_charge_threshold_max) & ...
     (Qcint(:,3) >= pmt_3_charge_threshold_min) & (Qcint(:,3) <= pmt_3_charge_threshold_max) & ...
@@ -1000,24 +1033,35 @@ validEventsFiltered_range = ...
 
 % --- PMTs --- N x 4
 Qcint_range = zeros(size(Qcint_good), 'like', Qcint_good);
-Qcint_range(validEventsFiltered_range, :) = Qcint_good(validEventsFiltered_range, :);
+Qcint_range(validEvents_range, :) = Qcint_good(validEvents_range, :);
+
+T_cint_1_range = zeros(size(Tl_cint), 'like', Tl_cint);
+T_cint_2_range = zeros(size(Tl_cint), 'like', Tl_cint);
+T_cint_3_range = zeros(size(Tl_cint), 'like', Tl_cint);
+T_cint_4_range = zeros(size(Tl_cint), 'like', Tl_cint);
+T_cint_1_range(validEvents_range) = Tl_cint(validEvents_range, 1);
+T_cint_2_range(validEvents_range) = Tl_cint(validEvents_range, 2);
+T_cint_3_range(validEvents_range) = Tl_cint(validEvents_range, 3);
+T_cint_4_range(validEvents_range) = Tl_cint(validEvents_range, 4);
+T_cint_top_range = (T_cint_3_range + T_cint_4_range) / 2;
+T_cint_bot_range = (T_cint_1_range + T_cint_2_range) / 2;
 
 % --- THICK STRIPS --- N x 1
 X_thick_strip_range = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
 Y_thick_strip_range = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
 T_thick_strip_range = zeros(size(T_thick_strip_good), 'like', T_thick_strip_good);
 Q_thick_strip_range = zeros(size(Q_thick_strip_good), 'like', Q_thick_strip_good);
-X_thick_strip_range(validEventsFiltered_range, :) = X_thick_strip_good(validEventsFiltered_range, :);
-Y_thick_strip_range(validEventsFiltered_range, :) = Y_thick_strip_good(validEventsFiltered_range, :);
-T_thick_strip_range(validEventsFiltered_range, :) = T_thick_strip_good(validEventsFiltered_range, :);
+X_thick_strip_range(validEvents_range, :) = X_thick_strip_good(validEvents_range, :);
+Y_thick_strip_range(validEvents_range, :) = Y_thick_strip_good(validEvents_range, :);
+T_thick_strip_range(validEvents_range, :) = T_thick_strip_good(validEvents_range, :);
 
-Q_thick_strip_range(validEventsFiltered_range) = Q_thick_strip_good(validEventsFiltered_range);
+Q_thick_strip_range(validEvents_range) = Q_thick_strip_good(validEvents_range);
 
 % --- THIN STRIPS --- N x 24
 Qb_range = zeros(size(Qb_good), 'like', Qb_good);
 Qt_range = zeros(size(Qt_good), 'like', Qt_good);
-Qb_range(validEventsFiltered_range, :) = Qb_good(validEventsFiltered_range, :);
-Qt_range(validEventsFiltered_range, :) = Qt_good(validEventsFiltered_range, :);
+Qb_range(validEvents_range, :) = Qb_good(validEvents_range, :);
+Qt_range(validEvents_range, :) = Qt_good(validEvents_range, :);
 
 % Totals per event --- N x 1
 Q_thin_top_event_range = sum(Qt_range, 2);
@@ -1157,6 +1201,469 @@ charge_limits_pmt     = [q005_pmt q95_pmt];
 
 
 %%
+
+
+
+% ---------------------------------------------------------------------
+% Timing studies ------------------------------------------------------
+% ---------------------------------------------------------------------
+
+% Histogram the PMT top and bottom time differences for good events
+time_diff = T_cint_bot_good - T_cint_top_good;
+time_diff_hist = nonzeros(time_diff);
+time_diff_hist(time_diff_hist == 0) = []; % remove zeros for histogram
+time_diff_edges = linspace(quantile(time_diff_hist, 0.001), quantile(time_diff_hist, 0.999), bin_number);
+
+% make a figure
+figure;
+histogram(time_diff_hist, time_diff_edges);
+% Fit a Gaussian to the histogram
+[counts, centers] = histcounts(time_diff_hist, time_diff_edges);
+centers = (time_diff_edges(1:end-1) + time_diff_edges(2:end)) / 2; % bin centers
+% Initial guess for Gaussian parameters: [amplitude, mean, stddev]
+[~, max_idx] = max(counts);
+initial_guess = [counts(max_idx), centers(max_idx), 1]; % amplitude, mean, stddev
+gauss_eq = @(p, x) p(1) * exp(-((x - p(2)).^2) / (2 * p(3)^2));
+% Define the error function for fitting
+error_func = @(p) sum((counts - gauss_eq(p, centers)).^2);
+% Perform the fit using fminsearch
+options = optimset('Display', 'off');
+fitted_params = fminsearch(error_func, initial_guess, options);
+% Extract fitted parameters
+amplitude_fit = fitted_params(1);
+mean_fit = fitted_params(2);
+stddev_fit = fitted_params(3);
+% Plot the fitted Gaussian
+x_fit = linspace(min(centers), max(centers), 1000);
+y_fit = gauss_eq(fitted_params, x_fit);
+hold on;
+plot(x_fit, y_fit, 'r-', 'LineWidth', 2);
+legend('Data', sprintf('Gaussian Fit: \\mu=%.2f ns, \\sigma=%.2f ns', mean_fit, stddev_fit));
+xlabel('Time Difference (Bottom - Top) [ns]');
+ylabel('Counts');
+title(sprintf('PMT Time Difference Histogram for Good Events (data from %s)', formatted_datetime_tex));
+
+% Individual scintillator time resolution
+sigma_scint = stddev_fit / sqrt(2);
+fprintf('Estimated individual scintillator time resolution: %.2f ns\n', sigma_scint);
+
+
+
+%%
+
+
+
+% Time of reference of the particle
+
+time_diff_RPC_SC1 = T_thick_strip_good - T_cint_top_good;
+time_diff_RPC_SC1 = time_diff_RPC_SC1( (abs(time_diff_RPC_SC1) < 50) & (abs(time_diff_RPC_SC1) > 10) );
+
+time_diff_RPC_SC2 = T_thick_strip_good - T_cint_bot_good;
+time_diff_RPC_SC2 = time_diff_RPC_SC2( (abs(time_diff_RPC_SC2) < 50) & (abs(time_diff_RPC_SC2) > 10) );
+
+time_diff_SC1_SC2 = T_cint_bot_good - T_cint_top_good;
+time_diff_SC1_SC2 = time_diff_SC1_SC2( (abs(time_diff_SC1_SC2) < 50) & (abs(time_diff_SC1_SC2) > 0) );
+
+
+%%
+
+% % compute time difference and filter zeros / non-finite values
+% time_diff_SC1_SC2 = T_cint_bot_good - T_cint_top_good;
+% mask_td = isfinite(time_diff_SC1_SC2) & (time_diff_SC1_SC2 ~= 0);
+
+% % x-values: total PMT charge (row-wise) and individual PMT charges
+% x_sum = sum(Qcint, 2);       % N x 1
+% q1 = Qcint(:,1); q2 = Qcint(:,2); q3 = Qcint(:,3); q4 = Qcint(:,4);
+
+% % apply mask
+% x_sum_m = x_sum(mask_td);
+% q1_m    = q1(mask_td);
+% q2_m    = q2(mask_td);
+% q3_m    = q3(mask_td);
+% q4_m    = q4(mask_td);
+% td_m    = time_diff_SC1_SC2(mask_td);
+
+% % Scatter the filtered data
+% figure;
+% hold on;
+% scatter(x_sum_m, td_m, 20, [1 1 1], '.');           % sum of PMT charges (white)
+% scatter(q1_m, td_m, 20, [0.2 0.2 0.8], '.');        % PMT1
+% scatter(q2_m, td_m, 20, [0.2 0.8 0.2], '.');        % PMT2
+% scatter(q3_m, td_m, 20, [0.8 0.2 0.2], '.');        % PMT3
+% scatter(q4_m, td_m, 20, [0.8 0.6 0.0], '.');        % PMT4
+% hold off;
+
+% % Print legend
+% legend({'Sum of PMT Charges', 'PMT1', 'PMT2', 'PMT3', 'PMT4'}, 'Location','best');
+
+% xlabel('Sum of PMT Charges Qcint1 + Qcint2 + Qcint3 + Qcint4 [ADCbins]');
+% ylabel('Time Difference SC2 - SC1 [ns]');
+% title(sprintf('Time Difference vs RPC Charge (data from %s)', formatted_datetime_tex));
+% grid on; box on;
+
+
+%%
+
+
+
+% Check correlation of the time difference in the same scint with the sum of times.
+% Should be no correlation ideally
+
+figure;
+tiledlayout(1,2, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+nexttile;
+hold on;
+scatter(sum_top_m, diff_top_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT3 + PMT4
+hold off;
+% Print legend
+legend({'PMT3 + PMT4'}, 'Location','best');
+xlabel('Sum of Times PMT3 - PMT4 [ns]');
+ylabel('Time Difference PMT3 - PMT4 [ns]');
+title(sprintf('Time Difference vs Sum of Times, Top scint (data from %s)', formatted_datetime_tex));
+grid on; box on;
+
+nexttile;
+hold on;
+scatter(sum_bot_m, diff_bot_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT1 + PMT2
+hold off;
+% Print legend
+legend({'PMT1 + PMT2'}, 'Location','best');
+xlabel('Sum of Times PMT1 - PMT2 [ns]');
+ylabel('Time Difference PMT1 - PMT2 [ns]');
+title(sprintf('Time Difference vs Sum of Times, Bottom scint (data from %s)', formatted_datetime_tex));
+grid on; box on;
+
+
+%%
+
+% Slewing correction on the PMTs
+diff_top = T_cint_3_good - T_cint_4_good;
+sum_top = T_cint_3_good + T_cint_4_good;
+
+diff_bot = T_cint_1_good - T_cint_2_good;
+sum_bot = T_cint_1_good + T_cint_2_good;
+
+mask_diff_top = isfinite(diff_top) & (diff_top ~= 0) & (abs(diff_top) < 20);
+mask_diff_bot = isfinite(diff_bot) & (diff_bot ~= 0) & (abs(diff_bot) < 20);
+
+q1 = Qcint_good(:,1);
+q2 = Qcint_good(:,2);
+q3 = Qcint_good(:,3);
+q4 = Qcint_good(:,4); 
+
+% apply mask
+q1_m = q1(mask_diff_bot);
+q2_m = q2(mask_diff_bot);
+q3_m = q3(mask_diff_top);
+q4_m = q4(mask_diff_top);
+diff_top_m = diff_top(mask_diff_top);
+sum_top_m = sum_top(mask_diff_top);
+diff_bot_m = diff_bot(mask_diff_bot);
+sum_bot_m = sum_bot(mask_diff_bot);
+
+% Scatter the filtered data
+figure;
+tiledlayout(1,2, 'TileSpacing', 'compact', 'Padding', 'compact');
+nexttile;
+hold on;
+scatter(q3_m, diff_top_m, 20, [0.2 0.2 0.8], '.');        % PMT3
+scatter(q4_m, diff_top_m, 20, [0.8 0.6 0.0], '.');        % PMT4
+hold off;
+% Print legend
+legend({'PMT3', 'PMT4'}, 'Location','best');
+xlabel('PMT Charge [ADCbins]');
+ylabel('Time Difference PMT3 - PMT4 [ns]');
+title(sprintf('Time Difference vs PMT Charge (data from %s)', formatted_datetime_tex));
+grid on; box on;
+
+nexttile;
+% Scatter the filtered data
+figure;
+hold on;
+scatter(q1_m, diff_bot_m, 20, [0.2 0.2 0.8], '.');        % PMT1
+scatter(q2_m, diff_bot_m, 20, [0.8 0.6 0.0], '.');        % PMT2
+hold off;
+% Print legend
+legend({'PMT1', 'PMT2'}, 'Location','best');
+xlabel('PMT Charge [ADCbins]');
+ylabel('Time Difference PMT1 - PMT2 [ns]');
+title(sprintf('Time Difference vs PMT Charge (data from %s)', formatted_datetime_tex));
+grid on; box on;
+
+
+
+%%
+
+
+
+%%
+
+
+
+%%
+
+
+
+% Bottom PMTs
+diff_bot = T_cint_1_good - T_cint_2_good;
+
+mask_diff_bot = isfinite(diff_bot) & (diff_bot ~= 0) & (abs(diff_bot) < 20);
+
+q1 = Qcint_good(:,1);
+q2 = Qcint_good(:,2);
+
+% apply mask
+q1_m = q1(mask_diff_bot);
+q2_m = q2(mask_diff_bot);
+diff_bot_m = diff_bot(mask_diff_bot);
+
+% Scatter the filtered data
+figure;
+hold on;
+scatter(q1_m, diff_bot_m, 20, [0.2 0.2 0.8], '.');        % PMT1
+scatter(q2_m, diff_bot_m, 20, [0.8 0.6 0.0], '.');        % PMT2
+hold off;
+% Print legend
+legend({'PMT1', 'PMT2'}, 'Location','best');
+xlabel('PMT Charge [ADCbins]');
+ylabel('Time Difference PMT1 - PMT2 [ns]');
+title(sprintf('Time Difference vs PMT Charge (data from %s)', formatted_datetime_tex));
+grid on; box on;
+
+
+
+%%
+
+
+
+% filepath: /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m
+
+% Compute time differences and apply a common mask
+time_diff_SC1_SC2 = T_cint_bot_good - T_cint_top_good;
+time_diff_RPC_SC1 = T_thick_strip_good - T_cint_top_good;
+time_diff_RPC_SC2 = T_thick_strip_good - T_cint_bot_good;
+
+% Common mask: valid and non-zero time differences
+mask_td = isfinite(time_diff_SC1_SC2) & isfinite(time_diff_RPC_SC1) & ...
+          isfinite(time_diff_RPC_SC2) & ...
+          (time_diff_SC1_SC2 ~= 0) & (time_diff_RPC_SC1 ~= 0) & (time_diff_RPC_SC2 ~= 0) & ...
+          (abs(time_diff_SC1_SC2) < 50) & (abs(time_diff_RPC_SC1) < 50) & (abs(time_diff_RPC_SC2) < 50);
+
+% x-values: total PMT charge (row-wise) and individual PMT charges
+qbot = Qcint_good(:,1) + Qcint_good(:,2);
+qtop = Qcint_good(:,3) + Qcint_good(:,4);
+qrpc = Q_thick_strip_good;
+
+% Apply the common mask
+qbot_m = qbot(mask_td);
+qtop_m = qtop(mask_td);
+qrpc_m = qrpc(mask_td);
+td_SC1_SC2_m = time_diff_SC1_SC2(mask_td);
+td_RPC_SC1_m = time_diff_RPC_SC1(mask_td);
+td_RPC_SC2_m = time_diff_RPC_SC2(mask_td);
+
+% Plot the three scatter plots in a single row
+figure;
+tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+% (1) SC2 - SC1 vs PMT charges
+nexttile;
+hold on;
+scatter(qbot_m, td_SC1_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+scatter(qtop_m, td_SC1_SC2_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
+hold off;
+legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
+xlabel('Sum of Scintillator Charges [ADCbins]');
+ylabel('Time Difference SC2 - SC1 [ns]');
+title('SC2 - SC1 vs PMT Charges');
+grid on; box on;
+
+% (2) RPC - SC1 vs PMT Top and RPC
+nexttile;
+hold on;
+scatter(qtop_m, td_RPC_SC1_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
+scatter(qrpc_m, td_RPC_SC1_m, 20, [0.8 0.2 0.2], '.'); % RPC
+hold off;
+legend({'PMT_Top', 'RPC'}, 'Location', 'best');
+xlabel('Sum of Scintillator Charges [ADCbins]');
+ylabel('Time Difference RPC - SC1 [ns]');
+title('RPC - SC1 vs PMT Top and RPC');
+grid on; box on;
+
+% (3) RPC - SC2 vs PMT Bottom and RPC
+nexttile;
+hold on;
+scatter(qbot_m, td_RPC_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+scatter(qrpc_m, td_RPC_SC2_m, 20, [0.8 0.2 0.2], '.'); % RPC
+hold off;
+legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
+xlabel('Sum of Scintillator Charges [ADCbins]');
+ylabel('Time Difference RPC - SC2 [ns]');
+title('RPC - SC2 vs PMT Bottom and RPC');
+grid on; box on;
+
+sgtitle(sprintf('Time Differences vs Charges (data from %s)', formatted_datetime_tex));
+
+
+
+
+%%
+
+
+
+
+% scatter time_diff_RPC_SC1 time_diff_RPC_SC2 time_diff_SC1_SC2
+figure;
+scatter(time_diff_RPC_SC1, time_diff_RPC_SC2, '.'); hold on;
+scatter(time_diff_RPC_SC2, time_diff_SC1_SC2, '.');
+scatter(time_diff_SC1_SC2, time_diff_RPC_SC1, '.');
+hold off;
+legend({'RPC - SC1', 'RPC - SC2', 'SC2 - SC1'}, 'Location','best');
+xlabel('Event Index');
+ylabel('Time Difference [ns]');
+title(sprintf('Time Differences Scatter Plot (data from %s)', formatted_datetime_tex));
+grid on; box on;
+xlabel('Time Difference RPC - SC1 [ns]');
+ylabel('Time Difference RPC - SC2 [ns]');
+zlabel('Time Difference SC2 - SC1 [ns]');
+title(sprintf('3D Scatter of Time Differences (data from %s)', formatted_datetime_tex));
+grid on; box on;
+
+
+return;
+
+
+
+
+%%
+
+
+% Fit a single Gaussian to each of the three time-difference distributions
+td_sets = { time_diff_RPC_SC1, time_diff_RPC_SC2, time_diff_SC1_SC2 };
+td_labels = {'RPC - SC1', 'RPC - SC2', 'SC2 - SC1'};
+td_colors = {[1 0 0], [0 0.6 0], [1 0.5 0]};   % red/green/orange
+nbins = 80;  % histogram bins for fitting
+opts = optimset('Display','off','TolX',1e-6,'TolFun',1e-6,'MaxIter',2000,'MaxFunEvals',2000);
+
+fit_results = struct('amp',[],'mu',[],'sigma',[],'FWHM',[]);
+
+figure;
+hold on;
+for ii = 1:3
+    td = td_sets{ii};
+    % sanitize
+    td = td(isfinite(td) & ~isnan(td));
+    if isempty(td)
+        warning('Time-diff %s empty, skipping fit.', td_labels{ii});
+        fit_results(ii).amp = NaN;
+        fit_results(ii).mu = NaN;
+        fit_results(ii).sigma = NaN;
+        fit_results(ii).FWHM = NaN;
+        continue;
+    end
+
+    % histogram (probability normalization)
+    lo = prctile(td, 0.1);
+    hi = prctile(td, 99.9);
+    if lo == hi
+        lo = min(td); hi = max(td);
+        if lo == hi
+            lo = lo - 1; hi = hi + 1;
+        end
+    end
+    edges = linspace(lo, hi, nbins+1);
+    p = histcounts(td, edges, 'Normalization', 'probability');
+    centers = edges(1:end-1) + diff(edges)/2;
+
+    % initial guess: amplitude, mean, sigma
+    [~, imax] = max(p);
+    amp0 = p(imax);
+    mu0 = centers(imax);
+    sigma0 = max(std(td), (edges(2)-edges(1))*2);
+
+    gauss = @(par,x) par(1) * exp(-((x - par(2)).^2) ./ (2 * par(3).^2));
+
+    err = @(par) sum((p - gauss(par, centers)).^2);
+
+    par0 = [amp0, mu0, sigma0];
+    parFit = fminsearch(err, par0, opts);
+
+    amp_fit = parFit(1);
+    mu_fit = parFit(2);
+    sigma_fit = abs(parFit(3)); % ensure positive
+    FWHM = 2*sqrt(2*log(2)) * sigma_fit;
+
+    fit_results(ii).amp = amp_fit;
+    fit_results(ii).mu = mu_fit;
+    fit_results(ii).sigma = sigma_fit;
+    fit_results(ii).FWHM = FWHM;
+
+    % Plot histogram (stairs) and fitted Gaussian (smooth)
+    stairs(centers, p, 'Color', td_colors{ii}, 'LineWidth', 1.0);
+    xfit = linspace(min(centers), max(centers), 1000);
+    yfit = gauss([amp_fit, mu_fit, sigma_fit], xfit);
+    plot(xfit, yfit, 'Color', td_colors{ii}, 'LineWidth', 2);
+
+    % annotate on plot
+    txt = sprintf('%s: \\mu=%.3f ns, \\sigma=%.3f ns, FWHM=%.3f ns', td_labels{ii}, mu_fit, sigma_fit, FWHM);
+    % place text progressively to avoid overlap
+    tx = min(centers) + 0.02*(ii-1)*(max(centers)-min(centers));
+    ty = max(p) * (0.9 - 0.18*(ii-1));
+    text(tx, ty, txt, 'Color', td_colors{ii}, 'FontSize', 9, 'Interpreter','tex');
+end
+xlabel('Time Difference [ns]');
+ylabel('Probability');
+legend([td_labels, strcat(td_labels, ' fit')], 'Location','best');
+title(sprintf('Time Difference Histograms and Gaussian fits (data from %s)', formatted_datetime_tex));
+grid on; box on;
+hold off;
+
+% Print fit summary
+for ii = 1:3
+    fprintf('%s fit: mu = %.4f ns, sigma = %.4f ns, FWHM = %.4f ns\n', ...
+        td_labels{ii}, fit_results(ii).mu, fit_results(ii).sigma, fit_results(ii).FWHM);
+end
+
+
+%%
+
+sigma_RPC_SC1 = fit_results(1).sigma;
+sigma_RPC_SC2 = fit_results(2).sigma;
+sigma_SC1_SC2 = fit_results(3).sigma;
+
+
+% Establish a linear system of equations to solve for individual time resolutions
+% Let:
+%   x = sigma_RPC^2
+%   y = sigma_SC1^2
+%   z = sigma_SC2^2
+A = [1, 1, 0; 0, 1, 1; 1, 0, 1];
+b = [sigma_RPC_SC1^2; sigma_SC1_SC2^2; sigma_RPC_SC2^2];
+resolutions = A\b;
+
+sigma_RPC = sqrt(resolutions(1));
+sigma_SC1 = sqrt(resolutions(2));
+sigma_SC2 = sqrt(resolutions(3));
+
+fprintf('Estimated individual time resolutions:\n');
+fprintf('  RPC: %.3f ns\n', sigma_RPC);
+fprintf('  SC1: %.3f ns\n', sigma_SC1);
+fprintf('  SC2: %.3f ns\n', sigma_SC2);
+
+
+
+
+
+
+%%
+
+
+return;
+
+
+%%
+
 
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
