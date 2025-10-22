@@ -1549,6 +1549,8 @@ if timing_studies
 
 
     time_diff_TOP_BOT = T_cint_bot_corr - T_cint_top_corr;
+
+
     time_diff_RPC_TOP = T_thick_strip_good - T_cint_top_corr;
     time_diff_RPC_BOT = T_thick_strip_good - T_cint_bot_corr;
 
@@ -1598,10 +1600,108 @@ if timing_studies
     sgtitle(sprintf('Time Differences vs Charges after Slewing Correction (data from %s)', formatted_datetime_tex));
 
 
+    %%
 
-    T_thick_strip_slew_corr = T_thick_strip_good;
-    T_cint_top_slew_corr = T_cint_top_corr;
-    T_cint_bot_slew_corr = T_cint_bot_corr;
+
+
+
+    % ========= Slewing correction for THICK STRIP using RPC charge =========
+    % Inputs already available in your workspace:
+    %   T_thick_strip_good, T_cint_top_corr, T_cint_bot_corr
+    %   Q_thick_strip_good
+    %   (Optionally your masks; we build fresh masks here)
+
+    % Time differences (RPC relative to corrected TOP/BOT)
+    time_diff_RPC_TOP = T_thick_strip_good - T_cint_top_corr;  % RPC - TOP
+    time_diff_RPC_BOT = T_thick_strip_good - T_cint_bot_corr;  % RPC - BOT
+    charge_RPC        = Q_thick_strip_good;
+
+    % Masks: finite diffs & charges; optional diff range to exclude outliers
+    m_rt = isfinite(time_diff_RPC_TOP) & isfinite(charge_RPC) & time_diff_RPC_TOP~=0 & abs(time_diff_RPC_TOP) < 20;
+    m_rb = isfinite(time_diff_RPC_BOT) & isfinite(charge_RPC) & time_diff_RPC_BOT~=0 & abs(time_diff_RPC_BOT) < 20;
+
+    % ---- Choose polynomial degree and fit window in charge (RPC charge) ----
+    deg_rpc  = 1;                 % change to 2, 3, ... if needed
+    lo_rpc   = prctile(charge_RPC(m_rt|m_rb),  1);   % or hardcode e.g. 200
+    hi_rpc   = prctile(charge_RPC(m_rt|m_rb), 99);   % or hardcode e.g. 2000
+
+    % ---- Fit D = f(Qrpc) separately for RPC-TOP and RPC-BOT (robust 2-pass) ----
+    [p_rt, Qrt_use, Drt_use] = polyfit_clipped_new(time_diff_RPC_TOP(m_rt), charge_RPC(m_rt), lo_rpc, hi_rpc, deg_rpc, 'x_on_y'); % fit D vs Q
+    [p_rb, Qrb_use, Drb_use] = polyfit_clipped_new(time_diff_RPC_BOT(m_rb), charge_RPC(m_rb), lo_rpc, hi_rpc, deg_rpc, 'x_on_y');
+
+    % Predicted slewing components
+    D_rt_fit = nan(size(time_diff_RPC_TOP));
+    D_rb_fit = nan(size(time_diff_RPC_BOT));
+    D_rt_fit(m_rt) = polyval(p_rt, charge_RPC(m_rt));
+    D_rb_fit(m_rb) = polyval(p_rb, charge_RPC(m_rb));
+
+    % Correct the differences -> decorrelate from charge
+    D_rt_corr = time_diff_RPC_TOP - D_rt_fit;   % RPC - TOP (charge-independent)
+    D_rb_corr = time_diff_RPC_BOT - D_rb_fit;   % RPC - BOT (charge-independent)
+
+    % Per-event deltas to apply to the RPC timestamp
+    % (We attribute slewing to the RPC; scintillator times were already corrected)
+    delta_rt = time_diff_RPC_TOP - D_rt_corr;   % equals D_rt_fit on m_rt
+    delta_rb = time_diff_RPC_BOT - D_rb_corr;   % equals D_rb_fit on m_rb
+
+    % Combine TOP/BOT information without double-correcting:
+    % If both available, average; if only one, use that one; else 0.
+    w_rt = double(m_rt);
+    w_rb = double(m_rb);
+    wsum = w_rt + w_rb;
+    wsum(wsum==0) = 1;  % avoid div by zero
+    delta_rpc = (w_rt.*delta_rt + w_rb.*delta_rb) ./ wsum;
+    delta_rpc(~(m_rt | m_rb)) = 0;   % no correction where we had no fit support
+
+    % ---- Recover the corrected RPC timestamps ----
+    T_thick_strip_rpc_corr = T_thick_strip_good - delta_rpc;
+
+    % (Optional) Recompute the decorrelated differences to verify
+    time_diff_RPC_TOP_corr = T_thick_strip_rpc_corr - T_cint_top_corr;
+    time_diff_RPC_BOT_corr = T_thick_strip_rpc_corr - T_cint_bot_corr;
+
+    % ========= Quick checks / plots =========
+    figure('Name','RPC slewing vs RPC charge');
+    tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+
+    % RPC - TOP
+    nexttile; hold on; grid on; box on;
+    scatter(charge_RPC(m_rt), time_diff_RPC_TOP(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
+    qfit = linspace(lo_rpc, hi_rpc, 200);
+    plot(qfit, polyval(p_rt, qfit), 'r--', 'LineWidth', 1.8);
+    xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP [ns]');
+    title(sprintf('RPC–TOP fit (deg=%d)', deg_rpc)); hold off;
+
+    % RPC - BOT
+    nexttile; hold on; grid on; box on;
+    scatter(charge_RPC(m_rb), time_diff_RPC_BOT(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
+    plot(qfit, polyval(p_rb, qfit), 'r--', 'LineWidth', 1.8);
+    xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT [ns]');
+    title(sprintf('RPC–BOT fit (deg=%d)', deg_rpc)); hold off;
+
+    figure('Name','After slewing correction (vs RPC charge)');
+    tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+    nexttile; hold on; grid on; box on;
+    scatter(charge_RPC(m_rt), time_diff_RPC_TOP_corr(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
+    xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP (corr) [ns]');
+    title('RPC–TOP after correction'); yline(0,'k:'); hold off;
+
+    nexttile; hold on; grid on; box on;
+    scatter(charge_RPC(m_rb), time_diff_RPC_BOT_corr(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
+    xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT (corr) [ns]');
+    title('RPC–BOT after correction'); yline(0,'k:'); hold off;
+
+
+
+
+
+
+
+    %%
+
+    T_thick_strip_slew_corr = T_thick_strip_rpc_corr;
+    T_cint_top_slew_corr = time_diff_RPC_TOP_corr;
+    T_cint_bot_slew_corr = time_diff_RPC_BOT_corr;
 
     %%
 
@@ -3641,7 +3741,7 @@ function [p, x_use, y_use, kept_mask] = polyfit_clipped(x, y, lo, hi, deg, res_m
         if strcmpi(res_mode,'mad')
             res_param = 3; % 3*MAD by default
         else
-            error('polyfit_clipped:absThresholdMissing', ...
+            error('polyfit_clipped_new:absThresholdMissing', ...
                 'res_param (absolute residual threshold) must be provided for res_mode=''abs''.');
         end
     end
@@ -3693,4 +3793,27 @@ function [p, x_use, y_use, kept_mask] = polyfit_clipped(x, y, lo, hi, deg, res_m
 
     % ---- Refit on inliers
     p = polyfit(x_use, y_use, deg);
+end
+
+
+function [p, x_use, y_use] = polyfit_clipped_new(y, x, lo, hi, deg, mode)
+% Fits y = P(x) with:
+%   1) range clipping lo < x < hi,
+%   2) initial polyfit, residual-based inlier keep (MAD),
+%   3) refit on inliers.
+% mode: 'x_on_y' is just a mnemonic to remind inputs are (y,x).
+    if nargin < 5 || isempty(deg),  deg = 1; end
+    x = x(:); y = y(:);
+    m0 = isfinite(x) & isfinite(y) & (x > lo) & (x < hi);
+    x0 = x(m0); y0 = y(m0);
+    if numel(x0) < (deg+1), error('Not enough points for degree-%d fit.',deg); end
+
+    p0 = polyfit(x0, y0, deg);
+    r  = y0 - polyval(p0, x0);
+    rmed = median(r); madR = median(abs(r - rmed)); srob = 1.4826*madR;
+    if srob <= 0, kin = true(size(r)); else, kin = abs(r - rmed) <= 3*srob; end
+    if sum(kin) < (deg+1), kin = true(size(r)); end
+
+    x_use = x0(kin); y_use = y0(kin);
+    p     = polyfit(x_use, y_use, deg);
 end
