@@ -959,6 +959,8 @@ validEvents_good = validEvents_coin; % Same as before
 % --- PMTs --- N x 4
 Qcint_good = zeros(size(Qcint), 'like', Qcint);
 Qcint_good(validEvents_good, :) = Qcint(validEvents_good, :);
+Qcint_top_good = Qcint_good(:,3) + Qcint_good(:,4);
+Qcint_bot_good = Qcint_good(:,1) + Qcint_good(:,2);
 
 T_cint_1_good = zeros(size(Tl_cint(:,1)), 'like', Tl_cint(:,1));
 T_cint_2_good = zeros(size(Tl_cint(:,2)), 'like', Tl_cint(:,2));
@@ -1213,120 +1215,6 @@ charge_limits_pmt     = [q005_pmt q95_pmt];
 timing_studies = true;
 if timing_studies
 
-    
-    % Histogram the PMT top and bottom time differences for good events
-    time_diff = T_cint_bot_good - T_cint_top_good;
-    time_diff_hist = nonzeros(time_diff);
-    time_diff_hist(time_diff_hist == 0) = []; % remove zeros for histogram
-    time_diff_edges = linspace(quantile(time_diff_hist, 0.001), quantile(time_diff_hist, 0.999), bin_number);
-
-    % make a figure
-    figure;
-    histogram(time_diff_hist, time_diff_edges);
-    % Fit a Gaussian to the histogram
-    [counts, centers] = histcounts(time_diff_hist, time_diff_edges);
-    centers = (time_diff_edges(1:end-1) + time_diff_edges(2:end)) / 2; % bin centers
-    % Initial guess for Gaussian parameters: [amplitude, mean, stddev]
-    [~, max_idx] = max(counts);
-    initial_guess = [counts(max_idx), centers(max_idx), 1]; % amplitude, mean, stddev
-    gauss_eq = @(p, x) p(1) * exp(-((x - p(2)).^2) / (2 * p(3)^2));
-    % Define the error function for fitting
-    error_func = @(p) sum((counts - gauss_eq(p, centers)).^2);
-    % Perform the fit using fminsearch
-    options = optimset('Display', 'off');
-    fitted_params = fminsearch(error_func, initial_guess, options);
-    % Extract fitted parameters
-    amplitude_fit = fitted_params(1);
-    mean_fit = fitted_params(2);
-    stddev_fit = fitted_params(3);
-    % Plot the fitted Gaussian
-    x_fit = linspace(min(centers), max(centers), 1000);
-    y_fit = gauss_eq(fitted_params, x_fit);
-    hold on;
-    plot(x_fit, y_fit, 'r-', 'LineWidth', 2);
-    legend('Data', sprintf('Gaussian Fit: \\mu=%.2f ns, \\sigma=%.2f ns', mean_fit, stddev_fit));
-    xlabel('Time Difference (Bottom - Top) [ns]');
-    ylabel('Counts');
-    title(sprintf('PMT Time Difference Histogram for Good Events (data from %s)', formatted_datetime_tex));
-
-    % Individual scintillator time resolution
-    sigma_scint = stddev_fit / sqrt(2);
-    fprintf('Estimated individual scintillator time resolution: %.2f ns\n', sigma_scint);
-
-
-
-    %%
-
-
-
-    % Time of reference of the particle
-
-    time_diff_RPC_SC1 = T_thick_strip_good - T_cint_top_good;
-    time_diff_RPC_SC1 = time_diff_RPC_SC1( (abs(time_diff_RPC_SC1) < 50) & (abs(time_diff_RPC_SC1) > 10) );
-
-    time_diff_RPC_SC2 = T_thick_strip_good - T_cint_bot_good;
-    time_diff_RPC_SC2 = time_diff_RPC_SC2( (abs(time_diff_RPC_SC2) < 50) & (abs(time_diff_RPC_SC2) > 10) );
-
-    time_diff_SC1_SC2 = T_cint_bot_good - T_cint_top_good;
-    time_diff_SC1_SC2 = time_diff_SC1_SC2( (abs(time_diff_SC1_SC2) < 50) & (abs(time_diff_SC1_SC2) > 0) );
-
-
-    %%
-
-    % Slewing correction on the PMTs
-    diff_top = T_cint_3_good - T_cint_4_good;
-    sum_top = T_cint_3_good + T_cint_4_good;
-
-    diff_bot = T_cint_1_good - T_cint_2_good;
-    sum_bot = T_cint_1_good + T_cint_2_good;
-
-    mask_diff_top = isfinite(diff_top) & (diff_top ~= 0) & (abs(diff_top) < 20);
-    mask_diff_bot = isfinite(diff_bot) & (diff_bot ~= 0) & (abs(diff_bot) < 20);
-
-    q1 = Qcint_good(:,1);
-    q2 = Qcint_good(:,2);
-    q3 = Qcint_good(:,3);
-    q4 = Qcint_good(:,4); 
-
-    % apply mask
-    q1_m = q1(mask_diff_bot);
-    q2_m = q2(mask_diff_bot);
-    q3_m = q3(mask_diff_top);
-    q4_m = q4(mask_diff_top);
-    diff_top_m = diff_top(mask_diff_top);
-    sum_top_m = sum_top(mask_diff_top);
-    diff_bot_m = diff_bot(mask_diff_bot);
-    sum_bot_m = sum_bot(mask_diff_bot);
-
-    % Scatter the filtered data
-    figure;
-    tiledlayout(1,2, 'TileSpacing', 'compact', 'Padding', 'compact');
-    nexttile;
-    hold on;
-    scatter(q3_m, diff_top_m, 20, [0.2 0.2 0.8], '.');        % PMT3
-    scatter(q4_m, diff_top_m, 20, [0.8 0.6 0.0], '.');        % PMT4
-    hold off;
-    % Print legend
-    legend({'PMT3', 'PMT4'}, 'Location','best');
-    xlabel('PMT Charge [ADCbins]');
-    ylabel('Time Difference PMT3 - PMT4 [ns]');
-    title(sprintf('Time Difference vs PMT Charge (data from %s)', formatted_datetime_tex));
-    grid on; box on;
-
-    nexttile;
-    hold on;
-    scatter(q1_m, diff_bot_m, 20, [0.2 0.2 0.8], '.');        % PMT1
-    scatter(q2_m, diff_bot_m, 20, [0.8 0.6 0.0], '.');        % PMT2
-    hold off;
-    % Print legend
-    legend({'PMT1', 'PMT2'}, 'Location','best');
-    xlabel('PMT Charge [ADCbins]');
-    ylabel('Time Difference PMT1 - PMT2 [ns]');
-    title(sprintf('Time Difference vs PMT Charge (data from %s)', formatted_datetime_tex));
-    grid on; box on;
-
-
-    %%
 
 
 
@@ -1386,9 +1274,6 @@ if timing_studies
     sum_top_m = sum_top(mask_diff_top);
     diff_bot_m = diff_bot(mask_diff_bot);
     sum_bot_m = sum_bot(mask_diff_bot);
-
-    %%
-
 
 
     % Slewing correction (linear fit), fit
@@ -1655,6 +1540,68 @@ if timing_studies
     legend('Location','best');
 
 
+    %%
+
+
+    % The proper slewing correction should be performed here: we have
+    % T_cint_bot_corr, T_cint_top_corr and T_thick_strip_good
+
+
+
+    time_diff_TOP_BOT = T_cint_bot_corr - T_cint_top_corr;
+    time_diff_RPC_TOP = T_thick_strip_good - T_cint_top_corr;
+    time_diff_RPC_BOT = T_thick_strip_good - T_cint_bot_corr;
+
+    charge_RPC = Q_thick_strip_good;
+    charge_TOP = Qcint_top_good;
+    charge_BOT = Qcint_bot_good;
+
+    % Plot in 1 row and 3 cols the scatter plots of time differences vs charges
+    figure;
+    tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
+    % (1) TOP - BOT vs PMT charges
+    nexttile;
+    hold on;
+    scatter(charge_BOT, time_diff_TOP_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+    scatter(charge_TOP, time_diff_TOP_BOT, 20, [0.2 0.8 0.2], '.'); % PMT Top
+    hold off;
+    legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
+    xlabel('Scintillator Charges [ADCbins]');
+    ylabel('Time Difference TOP - BOT [ns]');
+    title('TOP - BOT vs PMT Charges');
+    grid on; box on;
+    
+    % (2) RPC - TOP vs PMT Top and RPC
+    nexttile;
+    hold on;
+    scatter(charge_TOP, time_diff_RPC_TOP, 20, [0.2 0.8 0.2], '.'); % PMT Top
+    scatter(charge_RPC, time_diff_RPC_TOP, 20, [0.8 0.2 0.2], '.'); % RPC
+    hold off;
+    legend({'PMT_Top', 'RPC'}, 'Location', 'best');
+    xlabel('Scintillator Charges [ADCbins]');
+    ylabel('Time Difference RPC - TOP [ns]');
+    title('RPC - TOP vs PMT Top and RPC');
+    grid on; box on;
+
+    % (3) RPC - BOT vs PMT Bottom and RPC
+    nexttile;
+    hold on;
+    scatter(charge_BOT, time_diff_RPC_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+    scatter(charge_RPC, time_diff_RPC_BOT, 20, [0.8 0.2 0.2], '.'); % RPC
+    hold off;
+    legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
+    xlabel('Scintillator Charges [ADCbins]');
+    ylabel('Time Difference RPC - BOT [ns]');
+    title('RPC - BOT vs PMT Bottom and RPC');
+    grid on; box on;
+
+    sgtitle(sprintf('Time Differences vs Charges after Slewing Correction (data from %s)', formatted_datetime_tex));
+
+
+
+    T_thick_strip_slew_corr = T_thick_strip_good;
+    T_cint_top_slew_corr = T_cint_top_corr;
+    T_cint_bot_slew_corr = T_cint_bot_corr;
 
     %%
 
@@ -1664,9 +1611,9 @@ if timing_studies
     % time_diff_RPC_SC1 = T_thick_strip_good - T_cint_top_good;
     % time_diff_RPC_SC2 = T_thick_strip_good - T_cint_bot_good;
 
-    time_diff_SC1_SC2 = T_cint_bot_corr - T_cint_top_corr;
-    time_diff_RPC_SC1 = T_thick_strip_good - T_cint_top_corr;
-    time_diff_RPC_SC2 = T_thick_strip_good - T_cint_bot_corr;
+    time_diff_SC1_SC2 = T_cint_bot_slew_corr - T_cint_top_slew_corr;
+    time_diff_RPC_SC1 = T_thick_strip_slew_corr - T_cint_top_slew_corr;
+    time_diff_RPC_SC2 = T_thick_strip_slew_corr - T_cint_bot_slew_corr;
 
     % Common mask: valid and non-zero time differences
     mask_td = isfinite(time_diff_SC1_SC2) & isfinite(time_diff_RPC_SC1) & isfinite(time_diff_RPC_SC2) & ...
@@ -1728,25 +1675,6 @@ if timing_studies
     grid on; box on;
 
     sgtitle(sprintf('Time Differences vs Charges (data from %s)', formatted_datetime_tex));
-
-    %%
-
-    % scatter time_diff_RPC_SC1 time_diff_RPC_SC2 time_diff_SC1_SC2
-    figure;
-    scatter(time_diff_RPC_SC1, time_diff_RPC_SC2, '.'); hold on;
-    scatter(time_diff_RPC_SC2, time_diff_SC1_SC2, '.');
-    scatter(time_diff_SC1_SC2, time_diff_RPC_SC1, '.');
-    hold off;
-    legend({'RPC - SC1', 'RPC - SC2', 'SC2 - SC1'}, 'Location','best');
-    xlabel('Event Index');
-    ylabel('Time Difference [ns]');
-    title(sprintf('Time Differences Scatter Plot (data from %s)', formatted_datetime_tex));
-    grid on; box on;
-    xlabel('Time Difference RPC - SC1 [ns]');
-    ylabel('Time Difference RPC - SC2 [ns]');
-    zlabel('Time Difference SC2 - SC1 [ns]');
-    title(sprintf('3D Scatter of Time Differences (data from %s)', formatted_datetime_tex));
-    grid on; box on;
 
 
     %%
@@ -1837,8 +1765,6 @@ if timing_studies
         fprintf('%s fit: mu = %.4f ns, sigma = %.4f ns, FWHM = %.4f ns\n', ...
             td_labels{ii}, fit_results(ii).mu, fit_results(ii).sigma, fit_results(ii).FWHM);
     end
-
-
 
 
     % Assume the PMTs time resolutions are identical
