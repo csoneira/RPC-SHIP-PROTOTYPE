@@ -15,6 +15,7 @@ from matplotlib import colors as mcolors
 LOG_PATH = Path("LOG_FILES/DATA/big_log_lab_data.csv")
 RUN_DICT_PATH = Path("file_run_dictionary.csv")
 OUTLIER_ABS_LIMIT = 2000  # values above this (in absolute terms) are considered spurious
+OUTPUTS_8_DIR = Path("DATA_FILES/DATA/OUTPUTS_8")
 
 ALPHA_P = 0.9
 ALPHA_T = 0.9
@@ -409,7 +410,9 @@ def main() -> None:
             time_column="TimeDisplay",
         )
         output_path = (
-            args.output if args.output else Path("time_series_all_runs.pdf")
+            args.output
+            if args.output
+            else OUTPUTS_8_DIR / "time_series_all_runs.pdf"
         )
         save_figures_to_pdf(figures, output_path)
         return
@@ -422,7 +425,7 @@ def main() -> None:
         output_path = (
             args.output
             if args.output
-            else Path(f"time_series_run_{args.run}.pdf")
+            else OUTPUTS_8_DIR / f"time_series_run_{args.run}.pdf"
         )
         figures = create_figures(
             data, title_suffix=f"Run {args.run} ({start_str} -> {end_str})"

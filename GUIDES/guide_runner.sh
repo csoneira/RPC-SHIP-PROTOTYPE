@@ -3,6 +3,16 @@
 # This code is made to run the guide_*.sh scripts in order from the crontab.
 set -euo pipefail
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<EOF
+Usage: $0
+
+Invoke the guide scripts in sequence (as configured inside this file) and log
+their combined output to /home/csoneira/guide_runner.log. Intended for cron use.
+EOF
+  exit 0
+fi
+
 LOG="/home/csoneira/guide_runner.log"
 {
   echo "=== START $(date -Iseconds) ==="
@@ -16,6 +26,5 @@ bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/guide_4_to_analyze.sh --save
 
 echo "=== END   $(date -Iseconds) ==="
 } >>"$LOG" 2>&1
-
 
 

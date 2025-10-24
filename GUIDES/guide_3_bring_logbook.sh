@@ -1,6 +1,16 @@
 #!/bin/bash
 
 # Google Sheet ID and GID (worksheet/tab ID)
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<EOF
+Usage: $0
+
+Download the current online logbook CSV from the configured Google Sheet and
+store it as file_online_logbook.csv in the JOAO_SETUP workspace.
+EOF
+  exit 0
+fi
+
 SHEET_ID="1exbML95XhVeCf_810DScvRs1JnUW8ke-efMeSlrKpZ8"
 GID="805688773"
 

@@ -7,8 +7,27 @@ ALL_UNPACKED_DIR="$PROJECT_ROOT/DATA_FILES/DATA/ALL_UNPACKED"
 RUNS_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/RUNS"
 JOINED_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/JOINED"
 LOGBOOK="$PROJECT_ROOT/file_logbook.csv"
+STORAGE_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY"
+
+declare -A PREMERGED_SOURCES=(
+  ["1"]="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY/RUN_1"
+  ["2"]="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY/RUN_2"
+  ["3"]="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY/RUN_3"
+)
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<EOF
+Usage: $0
+
+Tag unpacked datasets per run, populate DATA_FILES/DATA/RUNS/RUN_<id> with the
+corresponding MAT files, and invoke the joiner to write merged outputs under
+DATA_FILES/DATA/JOINED/RUN_<id>.
+EOF
+  exit 0
+fi
 
 mkdir -p "$RUNS_ROOT" "$JOINED_ROOT"
+mkdir -p "$STORAGE_ROOT"
 
 # Update tagging information
 python3 "$PROJECT_ROOT/run_tagger.py"
@@ -34,6 +53,28 @@ if [[ ${#RUN_FILES[@]} -eq 0 ]]; then
 fi
 
 for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
+  if [[ -n "${PREMERGED_SOURCES[$run_id]:-}" ]]; then
+    source_dir="${PREMERGED_SOURCES[$run_id]}"
+    storage_dir="$STORAGE_ROOT/RUN_${run_id}"
+    run_dir="$RUNS_ROOT/RUN_${run_id}"
+    out_dir="$JOINED_ROOT/RUN_${run_id}"
+
+    if [[ -d "$source_dir" ]]; then
+      if [[ ! -d "$storage_dir" ]]; then
+        echo "Caching premerged data for run ${run_id} from ${source_dir}"
+        cp -a "$source_dir" "$storage_dir"
+      fi
+      rm -rf "$run_dir"
+      cp -a "$storage_dir" "$run_dir"
+      rm -rf "$out_dir"
+      cp -a "$storage_dir" "$out_dir"
+      echo "Run ${run_id} uses premerged data; skipping new merge."
+      continue
+    else
+      echo "Warning: expected premerged directory ${source_dir} not found for run ${run_id}."
+    fi
+  fi
+
   run_dir="$RUNS_ROOT/RUN_${run_id}"
   mkdir -p "$run_dir/time" "$run_dir/charge"
   rm -f "$run_dir/time"/*.mat "$run_dir/charge"/*.mat 2>/dev/null || true
@@ -55,12 +96,19 @@ for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
     done
   done
 
+  shopt -s nullglob
+  gathered_mat=("$run_dir/time"/*.mat "$run_dir/charge"/*.mat)
+  shopt -u nullglob
+  if [[ ${#gathered_mat[@]} -eq 0 ]]; then
+    echo "No MAT files collected for run ${run_id}; skipping join step."
+    continue
+  fi
+
   output_dir="$JOINED_ROOT/RUN_${run_id}"
   rm -rf "$output_dir"
   mkdir -p "$output_dir"
 
   ESC_RUN="${run_dir//\'/\'\'}"
   ESC_OUT="${output_dir//\'/\'\'}"
-  matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/SCRIPTS/join_mat_files.m'); exit;" || \
-    echo "Joiner encountered an issue for run ${run_id}; moving on."
+  matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/SCRIPTS/join_mat_files.m'); exit;" || echo "Joiner encountered an issue for run ${run_id}; moving on."
 done

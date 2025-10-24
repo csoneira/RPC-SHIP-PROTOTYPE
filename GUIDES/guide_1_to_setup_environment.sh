@@ -8,6 +8,17 @@ set -e  # Exit on error
 VENV_DIR="venv"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<EOF
+Usage: $0
+
+Create (if needed) and populate the Python virtual environment used by JOAO_SETUP.
+The script installs python3-venv if missing, creates the venv under ./venv, and
+installs the dependencies from requirements.txt.
+EOF
+    exit 0
+fi
+
 echo "=========================================="
 echo "JOAO_SETUP Environment Setup"
 echo "=========================================="

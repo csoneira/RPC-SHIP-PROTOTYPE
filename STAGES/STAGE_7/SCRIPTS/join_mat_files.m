@@ -70,17 +70,6 @@
 %     };
 
 
-% Run 5
-runs = {
-    '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25291140248_2025-10-20_11h51m27s'
-    '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25292123618_2025-10-20_11h52m27s'
-    '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25293115731_2025-10-21_19h33m08s'
-    '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25294114556_2025-10-21_19h33m23s'
-    };
-
-
-output_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/JOINED_OUTPUT/dabc25282152204_RUN_5_2025-10-20_16h00m00s';
-
 % -------------------------------------------------------------------------
 
 if exist('runs', 'var') == 1 && ~isempty(runs)

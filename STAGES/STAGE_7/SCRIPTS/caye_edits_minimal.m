@@ -90,7 +90,7 @@ end
 
 should_plot = ~no_plot_flag;
 
-save_plots_dir_default = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/PDF';
+save_plots_dir_default = [outputs7_root '/PDF'];
 if ~exist('save_plots','var')
     save_plots = false;
 end
@@ -185,11 +185,13 @@ DATA    = 'matFiles/time/';
 DATA_Q    = 'matFiles/charge/';
 % path(path,[HOME SCRIPTS 'util_matPlots/']);
 
-summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/';
+outputs7_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/OUTPUTS_7';
+summary_output_dir = [outputs7_root '/TABLES/'];
 path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STORED_NOT_ESSENTIAL/util_matPlots');
 project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
 mst_saves_root = fullfile(project_root, 'MST_saves');
 unpacked_root = fullfile(project_root, 'DATA_FILES', 'DATA', 'UNPACKED', 'PROCESSING');
+if ~exist(outputs7_root, 'dir'); mkdir(outputs7_root); end
 % ---------------------------------------------------------------------
 
 
@@ -3003,7 +3005,7 @@ bin_edges = 0:0.5:100;
 bin_centers = edges(1:end-1) + diff(edges)/2;
 charge_histogram_table = table(bin_centers', counts', 'VariableNames', {'Charge_bin_center', 'Count'});
 
-outdir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/CHARGES/';
+outdir = [outputs7_root '/CHARGES/'];
 if ~exist(outdir, 'dir')
     mkdir(outdir);
 end
