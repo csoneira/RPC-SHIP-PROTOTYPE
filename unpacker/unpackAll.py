@@ -58,7 +58,7 @@ t = time.time()
 #############
 homeOS = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/'
 home   = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/unpacker/'
-savesFolder  = homeOS + 'MST_saves'        #at the end of unpacking, converting... all the created folders/files are moved to savesFolder (if saveAnalysis = 1)
+savesFolder  = homeOS + 'DATA_FILES/DATA/ALL_UNPACKED'        #at the end of unpacking, converting... all the created folders/files are moved to savesFolder (if saveAnalysis = 1)
 hldInFolder  = home   + 'hlds_toUnpack'    #hld (input) folder; expected extension of files in the folder: *.hld; if saveAnalysis = 1 -> all the *.hld are then moved to ./hld
 hldOutFolder = home   + 'unpackedFiles'    #path of the output folder for unpacked files (*.txt + *.adc + *.tdc ...)
 chargeFolder = home   + 'charge'           #path of the output folder for *.charge files   (for df_charge)
@@ -74,7 +74,7 @@ convertTime           = 2    #0/1/2/3; 0: don't do it; 1: *.tdc -> *.time; 2: *.
 convertQandbLine      = 2    #0/1/2/3; 0: don't do it; 1: *.adc -> *.charge *.bLine; 2: *.adc -> *.charge *.bLine and one *_Q.mat file (per ADC) with concatenated data; 3: create *_Q.mat and *_BL.mat files
 plotQperStrip         = 0    #0/1;  *.jpg
 plotFrom              = 1    #1,2,3... (1 = first event in the file (which may have different 'id' (depending if it is the first hld of the run or not))
-plotTo                = 5   #1,2,3...
+plotTo                = 5    #1,2,3...
 saveAnalysis          = 1    #0/1
 #############
 
@@ -428,4 +428,3 @@ if saveAnalysis:
         print(f"saves done to {folderNameForSaves}")
 
 print(f"Total elapsed time: {time.time() - t:.3f} s")
-

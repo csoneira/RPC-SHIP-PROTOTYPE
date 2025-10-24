@@ -22,6 +22,8 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     usage
 fi
 
+echo "Selected input directory: $SELECTED_INPUT"
+
 # --------------------------------------------------------------------------------------------
 # Prevent the script from running multiple instances -----------------------------------------
 # --------------------------------------------------------------------------------------------
@@ -89,10 +91,6 @@ while [[ $# -gt 0 ]]; do
         -r|--run)
             [[ $# -ge 2 ]] || usage
             RUN_OVERRIDE="$2"
-            if ! [[ "$RUN_OVERRIDE" =~ ^[1-5]$ ]]; then
-                echo "Invalid run number: $RUN_OVERRIDE (expected 1-5)" >&2
-                exit 1
-            fi
             shift 2
             ;;
         --help|-h)
@@ -113,158 +111,49 @@ fi
 MATLAB_SCRIPT="feval('run','DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m');"
 MATLAB_WRAP="try, ${MATLAB_SCRIPT} catch ME, disp(getReport(ME,'extended')); exit(1); end"
 
-if [[ -n "$RUN_OVERRIDE" ]]; then
-  echo "Run override provided: analyzing predefined run ${RUN_OVERRIDE}."
-  MATLAB_PREFIX="test=true; run=${RUN_OVERRIDE};"
-  SAVE_FLAG="${SAVE_FLAG:-false}"
-
-  if [[ "$NO_PLOT_FLAG" == "true" ]]; then
-    MATLAB_PREFIX+=" no_plot=true; caye_cli_args={'--no-plot'};"
-  fi
-
-  if command -v matlab >/dev/null 2>&1; then
-    if [[ "$SAVE_FLAG" == "true" ]]; then
-      : "${SAVE_DIR:?SAVE_FLAG=true but SAVE_DIR not set}"
-      ESCAPED_DIR="${SAVE_DIR//\'/\'\'}"
-      MATLAB_CMD="${MATLAB_PREFIX} save_plots=true; save_plots_dir='${ESCAPED_DIR}'; ${MATLAB_WRAP}"
-    else
-      MATLAB_CMD="${MATLAB_PREFIX} ${MATLAB_WRAP}"
-    fi
-    matlab -batch "${MATLAB_CMD}"
-  else
-    err "matlab not found in PATH."
-  fi
-  exit 0
-fi
-
-
-
-# Expected env:
-#   PROJECT_ROOT   (required)
-#   SAVE_FLAG      (optional, "true" to enable saving)
-#   SAVE_DIR       (optional, dir to save plots when SAVE_FLAG=true)
-
-: "${PROJECT_ROOT:?Environment variable PROJECT_ROOT must be set}"
-
-MST_SAVES_DIR="$PROJECT_ROOT/MST_saves"
-UNPACKED_DIR="$PROJECT_ROOT/DATA_FILES/DATA/UNPACKED/UNPROCESSED"
-PROCESSING_DIR="$PROJECT_ROOT/DATA_FILES/DATA/UNPACKED/PROCESSING"
+JOINED_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/JOINED"
 
 # --- helpers -----------------------------------------------------------------
 
 err() { echo "Error: $*" >&2; exit 1; }
 warn() { echo "Warning: $*" >&2; }
 
-# Extracts an epoch seconds from a directory base name that ends with _YYYY-MM-DD_HHhMMmSSs
-# Returns epoch on stdout; empty if pattern not found or conversion fails.
-to_epoch() {
-  local name="$1"
-  # Pull the final timestamp group: _YYYY-MM-DD_HHhMMmSSs at the end
-  if [[ "$name" =~ _([0-9]{4}-[0-9]{2}-[0-9]{2})_([0-9]{2})h([0-9]{2})m([0-9]{2})s$ ]]; then
-    local date_part="${BASH_REMATCH[1]}"
-    local hh="${BASH_REMATCH[2]}"
-    local mm="${BASH_REMATCH[3]}"
-    local ss="${BASH_REMATCH[4]}"
-    local iso="${date_part} ${hh}:${mm}:${ss}"
-    # GNU date:
-    date -d "$iso" +%s 2>/dev/null || true
-  else
-    echo ""
-  fi
-}
-
 # --- checks ------------------------------------------------------------------
 
-if [[ -z "$RUN_OVERRIDE" ]]; then
-  echo "Starting test, copying test and joined directories"
-  # cp -r /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/PROCESSING/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s
-  cp -r /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/JOINED_OUTPUT/dabc25281080959_JOINED_2025-10-15_08h15m12s /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/UNPROCESSED
-
-  [[ -d "$MST_SAVES_DIR" ]] || err "MST_saves directory does not exist: $MST_SAVES_DIR"
-
-  mkdir -p "$UNPACKED_DIR" "$PROCESSING_DIR"
-
-  # --- 1) Move everything from MST_saves -> UNPACKED/UNPROCESSED --------------
-
-  shopt -s nullglob dotglob
-  moved_any=false
-  for entry in "$MST_SAVES_DIR"/*; do
-    base="$(basename "$entry")"
-    target="$UNPACKED_DIR/$base"
-
-    if [[ -e "$target" ]]; then
-      warn "Target already exists in UNPROCESSED, skipping: $base"
-      continue
-    fi
-
-    if mv "$entry" "$target"; then
-      moved_any=true
-    else
-      warn "Failed to move: $entry"
-    fi
-  done
-  shopt -u nullglob dotglob
-
-  # Not a hard error if nothing moved; there may already be backlog in UNPROCESSED
-  if [[ "$moved_any" == false ]]; then
-    echo "Info: nothing moved from MST_saves (possibly empty or all names already present)."
-  fi
-
-  # --- 2) Select the oldest directory in UNPACKED/UNPROCESSED by embedded timestamp
-
-  mapfile -t candidates < <(find "$UNPACKED_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
-
-  if [[ ${#candidates[@]} -eq 0 ]]; then
-    err "No directories found in UNPACKED/UNPROCESSED."
-  fi
-
-  oldest_epoch=""
-  oldest_name=""
-
-  for base in "${candidates[@]}"; do
-    epoch="$(to_epoch "$base")"
-    if [[ -z "$epoch" ]]; then
-      warn "Skipping (no timestamp suffix): $base"
-      continue
-    fi
-    if [[ -z "$oldest_epoch" || "$epoch" -lt "$oldest_epoch" ]]; then
-      oldest_epoch="$epoch"
-      oldest_name="$base"
-    fi
-  done
-
-  if [[ -z "$oldest_name" ]]; then
-    err "No directories with a valid _YYYY-MM-DD_HHhMMmSSs suffix found in UNPROCESSED."
-  fi
-
-  echo "Selected oldest directory: $oldest_name (epoch $oldest_epoch)"
-
-  SOURCE_DIR="$UNPACKED_DIR/$oldest_name"
-  TARGET_DIR="$PROCESSING_DIR/$oldest_name"
-
-  if [[ -e "$TARGET_DIR" ]]; then
-    warn "Target already exists in PROCESSING, skipping move: $TARGET_DIR"
-  else
-    mv "$SOURCE_DIR" "$TARGET_DIR" || err "Failed to move directory to PROCESSING."
-  fi
-
-  SELECTED_INPUT="$oldest_name"
-else
-  echo "Run override provided: analyzing predefined run ${RUN_OVERRIDE}."
+if [[ ! -d "$JOINED_ROOT" ]]; then
+  err "Joined data directory not found: $JOINED_ROOT"
 fi
+
+if [[ -n "$RUN_OVERRIDE" ]]; then
+  echo "Run override provided: analyzing run ${RUN_OVERRIDE}."
+  candidate="$JOINED_ROOT/RUN_${RUN_OVERRIDE}"
+  [[ -d "$candidate" ]] || err "Run directory not found: $candidate"
+  SELECTED_INPUT="$(cd "$candidate" && pwd)"
+else
+  echo "Selecting oldest joined run directory for analysis."
+  mapfile -t candidates < <(find "$JOINED_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -n)
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    err "No run directories found in $JOINED_ROOT."
+  fi
+  oldest_line="${candidates[0]}"
+  SELECTED_INPUT="${oldest_line#* }"
+  SELECTED_INPUT="$(cd "$SELECTED_INPUT" && pwd)"
+fi
+
+echo "Selected input directory: $SELECTED_INPUT"
 
 # --- 3) Run MATLAB on the selected directory ---------------------------------
 # Default SAVE_FLAG to false if unset
 SAVE_FLAG="${SAVE_FLAG:-false}"
 
-if [[ -z "$RUN_OVERRIDE" && -z "$SELECTED_INPUT" ]]; then
+if [[ -z "$SELECTED_INPUT" ]]; then
   err "No input directory selected for analysis."
 fi
 
+ESCAPED_INPUT="${SELECTED_INPUT//\'/\'\'}"
 if [[ -n "$RUN_OVERRIDE" ]]; then
-  MATLAB_PREFIX="test=true; run=${RUN_OVERRIDE};"
+  MATLAB_PREFIX="test=false; run=${RUN_OVERRIDE}; input_dir='${ESCAPED_INPUT}';"
 else
-  ESCAPED_INPUT="${SELECTED_INPUT//\'/\'\'}"
   MATLAB_PREFIX="test=false; run=0; input_dir='${ESCAPED_INPUT}';"
 fi
 

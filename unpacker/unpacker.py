@@ -233,8 +233,9 @@ def calibrateFineTime(InputPath, L_OutputFTimePath, CalibFTimePath, L_FPGAs, Num
                         totalNumberOfWords   = int(L_words[0], 16) // m      #e.g. '00000f88' /4 = 3976/4 = 994 words for this event
                         countedNumberOfWords = L_indexWordFPGAs[-1] +1 +1    #+1 -> started to count at '0'; +1 -> to include the last word (after '00015555'): '00000001'
                         if totalNumberOfWords != countedNumberOfWords:
-                            print(f'Number of words found (during CALIBRATION) in event {event}: {countedNumberOfWords} (for the central_CTS FPGA: {fpga}),',
-                            f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            # print(f'Number of words found (during CALIBRATION) in event {event}: {countedNumberOfWords} (for the central_CTS FPGA: {fpga}),',
+                            # f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            pass
                             #sys.exit()
                         ##############
                         ##############
@@ -271,8 +272,9 @@ def calibrateFineTime(InputPath, L_OutputFTimePath, CalibFTimePath, L_FPGAs, Num
                         totalNumberOfWords   = int(L_words[0], 16) // m      #e.g. '00000f88' /4 = 3976/4 = 994 words for this event
                         countedNumberOfWords = L_indexWordFPGAs[-1] +1 +1    #+1 -> started to count at '0'; +1 -> to include the last word (after '00015555'): '00000001'
                         if totalNumberOfWords != countedNumberOfWords:
-                            print(f'Number of words found (during CALIBRATION) in event {event}: {countedNumberOfWords} (for the central FPGA: {fpga}),',
-                            f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            # print(f'Number of words found (during CALIBRATION) in event {event}: {countedNumberOfWords} (for the central FPGA: {fpga}),',
+                            # f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            pass
                             sys.exit()
                         ##############
                         ##############
@@ -379,8 +381,9 @@ def convertToData(InputPath, L_OutputPath, L_FPGAs, D_CalibFTime, NumberOfEvents
                         totalNumberOfWords   = int(L_words[0], 16) // m      #e.g. '00000f88' /4 = 3976/4 = 994 words for this event
                         countedNumberOfWords = L_indexWordFPGAs[-1] +1 +1    #+1 -> started to count at '0'; +1 -> to include the last word (after '00015555'): '00000001'
                         if totalNumberOfWords != countedNumberOfWords:
-                            print(f'Number of words found in event {event}: {countedNumberOfWords} (for the central FPGA: {currentFpga}),',
-                            f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            # print(f'Number of words found in event {event}: {countedNumberOfWords} (for the central FPGA: {currentFpga}),',
+                            # f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            pass
                             sys.exit()
                         ##############
                         ##############
@@ -432,8 +435,9 @@ def convertToData(InputPath, L_OutputPath, L_FPGAs, D_CalibFTime, NumberOfEvents
                         totalNumberOfWords   = int(L_words[0], 16) // m      #e.g. '00000f88' /4 = 3976/4 = 994 words for this event
                         countedNumberOfWords = L_indexWordFPGAs[-1] +1 +1    #+1 -> started to count at '0'; +1 -> to include the last word (after '00015555'): '00000001'
                         if totalNumberOfWords != countedNumberOfWords:
-                            print(f'Number of words found in event {event}: {countedNumberOfWords} (for the central_CTS FPGA: {currentFpga}),',
-                            f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            # print(f'Number of words found in event {event}: {countedNumberOfWords} (for the central_CTS FPGA: {currentFpga}),',
+                            # f'while the expected is {totalNumberOfWords} (provided by the 1st word of the event)\naborting...')
+                            pass
                             #sys.exit()
                         ##############
                         ##############

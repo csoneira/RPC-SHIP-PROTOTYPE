@@ -76,11 +76,18 @@ echo $$ 1>&9
 
 
 PROJECT_ROOT="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP"
-HLD_SOURCE_DIR="$PROJECT_ROOT/DATA_FILES/DATA/HLD_FILES"
+HLD_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/HLD_FILES"
+HLD_SOURCE_DIR="$HLD_ROOT/NOT_UNPACKED"
+HLD_SENT_DIR="$HLD_ROOT/SENT_TO_UNPACKING"
 HLD_UNPACK_DIR="$PROJECT_ROOT/unpacker/hlds_toUnpack"
-IDLE_DIR="$PROJECT_ROOT/DATA_FILES/IDLE_IN_UNPACKING_DIR"
+UNPACKED_OUTPUT_DIR="$PROJECT_ROOT/unpacker/unpackedFiles"
+IDLE_DIR="$HLD_ROOT/IDLE_IN_UNPACKING_DIR"
 
-mkdir -p "$HLD_SOURCE_DIR" "$HLD_UNPACK_DIR" "$IDLE_DIR"
+mkdir -p "$HLD_SOURCE_DIR" "$HLD_UNPACK_DIR" "$UNPACKED_OUTPUT_DIR" "$IDLE_DIR" "$HLD_SENT_DIR"
+
+# Ensure unpacking staging directories start clean
+rm -f "$HLD_UNPACK_DIR"/*
+rm -f "$UNPACKED_OUTPUT_DIR"/*
 
 move_idle_contents() {
   shopt -s nullglob
@@ -100,6 +107,10 @@ process_single_hld() {
   move_idle_contents
 
   echo "Moving $filename to unpack queue"
+  if [[ -f "$HLD_SENT_DIR/$filename" ]]; then
+    echo "Copy in SENT_TO_UNPACKING exists; overwriting with latest copy."
+  fi
+  cp -a "$hld_path" "$HLD_SENT_DIR/"
   mv "$hld_path" "$HLD_UNPACK_DIR/$filename"
 
   cd "$PROJECT_ROOT"

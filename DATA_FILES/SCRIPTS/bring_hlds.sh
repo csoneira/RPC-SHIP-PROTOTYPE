@@ -1,6 +1,6 @@
 
 # Bring hlds file from rpcuser@odroid64:/home/rpcuser/hlds/*.hld to 
-# /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/unpacker/hlds_toUnpack,
+# /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/NOT_UNPACKED,
 # create a csv in /home/csoneira/WORK/LIP_stuff/JOAO_SETUP that tracks which
 # files have been copied already and in which date so there are two columns,
 # name of the file and date of copy. If the file is already there, do not copy it again.
@@ -12,7 +12,7 @@
 #!/bin/bash
 
 SRC="joao:/home/rpcuser/hlds/*.hld"
-DEST="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES"
+DEST="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/NOT_UNPACKED"
 CSV="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/file_database.csv"
 
 # Optional start date filter (format: YYYY-MM-DD)
@@ -225,5 +225,3 @@ echo "Files copied: $copied_count"
 echo "Files skipped (already exist): $skipped_count"
 echo "Files failed: $failed_count"
 echo "=========================================="
-
-
