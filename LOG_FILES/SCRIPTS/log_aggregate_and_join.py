@@ -17,6 +17,7 @@ All keys are optional. ``outlier_limits`` defaults to an empty mapping.
 
 from __future__ import annotations
 
+import csv
 import string
 from dataclasses import dataclass
 from pathlib import Path
@@ -166,6 +167,40 @@ FILE_SCHEMAS: List[FileSchema] = [
 ]
 
 
+def get_last_timestamp(path: Path) -> Optional[pd.Timestamp]:
+    """Return the last valid timestamp stored in a CSV file."""
+    if not path.exists():
+        return None
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, None)
+            if not header or "Time" not in header:
+                return None
+            time_idx = header.index("Time")
+            last_time: Optional[pd.Timestamp] = None
+            for row in reader:
+                if len(row) <= time_idx:
+                    continue
+                value = pd.to_datetime(row[time_idx], errors="coerce")
+                if pd.isna(value):
+                    continue
+                last_time = value
+            return last_time
+    except Exception:
+        return None
+
+
+def append_dataframe_to_csv(df: pd.DataFrame, path: Path) -> None:
+    """Append DataFrame rows to CSV, writing header only when creating the file."""
+    if df.empty:
+        return
+    mode = "a" if path.exists() else "w"
+    header = not path.exists()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, mode=mode, header=header, index=False, float_format="%.5g")
+
+
 def load_config() -> Dict[str, object]:
     """Load optional configuration from LOG_FILES/config.yaml."""
     if not CONFIG_PATH.exists() or yaml is None:
@@ -217,8 +252,13 @@ def _normalize_value(value):
         return text
 
 
-def process_files(schema: FileSchema, output_path: Path, source_dir: Path) -> bool:
-    """Aggregate all files with ``schema.prefix`` from ``source_dir`` into ``output_path``."""
+def process_files(
+    schema: FileSchema,
+    source_dir: Path,
+    last_timestamp: Optional[pd.Timestamp] = None,
+    archive_dir: Optional[Path] = None,
+) -> pd.DataFrame:
+    """Aggregate new rows for ``schema`` from ``source_dir``."""
     candidate_files = sorted(
         p
         for p in source_dir.glob(f"{schema.prefix}*")
@@ -226,9 +266,14 @@ def process_files(schema: FileSchema, output_path: Path, source_dir: Path) -> bo
     )
 
     if not candidate_files:
-        return False
+        return pd.DataFrame()
+
+    if archive_dir is None:
+        archive_dir = source_dir / "processed"
+    archive_dir.mkdir(parents=True, exist_ok=True)
 
     dataframes: List[pd.DataFrame] = []
+    processed_files: List[Path] = []
 
     for file_path in candidate_files:
         try:
@@ -265,58 +310,75 @@ def process_files(schema: FileSchema, output_path: Path, source_dir: Path) -> bo
             print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
 
         dataframes.append(df)
+        processed_files.append(file_path)
+
+    for processed in processed_files:
+        try:
+            destination = archive_dir / processed.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            processed.replace(destination)
+        except Exception as exc:
+            print(f"Warning: failed to archive {processed}: {exc}")
 
     if not dataframes:
-        return False
+        return pd.DataFrame()
 
     combined_df = pd.concat(dataframes, ignore_index=True)
+    if "Time" in combined_df.columns and last_timestamp is not None:
+        combined_df = combined_df[combined_df["Time"] > last_timestamp]
+    if combined_df.empty:
+        return pd.DataFrame()
+
+    combined_df = combined_df.sort_values("Time")
     
     # Drop columns that start with "Unused" or "unknown" (case-insensitive)
     cols_to_drop = [col for col in combined_df.columns if col.lower().startswith(('unused', 'unknown'))]
     if cols_to_drop:
         combined_df.drop(columns=cols_to_drop, inplace=True)
         print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
-    
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    combined_df.to_csv(output_path, index=False)
-    print(f"Aggregated CSV saved: {output_path}")
-    return True
+
+    return combined_df
 
 
-def process_csv(file_path: Path) -> pd.DataFrame:
+def process_csv(file_path: Path, start_time: Optional[pd.Timestamp] = None) -> pd.DataFrame:
     """Load a previously aggregated CSV and return it indexed by Time."""
     if not file_path.exists():
         print(f"Skipping missing aggregated file: {file_path}")
         return pd.DataFrame()
 
     try:
-        df = pd.read_csv(file_path)
+        iterator = pd.read_csv(file_path, chunksize=100_000)
     except Exception as exc:
         print(f"Could not read {file_path}: {exc}")
         return pd.DataFrame()
 
-    # Drop columns that start with "Unused"
-    cols_to_drop = [col for col in df.columns 
-                    if col.lower().startswith(('Unused'))]
-    if cols_to_drop:
-        df.drop(columns=cols_to_drop, inplace=True)
+    frames: List[pd.DataFrame] = []
+    for chunk in iterator:
+        if "Time" not in chunk.columns:
+            print(f"Column 'Time' missing in {file_path}; skipping chunk.")
+            continue
 
-    if "Time" not in df.columns:
-        print(f"Column 'Time' missing in {file_path}; skipping.")
+        cols_to_drop = [col for col in chunk.columns if col.lower().startswith(("unused", "unknown"))]
+        if cols_to_drop:
+            chunk = chunk.drop(columns=cols_to_drop)
+
+        chunk["Time"] = pd.to_datetime(chunk["Time"], errors="coerce")
+        chunk = chunk.dropna(subset=["Time"])
+        if start_time is not None:
+            chunk = chunk[chunk["Time"] > start_time]
+        if chunk.empty:
+            continue
+
+        chunk.set_index("Time", inplace=True)
+        for column in chunk.columns:
+            chunk[column] = pd.to_numeric(chunk[column], errors="coerce")
+        frames.append(chunk)
+
+    if not frames:
         return pd.DataFrame()
 
-    df["Time"] = pd.to_datetime(df["Time"], errors="coerce")
-    df = df.dropna(subset=["Time"])
-    if df.empty:
-        return pd.DataFrame()
-
-    df.set_index("Time", inplace=True)
-
-    for column in df.columns:
-        df[column] = pd.to_numeric(df[column], errors="coerce")
-
+    df = pd.concat(frames, axis=0)
     df = df.sort_index()
-
     if not df.index.is_unique:
         df = df.groupby(level=0).mean()
     return df
@@ -330,12 +392,9 @@ def merge_dataframes(
     dataframes: List[pd.DataFrame] = []
 
     for name, path in file_mappings.items():
-        df = process_csv(path)
+        df = process_csv(path, start_time=start_time)
         if df.empty:
             continue
-
-        if start_time is not None:
-            df = df[df.index > start_time]
 
         df.columns = [f"{name}_{col}" for col in df.columns]
 
@@ -400,15 +459,41 @@ def main(argv: List[str]) -> int:
 
         config = load_config()
         outlier_limits = config.get("outlier_limits", {}) if isinstance(config, dict) else {}
-        create_new_csv = bool(config.get("create_new_csv", True)) if isinstance(config, dict) else True
+        create_new_csv = bool(config.get("create_new_csv", False)) if isinstance(config, dict) else False
+
+        final_last_timestamp = None
+        if create_new_csv:
+            if final_output_path.exists():
+                final_output_path.unlink()
+                print(f"Removed existing {final_output_path}")
+        else:
+            final_last_timestamp = get_last_timestamp(final_output_path)
 
         print("Processing files...")
 
         produced_paths: Dict[str, Path] = {}
+        aggregated_last_cache: Dict[str, Optional[pd.Timestamp]] = {}
         for schema in FILE_SCHEMAS:
             output_path = accumulated_directory / schema.output
-            produced = process_files(schema, output_path, unprocessed_logs_directory)
-            if produced:
+            last_timestamp = get_last_timestamp(output_path)
+            archive_dir = unprocessed_logs_directory / "processed" / schema.prefix
+            new_rows = process_files(
+                schema,
+                unprocessed_logs_directory,
+                last_timestamp=last_timestamp,
+                archive_dir=archive_dir,
+            )
+            if not new_rows.empty:
+                latest_time = new_rows["Time"].max() if "Time" in new_rows.columns else None
+                if "Time" in new_rows.columns:
+                    new_rows = new_rows.copy()
+                    new_rows["Time"] = new_rows["Time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                append_dataframe_to_csv(new_rows, output_path)
+                if latest_time is not None:
+                    last_timestamp = latest_time
+                print(f"Aggregated CSV updated: {output_path}")
+            aggregated_last_cache[schema.label] = last_timestamp
+            if output_path.exists():
                 produced_paths[schema.label] = output_path
 
         print("All files processed...")
@@ -418,7 +503,24 @@ def main(argv: List[str]) -> int:
             success = True
             return 0
 
-        merged_df = merge_dataframes(produced_paths, outlier_limits)
+        if not create_new_csv and final_last_timestamp is not None:
+            produced_paths = {
+                label: path
+                for label, path in produced_paths.items()
+                if aggregated_last_cache.get(label) is not None
+                and aggregated_last_cache[label] > final_last_timestamp
+            }
+
+        if not produced_paths:
+            print("No new data detected for merged CSV. Skipping final update.")
+            success = True
+            return 0
+
+        merged_df = merge_dataframes(
+            produced_paths,
+            outlier_limits,
+            start_time=None if create_new_csv else final_last_timestamp,
+        )
 
         if merged_df.empty:
             print("No data available after aggregation. Skipping final CSV generation.")
@@ -428,12 +530,20 @@ def main(argv: List[str]) -> int:
         merged_df = merged_df.resample("1min").mean()
         merged_df.reset_index(inplace=True)
 
-        if final_output_path.exists() and create_new_csv:
-            final_output_path.unlink()
-            print(f"Removed existing {final_output_path}")
+        if not create_new_csv and final_last_timestamp is not None:
+            merged_df = merged_df[merged_df["Time"] > final_last_timestamp]
 
-        merged_df.to_csv(final_output_path, index=False, float_format="%.5g")
-        print(f"Updated merged data saved to {final_output_path}")
+        if merged_df.empty:
+            print("No new rows to append to merged CSV.")
+            success = True
+            return 0
+
+        merged_df = merged_df.sort_values("Time")
+        merged_df = merged_df.drop_duplicates(subset=["Time"], keep="last")
+        merged_df["Time"] = merged_df["Time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        append_dataframe_to_csv(merged_df, final_output_path)
+        print(f"Appended merged data to {final_output_path}")
 
         success = True
         return 0

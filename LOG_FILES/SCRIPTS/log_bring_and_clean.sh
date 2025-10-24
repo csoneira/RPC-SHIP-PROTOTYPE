@@ -68,13 +68,22 @@ echo '--------------------------- bash script starts ---------------------------
 
 remote_host="${REMOTE_LOG_HOST:-joao}"
 remote_path="${remote_host}:/home/rpcuser/logs/"
+fetch_only="${FETCH_ONLY_FILES:-}"
 
-# Sync data from the remote server
-rsync -avz --delete \
-    --exclude='/clean_*' \
-    --exclude='/done/clean_*' \
-    --exclude='/done/merged_*' \
-    "$remote_path" "$local_destination"
+if [[ -n "$fetch_only" ]]; then
+    echo "Fetching specified log files from remote host."
+    while IFS= read -r remote_file; do
+        [[ -z "$remote_file" ]] && continue
+        rsync -avz "${remote_host}:/home/rpcuser/logs/${remote_file}" "$local_destination/"
+    done <<< "$fetch_only"
+else
+    # Sync data from the remote server
+    rsync -avz --delete \
+        --exclude='/clean_*' \
+        --exclude='/done/clean_*' \
+        --exclude='/done/merged_*' \
+        "$remote_path" "$local_destination"
+fi
 
 echo 'Received data from remote computer'
 

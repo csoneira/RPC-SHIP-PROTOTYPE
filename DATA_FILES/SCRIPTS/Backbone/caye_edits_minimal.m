@@ -27,15 +27,13 @@
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-% Print terminal warning to indicate the matlab script starts
-fprintf('Starting MATLAB script\n');
-
 % ---------------------------------------------------------------------
-% Command-line flag parsing
+% Command-line flag parsing and logging setup
 % ---------------------------------------------------------------------
 
 cli_args = collect_cli_args();
 no_plot_flag = any(strcmpi(cli_args, '--no-plot'));
+debug_flag = any(strcmpi(cli_args, '--debug') | strcmpi(cli_args, '-d'));
 
 if evalin('base', 'exist(''no_plot'', ''var'')')
     base_no_plot = evalin('base', 'no_plot');
@@ -48,6 +46,46 @@ if evalin('base', 'exist(''no_plot'', ''var'')')
     if islogical(base_no_plot)
         no_plot_flag = no_plot_flag || base_no_plot;
     end
+end
+
+if evalin('base', 'exist(''debug_mode'', ''var'')')
+    base_debug = evalin('base', 'debug_mode');
+    if ischar(base_debug) || isstring(base_debug)
+        base_debug = strcmpi(string(base_debug), "true");
+    end
+    if isnumeric(base_debug)
+        base_debug = logical(base_debug);
+    end
+    if islogical(base_debug)
+        debug_flag = debug_flag || base_debug;
+    end
+end
+if evalin('base', 'exist(''debug'', ''var'')')
+    base_debug_alt = evalin('base', 'debug');
+    if ischar(base_debug_alt) || isstring(base_debug_alt)
+        base_debug_alt = strcmpi(string(base_debug_alt), "true");
+    end
+    if isnumeric(base_debug_alt)
+        base_debug_alt = logical(base_debug_alt);
+    end
+    if islogical(base_debug_alt)
+        debug_flag = debug_flag || base_debug_alt;
+    end
+end
+
+debug_mode = logical(debug_flag);
+
+log_info = @(fmt, varargin) fprintf('[INFO] %s\n', sprintf(fmt, varargin{:}));
+if debug_mode
+    log_debug = @(fmt, varargin) fprintf('[DEBUG] %s\n', sprintf(fmt, varargin{:}));
+else
+    log_debug = @(varargin) [];
+end
+log_banner = @(fmt, varargin) fprintf('\n=== %s ===\n', sprintf(fmt, varargin{:}));
+
+log_banner('Starting caye_edits_minimal');
+if debug_mode
+    log_info('Debug logging enabled.');
 end
 
 should_plot = ~no_plot_flag;
@@ -63,7 +101,7 @@ if no_plot_flag
     save_plots = false;
 end
 
-clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag;
+clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag debug_flag debug_mode log_info log_debug log_banner;
 close all; clc;
 
 
@@ -142,13 +180,13 @@ position_from_narrow_strips = false;
 
 % Some paths ----------------------------------------------------------
 HOME    = '/home/csoneira/WORK/LIP_stuff/';
-SCRIPTS = 'JOAO_SETUP/STORED_NOT_ESSENTIAL/';
+% SCRIPTS = 'JOAO_SETUP/STORED_NOT_ESSENTIAL/';
 DATA    = 'matFiles/time/';
 DATA_Q    = 'matFiles/charge/';
-path(path,[HOME SCRIPTS 'util_matPlots/']);
+% path(path,[HOME SCRIPTS 'util_matPlots/']);
 
 summary_output_dir = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/';
-path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/util_matPlots');
+path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STORED_NOT_ESSENTIAL/util_matPlots');
 project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
 mst_saves_root = fullfile(project_root, 'MST_saves');
 unpacked_root = fullfile(project_root, 'DATA_FILES', 'DATA', 'UNPACKED', 'PROCESSING');
@@ -159,8 +197,8 @@ if isstring(save_plots_dir)
     save_plots_dir = char(save_plots_dir);
 end
 
-% Debug: Print the save_plots_dir to verify its value
-fprintf('Using save_plots_dir: %s\n', save_plots_dir);
+% Debug visibility for target directories
+log_debug('Using save_plots_dir: %s', save_plots_dir);
 
 % Ensure save_plots_dir is valid and not overwritten unnecessarily
 if save_plots && (isempty(save_plots_dir) || (~ischar(save_plots_dir) && ~isstring(save_plots_dir)))
@@ -196,7 +234,7 @@ if ( ~exist('input_dir','var') || isempty(input_dir) ) && ~test
 
     [~, oldest_idx] = min([dir_info.datenum]);
     input_dir = dir_info(oldest_idx).name;
-    fprintf('Automatically selected oldest MST_saves directory: %s\n', input_dir);
+    log_info('Automatically selected MST_saves directory: %s', input_dir);
 elseif isstring(input_dir)
     input_dir = char(input_dir);
 end
@@ -209,6 +247,9 @@ if ~test
     end
     data_dir = existing_dirs{1};
 end
+
+log_info('Processing run %d using input directory "%s".', run, input_dir);
+log_debug('Resolved data directory: %s', data_dir);
 
 time_dir = fullfile(data_dir, 'time');
 charge_dir = fullfile(data_dir, 'charge');
@@ -235,18 +276,53 @@ else
 end
 
 % Extract datetime from the basename and convert to 'yyyy-mm-dd_HH.MM.SS'
-datetime_str = regexp(dataset_basename, '\d{11}', 'match', 'once'); % Extract the YYYYDOYHHMMSS part
+datetime_str = regexp(dataset_basename, '\d{11,13}', 'match', 'once'); % Extract YYYYDOYHHMM[SS]
 if isempty(datetime_str)
     error('Failed to extract datetime from basename: %s', dataset_basename);
 end
 
-% Parse correctly (calendar year, day-of-year, hour, minute, second)
-file_datetime = datetime(datetime_str, 'InputFormat', 'yyyyDDDHHmmss');
+% Manually parse components to avoid the MATLAB warning triggered by mixing
+% day-of-year tokens with Gregorian year format specifiers.
+
+year_val = str2double(datetime_str(1:4));
+doy_val = str2double(datetime_str(5:7));
+if isnan(year_val) || isnan(doy_val)
+    error('Unable to parse year/day-of-year from token "%s".', datetime_str);
+end
+hour_val = 0;
+minute_val = 0;
+second_val = 0;
+if numel(datetime_str) >= 9
+    hour_val = str2double(datetime_str(8:9));
+    if isnan(hour_val)
+        error('Unable to parse hour from token "%s".', datetime_str);
+    end
+end
+if numel(datetime_str) >= 11
+    minute_val = str2double(datetime_str(10:11));
+    if isnan(minute_val)
+        error('Unable to parse minute from token "%s".', datetime_str);
+    end
+end
+if numel(datetime_str) >= 13
+    second_val = str2double(datetime_str(12:13));
+    if isnan(second_val)
+        error('Unable to parse second from token "%s".', datetime_str);
+    end
+end
+
+is_leap = (mod(year_val, 4) == 0 && (mod(year_val, 100) ~= 0 || mod(year_val, 400) == 0));
+max_doy = 365 + double(is_leap);
+if doy_val < 1 || doy_val > max_doy
+    error('Day-of-year value %d out of range for year %d.', doy_val, year_val);
+end
+
+file_datetime = datetime(year_val, 1, 1, hour_val, minute_val, second_val) + days(doy_val - 1);
 
 % For readability in filenames
 formatted_datetime = datestr(file_datetime, 'yyyy-mm-dd_HH.MM.SS');
 formatted_datetime_tex = strrep(formatted_datetime, '_', '\_'); % Escape underscores for titles/labels
-fprintf("The time of the dataset is: %s\n", formatted_datetime);
+log_info('Dataset timestamp: %s', formatted_datetime);
 
 execution_datetime = datestr(now, 'yyyy_mm_dd-HH.MM.SS');
 if run ~= 0
@@ -255,7 +331,7 @@ else
     pdfFileName = sprintf('results_%s_exec_%s.pdf', formatted_datetime, execution_datetime);
 end
 pdfPath = fullfile(save_plots_dir, pdfFileName);
-fprintf("PDF will be saved to: %s\n", pdfPath);
+log_info('Planned PDF output: %s', pdfPath);
 
 % Dynamically detect time MAT files in the directory
 time_files = dir(fullfile(time_dir, sprintf('%s*_T.mat', dataset_basename)));
@@ -264,10 +340,12 @@ if isempty(time_files)
     error('No time MAT files found matching "%s*_T.mat" in %s', dataset_basename, time_dir);
 end
 
+log_info('Loading %d time file(s) from %s', numel(time_files), time_dir);
+
 % Load each time file
 for i = 1:length(time_files)
     time_file_path = fullfile(time_dir, time_files(i).name);
-    fprintf('Loading time file: %s\n', time_file_path);
+    log_debug('Loading time file: %s', time_file_path);
     load(time_file_path);
 end
 
@@ -276,9 +354,10 @@ if isempty(charge_listing)
     error('No charge MAT files found matching "%s_a*_Q.mat" in %s', dataset_basename, charge_dir);
 end
 charge_files = sort({charge_listing.name});
+log_info('Loading %d charge file(s) from %s', numel(charge_files), charge_dir);
 for idx = 1:numel(charge_files)
     charge_path = fullfile(charge_dir, charge_files{idx});
-    fprintf('Loading charge data: %s\n', charge_path);
+    log_debug('Loading charge data: %s', charge_path);
     load(charge_path);
 end
 
@@ -303,6 +382,7 @@ replaced_counts = [];
 skipped_names   = {};
 skipped_types   = {};
 
+log_info('Scanning %d workspace variable(s) for NaNs', numel(vars));
 for k = 1:numel(vars)
     name = vars(k).name;
     cls  = vars(k).class;
@@ -335,12 +415,9 @@ end
 
 % ------------- Summary -------------
 total_nans = sum(replaced_counts);
-fprintf('\n=====================================================\n');
-fprintf('NaN replacement summary\n');
-fprintf('  Variables processed (float): %d\n', numel(replaced_names));
-fprintf('  Total NaNs replaced:         %d\n', total_nans);
-fprintf('  Variables skipped:           %d\n', numel(skipped_names));
-fprintf('=====================================================\n');
+log_debug( ...
+    'NaN replacement summary | float vars=%d | total replaced=%d | skipped=%d', ...
+    numel(replaced_names), total_nans, numel(skipped_names));
 
 
 %%
@@ -415,9 +492,9 @@ param_map = containers.Map(param_names, param_values);
 getParam = @(name) param_map(name);
 
 if run >= 4 && ~strcmp(run_field, 'default')
-    fprintf('Using configuration column %s for run %d\n', run_field, run);
+    log_info('Using configuration column "%s" for run %d.', run_field, run);
 elseif strcmp(run_field, 'default')
-    fprintf('Using default parameter configuration for run %d\n', run);
+    log_info('Using default parameter configuration for run %d.', run);
 end
 
 
@@ -584,7 +661,6 @@ Tt_cint = Tt_cint_OG;
 
 % Count the number of events that not all Tl_cint(:,1:4) are zero
 rawEvents = sum(any(Tl_cint(:,1:4) ~= 0, 2));
-fprintf('Total raw events with any leading time in Tl_cint: %d\n', rawEvents);
 
 total_raw_events = rawEvents;
 
@@ -669,9 +745,8 @@ Tt_cint(Tl_cint == 0) = 0;
 
 % Count the number of events that not all Tl_cint(:,1:4) are zero after filtering
 filteredEvents = sum(any(Tl_cint(:,1:4) ~= 0, 2));
-fprintf('Total filtered events with any leading time in Tl_cint after PMT cuts: %d\n', filteredEvents);
 percentage_good_events_in_pmts = 100 * filteredEvents / rawEvents;
-fprintf('Percentage of good events in PMTs after PMT cuts: %.2f%%\n', percentage_good_events_in_pmts);
+log_info('PMT filtering | raw events=%d | kept=%d (%.2f%%)', total_raw_events, filteredEvents, percentage_good_events_in_pmts);
 
 %channels 1 and 2 -> bottom PMTs
 Qcint = [Tt_cint(:,1) - Tl_cint(:,1) Tt_cint(:,2) - Tl_cint(:,2) Tt_cint(:,3) - Tl_cint(:,3) Tt_cint(:,4) - Tl_cint(:,4)]; 
@@ -1010,7 +1085,7 @@ Q_thin_bot_event_good = sum(Qb_good, 2);
 % ------------------------------------------------------------------------
 
 % Create masks------------------------------------------------------------
-fprintf("Calculating PMT charge thresholds for run 0 based on 20th and 80th percentiles.\n");
+log_debug('Calculating PMT charge thresholds for run 0 based on 20th and 80th percentiles.');
 Q_pmt_1 = Qcint_good(:,1);
 Q_pmt_2 = Qcint_good(:,2);
 Q_pmt_3 = Qcint_good(:,3);
@@ -1216,40 +1291,6 @@ timing_studies = true;
 if timing_studies
 
 
-
-
-    % Check correlation of the time difference in the same scint with the sum of times.
-    % Should be no correlation ideally
-
-    figure;
-    tiledlayout(1,2, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-    nexttile;
-    hold on;
-    scatter(sum_top_m, diff_top_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT3 + PMT4
-    hold off;
-    % Print legend
-    legend({'PMT3 + PMT4'}, 'Location','best');
-    xlabel('Sum of Times PMT3 - PMT4 [ns]');
-    ylabel('Time Difference PMT3 - PMT4 [ns]');
-    title(sprintf('Time Difference vs Sum of Times, Top scint (data from %s)', formatted_datetime_tex));
-    grid on; box on;
-
-    nexttile;
-    hold on;
-    scatter(sum_bot_m, diff_bot_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT1 + PMT2
-    hold off;
-    % Print legend
-    legend({'PMT1 + PMT2'}, 'Location','best');
-    xlabel('Sum of Times PMT1 - PMT2 [ns]');
-    ylabel('Time Difference PMT1 - PMT2 [ns]');
-    title(sprintf('Time Difference vs Sum of Times, Bottom scint (data from %s)', formatted_datetime_tex));
-    grid on; box on;
-
-
-    %%
-
-
     % Slewing correction on the PMTs
     diff_top = T_cint_3_good - T_cint_4_good;
     sum_top = T_cint_3_good + T_cint_4_good;
@@ -1275,6 +1316,37 @@ if timing_studies
     diff_bot_m = diff_bot(mask_diff_bot);
     sum_bot_m = sum_bot(mask_diff_bot);
 
+
+    % Check correlation of the time difference in the same scint with the sum of times.
+    % Should be no correlation ideally
+
+    if should_plot
+        figure;
+        tiledlayout(1,2, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+        nexttile;
+        hold on;
+        scatter(sum_top_m, diff_top_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT3 + PMT4
+        hold off;
+        % Print legend
+        legend({'PMT3 + PMT4'}, 'Location','best');
+        xlabel('Sum of Times PMT3 - PMT4 [ns]');
+        ylabel('Time Difference PMT3 - PMT4 [ns]');
+        title(sprintf('Time Difference vs Sum of Times, Top scint (data from %s)', formatted_datetime_tex));
+        grid on; box on;
+
+        nexttile;
+        hold on;
+        scatter(sum_bot_m, diff_bot_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT1 + PMT2
+        hold off;
+        % Print legend
+        legend({'PMT1 + PMT2'}, 'Location','best');
+        xlabel('Sum of Times PMT1 - PMT2 [ns]');
+        ylabel('Time Difference PMT1 - PMT2 [ns]');
+        title(sprintf('Time Difference vs Sum of Times, Bottom scint (data from %s)', formatted_datetime_tex));
+        grid on; box on;
+    end
+    
 
     % Slewing correction (linear fit), fit
     % diff_bot_corr_1 = diff_bot - F(q1)
@@ -1331,101 +1403,104 @@ if timing_studies
     diff_bot_corr_1_m = diff_bot_corr_1(mask_diff_bot);
     diff_bot_corr_2_m = diff_bot_corr_2(mask_diff_bot);
 
-    % --- Plots (before/after) ---
-    figure;
-    tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
+    if should_plot
+        % --- Plots (before/after) ---
+        figure;
+        tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-    ylimits = [-4 4];
+        ylimits = [-4 4];
 
-    % ---- TOP: raw vs q3,q4 with polynomial overlays
-    nexttile; hold on; grid on; box on;
-    scatter(q3_m, diff_top_m, 20, [0.2 0.2 0.8], '.');   % PMT3
-    scatter(q4_m, diff_top_m, 20, [0.8 0.6 0.0], '.');   % PMT4
-    xfit_top_3 = linspace(min(q3_use), max(q3_use), 200);
-    xfit_top_4 = linspace(min(q4_use), max(q4_use), 200);
-    plot(xfit_top_3, polyval(pmt3_fit_coeffs, xfit_top_3), 'b--', 'LineWidth', 2);
-    plot(xfit_top_4, polyval(pmt4_fit_coeffs, xfit_top_4), 'r--', 'LineWidth', 2);
-    ylim(ylimits);
-    legend({'PMT3','PMT4'}, 'Location','best');
-    xlabel('PMT Charge [ADCbins]');
-    ylabel('Time Difference PMT3 - PMT4 [ns]');
-    title(sprintf('Time Diff vs PMT Charge (raw) — deg = %d', deg));
-    hold off;
+        % ---- TOP: raw vs q3,q4 with polynomial overlays
+        nexttile; hold on; grid on; box on;
+        scatter(q3_m, diff_top_m, 20, [0.2 0.2 0.8], '.');   % PMT3
+        scatter(q4_m, diff_top_m, 20, [0.8 0.6 0.0], '.');   % PMT4
+        xfit_top_3 = linspace(min(q3_use), max(q3_use), 200);
+        xfit_top_4 = linspace(min(q4_use), max(q4_use), 200);
+        plot(xfit_top_3, polyval(pmt3_fit_coeffs, xfit_top_3), 'b--', 'LineWidth', 2);
+        plot(xfit_top_4, polyval(pmt4_fit_coeffs, xfit_top_4), 'r--', 'LineWidth', 2);
+        ylim(ylimits);
+        legend({'PMT3','PMT4'}, 'Location','best');
+        xlabel('PMT Charge [ADCbins]');
+        ylabel('Time Difference PMT3 - PMT4 [ns]');
+        title(sprintf('Time Diff vs PMT Charge (raw) — deg = %d', deg));
+        hold off;
 
-    % ---- BOTTOM: raw vs q1,q2 with polynomial overlays
-    nexttile; hold on; grid on; box on;
-    scatter(q1_m, diff_bot_m, 20, [0.2 0.2 0.8], '.');   % PMT1
-    scatter(q2_m, diff_bot_m, 20, [0.8 0.6 0.0], '.');   % PMT2
-    xfit_bot_1 = linspace(max(q1_use), min([q1_use; q2_use]), 200);
-    xfit_bot_2 = linspace(max([q1_use; q2_use]), min([q1_use; q2_use]), 200);
-    plot(xfit_bot_1, polyval(pmt1_fit_coeffs, xfit_bot_1), 'b--', 'LineWidth', 2);
-    plot(xfit_bot_2, polyval(pmt2_fit_coeffs, xfit_bot_2), 'r--', 'LineWidth', 2);
-    ylim(ylimits);
-    legend({'PMT1','PMT2'}, 'Location','best');
-    xlabel('PMT Charge [ADCbins]');
-    ylabel('Time Difference PMT1 - PMT2 [ns]');
-    title(sprintf('Time Diff vs PMT Charge (raw) — deg = %d', deg));
-    hold off;
+        % ---- BOTTOM: raw vs q1,q2 with polynomial overlays
+        nexttile; hold on; grid on; box on;
+        scatter(q1_m, diff_bot_m, 20, [0.2 0.2 0.8], '.');   % PMT1
+        scatter(q2_m, diff_bot_m, 20, [0.8 0.6 0.0], '.');   % PMT2
+        xfit_bot_1 = linspace(max(q1_use), min([q1_use; q2_use]), 200);
+        xfit_bot_2 = linspace(max([q1_use; q2_use]), min([q1_use; q2_use]), 200);
+        plot(xfit_bot_1, polyval(pmt1_fit_coeffs, xfit_bot_1), 'b--', 'LineWidth', 2);
+        plot(xfit_bot_2, polyval(pmt2_fit_coeffs, xfit_bot_2), 'r--', 'LineWidth', 2);
+        ylim(ylimits);
+        legend({'PMT1','PMT2'}, 'Location','best');
+        xlabel('PMT Charge [ADCbins]');
+        ylabel('Time Difference PMT1 - PMT2 [ns]');
+        title(sprintf('Time Diff vs PMT Charge (raw) — deg = %d', deg));
+        hold off;
 
-    % ---- TOP: corrected
-    nexttile; hold on; grid on; box on;
-    scatter(q3_m, diff_top_corr_3_m, 20, [0.2 0.2 0.8], '.');   % PMT3
-    scatter(q4_m, diff_top_corr_4_m, 20, [0.8 0.6 0.0], '.');   % PMT4
-    ylim(ylimits);
-    legend({'PMT3','PMT4'}, 'Location','best');
-    xlabel('PMT Charge [ADCbins]');
-    ylabel('Corrected Time Difference (TOP) [ns]');
-    title('After charge correction (TOP)');
-    hold off;
+        % ---- TOP: corrected
+        nexttile; hold on; grid on; box on;
+        scatter(q3_m, diff_top_corr_3_m, 20, [0.2 0.2 0.8], '.');   % PMT3
+        scatter(q4_m, diff_top_corr_4_m, 20, [0.8 0.6 0.0], '.');   % PMT4
+        ylim(ylimits);
+        legend({'PMT3','PMT4'}, 'Location','best');
+        xlabel('PMT Charge [ADCbins]');
+        ylabel('Corrected Time Difference (TOP) [ns]');
+        title('After charge correction (TOP)');
+        hold off;
 
-    % ---- BOTTOM: corrected
-    nexttile; hold on; grid on; box on;
-    scatter(q1_m, diff_bot_corr_1_m, 20, [0.2 0.2 0.8], '.');   % PMT1
-    scatter(q2_m, diff_bot_corr_2_m, 20, [0.8 0.6 0.0], '.');   % PMT2
-    ylim(ylimits);
-    legend({'PMT1','PMT2'}, 'Location','best');
-    xlabel('PMT Charge [ADCbins]');
-    ylabel('Corrected Time Difference (BOTTOM) [ns]');
-    title('After charge correction (BOTTOM)');
-    hold off;
+        % ---- BOTTOM: corrected
+        nexttile; hold on; grid on; box on;
+        scatter(q1_m, diff_bot_corr_1_m, 20, [0.2 0.2 0.8], '.');   % PMT1
+        scatter(q2_m, diff_bot_corr_2_m, 20, [0.8 0.6 0.0], '.');   % PMT2
+        ylim(ylimits);
+        legend({'PMT1','PMT2'}, 'Location','best');
+        xlabel('PMT Charge [ADCbins]');
+        ylabel('Corrected Time Difference (BOTTOM) [ns]');
+        title('After charge correction (BOTTOM)');
+        hold off;
 
 
-    % ========================
-    %  HISTOGRAMS: before vs after correction (fixed binning)
-    % =========================
-    figure('Name','Time-difference histograms before/after correction');
-    tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
+        % ========================
+        %  HISTOGRAMS: before vs after correction (fixed binning)
+        % =========================
+        figure('Name','Time-difference histograms before/after correction');
+        tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
 
-    % Common binning
-    edges = linspace(-5, 5, 251);  % n bins from -5 to 5
+        % Common binning
+        edges = linspace(-5, 5, 251);  % n bins from -5 to 5
 
-    % ---- TOP detector ----
-    nexttile;
-    hold on; grid on; box on;
-    histogram(diff_top_m, edges, ...
-        'FaceColor', [0.4 0.4 0.9], 'FaceAlpha', 0.5, 'DisplayName','Before correction');
-    histogram(diff_top_corr_3_m, edges, 'FaceColor', [0.9 0.4 0.4], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 3');
-    histogram(diff_top_corr_4_m, edges, 'FaceColor', [1 1 1], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 4');
-    xlabel('Time difference TOP [ns]');
-    ylabel('Counts');
-    legend('Location','best');
-    title('TOP time difference distribution — before vs after correction');
-    xlim([-5 5]);
+        % ---- TOP detector ----
+        nexttile;
+        hold on; grid on; box on;
+        histogram(diff_top_m, edges, ...
+            'FaceColor', [0.4 0.4 0.9], 'FaceAlpha', 0.5, 'DisplayName','Before correction');
+        histogram(diff_top_corr_3_m, edges, 'FaceColor', [0.9 0.4 0.4], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 3');
+        histogram(diff_top_corr_4_m, edges, 'FaceColor', [1 1 1], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 4');
+        xlabel('Time difference TOP [ns]');
+        ylabel('Counts');
+        legend('Location','best');
+        title('TOP time difference distribution — before vs after correction');
+        xlim([-5 5]);
 
-    % ---- BOTTOM detector ----
-    nexttile;
-    hold on; grid on; box on;
-    histogram(diff_bot_m, edges, ...
-        'FaceColor', [0.4 0.4 0.9], 'FaceAlpha', 0.5, 'DisplayName','Before correction');
-    histogram(diff_bot_corr_1_m, edges, 'FaceColor', [0.9 0.4 0.4], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 1');
-    histogram(diff_bot_corr_2_m, edges, 'FaceColor', [1 1 1], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 2');
-    xlabel('Time difference BOTTOM [ns]');
-    ylabel('Counts');
-    legend('Location','best');
-    title('BOTTOM time difference distribution — before vs after correction');
-    xlim([-5 5]);
+        % ---- BOTTOM detector ----
+        nexttile;
+        hold on; grid on; box on;
+        histogram(diff_bot_m, edges, ...
+            'FaceColor', [0.4 0.4 0.9], 'FaceAlpha', 0.5, 'DisplayName','Before correction');
+        histogram(diff_bot_corr_1_m, edges, 'FaceColor', [0.9 0.4 0.4], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 1');
+        histogram(diff_bot_corr_2_m, edges, 'FaceColor', [1 1 1], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 2');
+        xlabel('Time difference BOTTOM [ns]');
+        ylabel('Counts');
+        legend('Location','best');
+        title('BOTTOM time difference distribution — before vs after correction');
+        xlim([-5 5]);
 
-    sgtitle(sprintf('Time difference improvement after charge correction (%s)', formatted_datetime_tex));
+        sgtitle(sprintf('Time difference improvement after charge correction (%s)', formatted_datetime_tex));
+    end
+
 
 
     %%
@@ -1487,57 +1562,59 @@ if timing_studies
     time_diff_sum = T_cint_bot_good - T_cint_top_good;
     time_diff_sum_corr = T_cint_bot_corr - T_cint_top_corr;
 
-    figure('Name','Time Difference Sum — Before/After with Gaussian fits (scaled properly)');
-    nexttile; hold on; grid on; box on;
+    if should_plot
+        figure('Name','Time Difference Sum — Before/After with Gaussian fits (scaled properly)');
+        nexttile; hold on; grid on; box on;
 
-    % Data and mask
-    m = mask_diff_bot & mask_diff_top;
-    td_before = time_diff_sum(m);
-    td_after  = time_diff_sum_corr(m);
+        % Data and mask
+        m = mask_diff_bot & mask_diff_top;
+        td_before = time_diff_sum(m);
+        td_after  = time_diff_sum_corr(m);
 
-    % Common binning
-    edges = linspace(-3, 3, 351);
-    binCenters = edges(1:end-1) + diff(edges)/2;
+        % Common binning
+        edges = linspace(-3, 3, 351);
+        binCenters = edges(1:end-1) + diff(edges)/2;
 
-    % --- Histogram counts (manual, not histogram object) ---
-    [counts_b,~] = histcounts(td_before, edges);
-    [counts_a,~] = histcounts(td_after,  edges);
+        % --- Histogram counts (manual, not histogram object) ---
+        [counts_b,~] = histcounts(td_before, edges);
+        [counts_a,~] = histcounts(td_after,  edges);
 
-    % --- Fit Gaussian directly to histogram (counts vs bin centers) ---
-    gauss_fun = @(b, x) b(1) * exp(-0.5*((x - b(2))/b(3)).^2);  % b = [amplitude, mean, sigma]
+        % --- Fit Gaussian directly to histogram (counts vs bin centers) ---
+        gauss_fun = @(b, x) b(1) * exp(-0.5*((x - b(2))/b(3)).^2);  % b = [amplitude, mean, sigma]
 
-    % Initial guesses
-    b0_b = [max(counts_b), mean(td_before), std(td_before)];
-    b0_a = [max(counts_a), mean(td_after),  std(td_after)];
+        % Initial guesses
+        b0_b = [max(counts_b), mean(td_before), std(td_before)];
+        b0_a = [max(counts_a), mean(td_after),  std(td_after)];
 
-    % Fit via fminsearch
-    error_func_b = @(b) sum((counts_b - gauss_fun(b, binCenters)).^2);
-    error_func_a = @(b) sum((counts_a - gauss_fun(b, binCenters)).^2);
+        % Fit via fminsearch
+        error_func_b = @(b) sum((counts_b - gauss_fun(b, binCenters)).^2);
+        error_func_a = @(b) sum((counts_a - gauss_fun(b, binCenters)).^2);
 
-    opts = optimset('Display', 'off');
-    bfit_b = fminsearch(error_func_b, b0_b, opts);
-    bfit_a = fminsearch(error_func_a, b0_a, opts);
+        opts = optimset('Display', 'off');
+        bfit_b = fminsearch(error_func_b, b0_b, opts);
+        bfit_a = fminsearch(error_func_a, b0_a, opts);
 
-    % --- Evaluate fits for plotting ---
-    xfit = linspace(edges(1), edges(end), 600);
-    yfit_b = gauss_fun(bfit_b, xfit);
-    yfit_a = gauss_fun(bfit_a, xfit);
+        % --- Evaluate fits for plotting ---
+        xfit = linspace(edges(1), edges(end), 600);
+        yfit_b = gauss_fun(bfit_b, xfit);
+        yfit_a = gauss_fun(bfit_a, xfit);
 
-    % --- Plot histograms (counts) ---
-    bar(binCenters, counts_b, 1, 'FaceColor',[0.4 0.4 0.9], 'FaceAlpha',0.4, 'EdgeColor','none', 'DisplayName','Before correction');
-    bar(binCenters, counts_a, 1, 'FaceColor',[0.9 0.4 0.4], 'FaceAlpha',0.4, 'EdgeColor','none', 'DisplayName','After correction');
+        % --- Plot histograms (counts) ---
+        bar(binCenters, counts_b, 1, 'FaceColor',[0.4 0.4 0.9], 'FaceAlpha',0.4, 'EdgeColor','none', 'DisplayName','Before correction');
+        bar(binCenters, counts_a, 1, 'FaceColor',[0.9 0.4 0.4], 'FaceAlpha',0.4, 'EdgeColor','none', 'DisplayName','After correction');
 
-    % --- Overlay fits (perfectly scaled) ---
-    plot(xfit, yfit_b, 'b-', 'LineWidth',2, ...
-        'DisplayName', sprintf('Gaussian before: \\mu=%.3f, \\sigma=%.3f', bfit_b(2), bfit_b(3)));
-    plot(xfit, yfit_a, 'r-', 'LineWidth',2, ...
-        'DisplayName', sprintf('Gaussian after: \\mu=%.3f, \\sigma=%.3f', bfit_a(2), bfit_a(3)));
+        % --- Overlay fits (perfectly scaled) ---
+        plot(xfit, yfit_b, 'b-', 'LineWidth',2, ...
+            'DisplayName', sprintf('Gaussian before: \\mu=%.3f, \\sigma=%.3f', bfit_b(2), bfit_b(3)));
+        plot(xfit, yfit_a, 'r-', 'LineWidth',2, ...
+            'DisplayName', sprintf('Gaussian after: \\mu=%.3f, \\sigma=%.3f', bfit_a(2), bfit_a(3)));
 
-    xlabel('Time Difference Sum (Bottom - Top) [ns]');
-    ylabel('Counts');
-    title(sprintf('Time Difference Sum — Before vs After correction (data from %s)', formatted_datetime_tex));
-    xlim([-3 3]);
-    legend('Location','best');
+        xlabel('Time Difference Sum (Bottom - Top) [ns]');
+        ylabel('Counts');
+        title(sprintf('Time Difference Sum — Before vs After correction (data from %s)', formatted_datetime_tex));
+        xlim([-3 3]);
+        legend('Location','best');
+    end
 
 
     %%
@@ -1546,10 +1623,7 @@ if timing_studies
     % The proper slewing correction should be performed here: we have
     % T_cint_bot_corr, T_cint_top_corr and T_thick_strip_good
 
-
-
     time_diff_TOP_BOT = T_cint_bot_corr - T_cint_top_corr;
-
 
     time_diff_RPC_TOP = T_thick_strip_good - T_cint_top_corr;
     time_diff_RPC_BOT = T_thick_strip_good - T_cint_bot_corr;
@@ -1558,51 +1632,51 @@ if timing_studies
     charge_TOP = Qcint_top_good;
     charge_BOT = Qcint_bot_good;
 
-    % Plot in 1 row and 3 cols the scatter plots of time differences vs charges
-    figure;
-    tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
-    % (1) TOP - BOT vs PMT charges
-    nexttile;
-    hold on;
-    scatter(charge_BOT, time_diff_TOP_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-    scatter(charge_TOP, time_diff_TOP_BOT, 20, [0.2 0.8 0.2], '.'); % PMT Top
-    hold off;
-    legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
-    xlabel('Scintillator Charges [ADCbins]');
-    ylabel('Time Difference TOP - BOT [ns]');
-    title('TOP - BOT vs PMT Charges');
-    grid on; box on;
-    
-    % (2) RPC - TOP vs PMT Top and RPC
-    nexttile;
-    hold on;
-    scatter(charge_TOP, time_diff_RPC_TOP, 20, [0.2 0.8 0.2], '.'); % PMT Top
-    scatter(charge_RPC, time_diff_RPC_TOP, 20, [0.8 0.2 0.2], '.'); % RPC
-    hold off;
-    legend({'PMT_Top', 'RPC'}, 'Location', 'best');
-    xlabel('Scintillator Charges [ADCbins]');
-    ylabel('Time Difference RPC - TOP [ns]');
-    title('RPC - TOP vs PMT Top and RPC');
-    grid on; box on;
+    if should_plot
+        % Plot in 1 row and 3 cols the scatter plots of time differences vs charges
+        figure;
+        tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
+        % (1) TOP - BOT vs PMT charges
+        nexttile;
+        hold on;
+        scatter(charge_BOT, time_diff_TOP_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+        scatter(charge_TOP, time_diff_TOP_BOT, 20, [0.2 0.8 0.2], '.'); % PMT Top
+        hold off;
+        legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
+        xlabel('Scintillator Charges [ADCbins]');
+        ylabel('Time Difference TOP - BOT [ns]');
+        title('TOP - BOT vs PMT Charges');
+        grid on; box on;
+        
+        % (2) RPC - TOP vs PMT Top and RPC
+        nexttile;
+        hold on;
+        scatter(charge_TOP, time_diff_RPC_TOP, 20, [0.2 0.8 0.2], '.'); % PMT Top
+        scatter(charge_RPC, time_diff_RPC_TOP, 20, [0.8 0.2 0.2], '.'); % RPC
+        hold off;
+        legend({'PMT_Top', 'RPC'}, 'Location', 'best');
+        xlabel('Scintillator Charges [ADCbins]');
+        ylabel('Time Difference RPC - TOP [ns]');
+        title('RPC - TOP vs PMT Top and RPC');
+        grid on; box on;
 
-    % (3) RPC - BOT vs PMT Bottom and RPC
-    nexttile;
-    hold on;
-    scatter(charge_BOT, time_diff_RPC_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-    scatter(charge_RPC, time_diff_RPC_BOT, 20, [0.8 0.2 0.2], '.'); % RPC
-    hold off;
-    legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
-    xlabel('Scintillator Charges [ADCbins]');
-    ylabel('Time Difference RPC - BOT [ns]');
-    title('RPC - BOT vs PMT Bottom and RPC');
-    grid on; box on;
+        % (3) RPC - BOT vs PMT Bottom and RPC
+        nexttile;
+        hold on;
+        scatter(charge_BOT, time_diff_RPC_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+        scatter(charge_RPC, time_diff_RPC_BOT, 20, [0.8 0.2 0.2], '.'); % RPC
+        hold off;
+        legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
+        xlabel('Scintillator Charges [ADCbins]');
+        ylabel('Time Difference RPC - BOT [ns]');
+        title('RPC - BOT vs PMT Bottom and RPC');
+        grid on; box on;
 
-    sgtitle(sprintf('Time Differences vs Charges after Slewing Correction (data from %s)', formatted_datetime_tex));
+        sgtitle(sprintf('Time Differences vs Charges after Slewing Correction (data from %s)', formatted_datetime_tex));
+    end
 
 
     %%
-
-
 
 
     % ========= Slewing correction for THICK STRIP using RPC charge =========
@@ -1661,50 +1735,45 @@ if timing_studies
     time_diff_RPC_BOT_corr = T_thick_strip_rpc_corr - T_cint_bot_corr;
 
     % ========= Quick checks / plots =========
-    figure('Name','RPC slewing vs RPC charge');
-    tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+    if should_plot
+        figure('Name','RPC slewing vs RPC charge');
+        tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
 
-    % RPC - TOP
-    nexttile; hold on; grid on; box on;
-    scatter(charge_RPC(m_rt), time_diff_RPC_TOP(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
-    qfit = linspace(lo_rpc, hi_rpc, 200);
-    plot(qfit, polyval(p_rt, qfit), 'r--', 'LineWidth', 1.8);
-    xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP [ns]');
-    title(sprintf('RPC–TOP fit (deg=%d)', deg_rpc)); hold off;
+        % RPC - TOP
+        nexttile; hold on; grid on; box on;
+        scatter(charge_RPC(m_rt), time_diff_RPC_TOP(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
+        qfit = linspace(lo_rpc, hi_rpc, 200);
+        plot(qfit, polyval(p_rt, qfit), 'r--', 'LineWidth', 1.8);
+        xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP [ns]');
+        title(sprintf('RPC–TOP fit (deg=%d)', deg_rpc)); hold off;
 
-    % RPC - BOT
-    nexttile; hold on; grid on; box on;
-    scatter(charge_RPC(m_rb), time_diff_RPC_BOT(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
-    plot(qfit, polyval(p_rb, qfit), 'r--', 'LineWidth', 1.8);
-    xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT [ns]');
-    title(sprintf('RPC–BOT fit (deg=%d)', deg_rpc)); hold off;
+        % RPC - BOT
+        nexttile; hold on; grid on; box on;
+        scatter(charge_RPC(m_rb), time_diff_RPC_BOT(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
+        plot(qfit, polyval(p_rb, qfit), 'r--', 'LineWidth', 1.8);
+        xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT [ns]');
+        title(sprintf('RPC–BOT fit (deg=%d)', deg_rpc)); hold off;
 
-    figure('Name','After slewing correction (vs RPC charge)');
-    tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
-    nexttile; hold on; grid on; box on;
-    scatter(charge_RPC(m_rt), time_diff_RPC_TOP_corr(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
-    xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP (corr) [ns]');
-    title('RPC–TOP after correction'); yline(0,'k:'); hold off;
+        figure('Name','After slewing correction (vs RPC charge)');
+        tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+        nexttile; hold on; grid on; box on;
+        scatter(charge_RPC(m_rt), time_diff_RPC_TOP_corr(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
+        xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP (corr) [ns]');
+        title('RPC–TOP after correction'); yline(0,'k:'); hold off;
 
-    nexttile; hold on; grid on; box on;
-    scatter(charge_RPC(m_rb), time_diff_RPC_BOT_corr(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
-    xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT (corr) [ns]');
-    title('RPC–BOT after correction'); yline(0,'k:'); hold off;
-
-
-
-
-
+        nexttile; hold on; grid on; box on;
+        scatter(charge_RPC(m_rb), time_diff_RPC_BOT_corr(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
+        xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT (corr) [ns]');
+        title('RPC–BOT after correction'); yline(0,'k:'); hold off;
+    end
 
 
     %%
+
 
     T_thick_strip_slew_corr = T_thick_strip_rpc_corr;
-    T_cint_top_slew_corr = time_diff_RPC_TOP_corr;
-    T_cint_bot_slew_corr = time_diff_RPC_BOT_corr;
-
-    %%
-
+    T_cint_top_slew_corr = T_cint_top_corr;
+    T_cint_bot_slew_corr = T_cint_bot_corr;
 
     % Compute time differences and apply a common mask
     % time_diff_SC1_SC2 = T_cint_bot_good - T_cint_top_good;
@@ -1720,7 +1789,9 @@ if timing_studies
             (time_diff_SC1_SC2 ~= 0) & (time_diff_RPC_SC1 ~= 0) & (time_diff_RPC_SC2 ~= 0) & ...
             (abs(time_diff_SC1_SC2) < 50) & (abs(time_diff_RPC_SC1) < 50) & (abs(time_diff_RPC_SC2) < 50) & ...
             (abs(time_diff_SC1_SC2) > 0.2) & (abs(time_diff_RPC_SC1) > 0.2) & (abs(time_diff_RPC_SC2) > 0.2);
-
+    
+    % mask_td = true(size(time_diff_SC1_SC2));  % for testing without mask
+    
     % x-values: total PMT charge (row-wise) and individual PMT charges
     qbot = Qcint_good(:,1) + Qcint_good(:,2);
     qtop = Qcint_good(:,3) + Qcint_good(:,4);
@@ -1735,46 +1806,48 @@ if timing_studies
     td_RPC_SC2_m = time_diff_RPC_SC2(mask_td);
 
     % Plot the three scatter plots in a single row
-    figure;
-    tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
+    if should_plot
+        figure;
+        tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-    % (1) SC2 - SC1 vs PMT charges
-    nexttile;
-    hold on;
-    scatter(qbot_m, td_SC1_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-    scatter(qtop_m, td_SC1_SC2_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
-    hold off;
-    legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
-    xlabel('Sum of Scintillator Charges [ADCbins]');
-    ylabel('Time Difference SC2 - SC1 [ns]');
-    title('SC2 - SC1 vs PMT Charges');
-    grid on; box on;
+        % (1) SC2 - SC1 vs PMT charges
+        nexttile;
+        hold on;
+        scatter(qbot_m, td_SC1_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+        scatter(qtop_m, td_SC1_SC2_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
+        hold off;
+        legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
+        xlabel('Sum of Scintillator Charges [ADCbins]');
+        ylabel('Time Difference SC2 - SC1 [ns]');
+        title('SC2 - SC1 vs PMT Charges');
+        grid on; box on;
 
-    % (2) RPC - SC1 vs PMT Top and RPC
-    nexttile;
-    hold on;
-    scatter(qtop_m, td_RPC_SC1_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
-    scatter(qrpc_m, td_RPC_SC1_m, 20, [0.8 0.2 0.2], '.'); % RPC
-    hold off;
-    legend({'PMT_Top', 'RPC'}, 'Location', 'best');
-    xlabel('Sum of Scintillator Charges [ADCbins]');
-    ylabel('Time Difference RPC - SC1 [ns]');
-    title('RPC - SC1 vs PMT Top and RPC');
-    grid on; box on;
+        % (2) RPC - SC1 vs PMT Top and RPC
+        nexttile;
+        hold on;
+        scatter(qtop_m, td_RPC_SC1_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
+        scatter(qrpc_m, td_RPC_SC1_m, 20, [0.8 0.2 0.2], '.'); % RPC
+        hold off;
+        legend({'PMT_Top', 'RPC'}, 'Location', 'best');
+        xlabel('Sum of Scintillator Charges [ADCbins]');
+        ylabel('Time Difference RPC - SC1 [ns]');
+        title('RPC - SC1 vs PMT Top and RPC');
+        grid on; box on;
 
-    % (3) RPC - SC2 vs PMT Bottom and RPC
-    nexttile;
-    hold on;
-    scatter(qbot_m, td_RPC_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-    scatter(qrpc_m, td_RPC_SC2_m, 20, [0.8 0.2 0.2], '.'); % RPC
-    hold off;
-    legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
-    xlabel('Sum of Scintillator Charges [ADCbins]');
-    ylabel('Time Difference RPC - SC2 [ns]');
-    title('RPC - SC2 vs PMT Bottom and RPC');
-    grid on; box on;
+        % (3) RPC - SC2 vs PMT Bottom and RPC
+        nexttile;
+        hold on;
+        scatter(qbot_m, td_RPC_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
+        scatter(qrpc_m, td_RPC_SC2_m, 20, [0.8 0.2 0.2], '.'); % RPC
+        hold off;
+        legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
+        xlabel('Sum of Scintillator Charges [ADCbins]');
+        ylabel('Time Difference RPC - SC2 [ns]');
+        title('RPC - SC2 vs PMT Bottom and RPC');
+        grid on; box on;
 
-    sgtitle(sprintf('Time Differences vs Charges (data from %s)', formatted_datetime_tex));
+        sgtitle(sprintf('Time Differences vs Charges (data from %s)', formatted_datetime_tex));
+    end
 
 
     %%
@@ -1787,20 +1860,21 @@ if timing_studies
     nbins = 100;  % histogram bins for fitting
     opts = optimset('Display','off','TolX',1e-6,'TolFun',1e-6,'MaxIter',2000,'MaxFunEvals',2000);
 
-    fit_results = struct('amp',[],'mu',[],'sigma',[],'FWHM',[]);
+    fit_results = repmat(struct('amp',NaN,'mu',NaN,'sigma',NaN,'FWHM',NaN), 1, numel(td_sets));
 
-    figure;
-    hold on;
-    for ii = 1:3
+    did_plot_time_fits = false;
+    if should_plot
+        figure;
+        hold on;
+        did_plot_time_fits = true;
+    end
+
+    for ii = 1:numel(td_sets)
         td = td_sets{ii};
         % sanitize
         td = td(isfinite(td) & ~isnan(td));
         if isempty(td)
             warning('Time-diff %s empty, skipping fit.', td_labels{ii});
-            fit_results(ii).amp = NaN;
-            fit_results(ii).mu = NaN;
-            fit_results(ii).sigma = NaN;
-            fit_results(ii).FWHM = NaN;
             continue;
         end
 
@@ -1840,29 +1914,34 @@ if timing_studies
         fit_results(ii).sigma = sigma_fit;
         fit_results(ii).FWHM = FWHM;
 
-        % Plot histogram (stairs) and fitted Gaussian (smooth)
-        stairs(centers, p, 'Color', td_colors{ii}, 'LineWidth', 1.0);
-        xfit = linspace(min(centers), max(centers), 1000);
-        yfit = gauss([amp_fit, mu_fit, sigma_fit], xfit);
-        plot(xfit, yfit, 'Color', td_colors{ii}, 'LineWidth', 2);
+        if should_plot
+            % Plot histogram (stairs) and fitted Gaussian (smooth)
+            stairs(centers, p, 'Color', td_colors{ii}, 'LineWidth', 1.0);
+            xfit = linspace(min(centers), max(centers), 1000);
+            yfit = gauss([amp_fit, mu_fit, sigma_fit], xfit);
+            plot(xfit, yfit, 'Color', td_colors{ii}, 'LineWidth', 2);
 
-        % annotate on plot
-        txt = sprintf('%s: \\mu=%.3f ns, \\sigma=%.3f ns, FWHM=%.3f ns', td_labels{ii}, mu_fit, sigma_fit, FWHM);
-        % place text progressively to avoid overlap
-        tx = min(centers) + 0.02*(ii-1)*(max(centers)-min(centers));
-        ty = max(p) * (0.9 - 0.18*(ii-1));
-        text(tx, ty, txt, 'Color', td_colors{ii}, 'FontSize', 9, 'Interpreter','tex');
+            % annotate on plot
+            txt = sprintf('%s: \\mu=%.3f ns, \\sigma=%.3f ns, FWHM=%.3f ns', td_labels{ii}, mu_fit, sigma_fit, FWHM);
+            % place text progressively to avoid overlap
+            tx = min(centers) + 0.02*(ii-1)*(max(centers)-min(centers));
+            ty = max(p) * (0.9 - 0.18*(ii-1));
+            text(tx, ty, txt, 'Color', td_colors{ii}, 'FontSize', 9, 'Interpreter','tex');
+        end
     end
-    xlabel('Time Difference [ns]');
-    ylabel('Probability');
-    legend([td_labels, strcat(td_labels, ' fit')], 'Location','best');
-    title(sprintf('Time Difference Histograms and Gaussian fits (data from %s)', formatted_datetime_tex));
-    grid on; box on;
-    hold off;
+
+    if should_plot && did_plot_time_fits
+        xlabel('Time Difference [ns]');
+        ylabel('Probability');
+        legend([td_labels, strcat(td_labels, ' fit')], 'Location','best');
+        title(sprintf('Time Difference Histograms and Gaussian fits (data from %s)', formatted_datetime_tex));
+        grid on; box on;
+        hold off;
+    end
 
     % Print fit summary
     for ii = 1:3
-        fprintf('%s fit: mu = %.4f ns, sigma = %.4f ns, FWHM = %.4f ns\n', ...
+        log_debug('%s fit: mu=%.4f ns | sigma=%.4f ns | FWHM=%.4f ns', ...
             td_labels{ii}, fit_results(ii).mu, fit_results(ii).sigma, fit_results(ii).FWHM);
     end
 
@@ -1875,14 +1954,9 @@ if timing_studies
     sigma_RPC_SC = (sigma_RPC_SC1 + sigma_RPC_SC2) / 2;
     sigma_SC = sigma_SC1_SC2 / sqrt(2);
 
-    fprintf('\nAssuming identical PMT time resolutions:\n');
-    fprintf('Estimated individual time resolutions:\n');
-    fprintf('  RPC:  %.5f ns\n', sigma_RPC_SC);
-    fprintf('  SC:   %.5f ns\n', sigma_SC);
-
     sigma_RPC = sqrt( (sigma_RPC_SC^2) - (sigma_SC^2) );
-    fprintf('Derived RPC time resolution:\n');
-    fprintf('  RPC:  %.5f ns\n', sigma_RPC);
+
+    log_info('Time resolution estimates (ns) under equal-PMT assumption | RPC=%.5f | SC=%.5f', sigma_RPC, sigma_SC);
 
 end
 
@@ -1938,8 +2012,8 @@ if should_plot
     subplot(1,2,2); plot(Qcint_OG(:,3), Qcint_OG(:,4), '.'); hold on; plot(Qcint(:,3), Qcint(:,4), '.');
     xlabel('Qcint3'); ylabel('Qcint4'); title('Charge PMT3 vs PMT4');
     xlim(charge_limits_pmt); ylim(charge_limits_pmt);
+    sgtitle(sprintf('PMT charge correlations (data from %s)', formatted_datetime_tex));
 end
-sgtitle(sprintf('PMT charge correlations (data from %s)', formatted_datetime_tex));
 
 
 % Finally, plot the Tl_cint i vs Tl_cint j scatter plots for all PMT pairs
@@ -2729,9 +2803,9 @@ if position_from_narrow_strips && should_plot
     height_ax = height_top_ax - height_bottom_ax;
     center_ax = [(base_left_ax + base_right_ax)/2, (height_bottom_ax + height_top_ax)/2];
 
-    fprintf('Rectangle in mm: center=(%.1f, %.1f), base=%.1f, height=%.1f\n', ...
+    log_debug('Selection rectangle (mm): center=(%.1f, %.1f) | base=%.1f | height=%.1f', ...
             center_mm(1), center_mm(2), base_mm, height_mm);
-    fprintf('Rectangle in axes: center=(%.1f, %.1f), base=%.1f, height=%.1f\n', ...
+    log_debug('Selection rectangle (axes units): center=(%.1f, %.1f) | base=%.1f | height=%.1f', ...
             center_ax(1), center_ax(2), base_ax, height_ax);
 
     figure('Name','Original thin vs thick (top row) → Final thin vs thick (bottom row)');
@@ -2862,9 +2936,8 @@ percentage_streamer_thin_bot = 100 * num_streamers_thin_bot / rawEvents;
 percentage_streamer_pmt_top = 0; % Not defined
 percentage_streamer_pmt_bot = 0; % Not defined
 
-fprintf('Percentage of streamers (Q > threshold) in Thin RPC TOP: %.2f%%\n', percentage_streamer_thin_top);
-fprintf('Percentage of streamers (Q > threshold) in Thick RPC: %.2f%%\n', percentage_streamer_thick);
-fprintf('Percentage of streamers (Q > threshold) in Thin RPC BOTTOM: %.2f%%\n', percentage_streamer_thin_bot);
+log_info('Streamer fraction of raw events | Thin top=%.2f%% | Thick=%.2f%% | Thin bottom=%.2f%%', ...
+    percentage_streamer_thin_top, percentage_streamer_thick, percentage_streamer_thin_bot);
 
 % Take only positive charges for the plots in a new vector that does not replace the original
 Q_thick_plot = Q_thick(isfinite(Q_thick) & Q_thick > 0);
@@ -3195,10 +3268,8 @@ thin_bot_threshold = 0;
 thick_threshold   = 0;
 
 % Print these three limits
-fprintf('Using thresholds for efficiency calculation:\n');
-fprintf('  Thick RPC: %g ADC bins\n', thick_threshold);
-fprintf('  Thin RPC TOP: %g ADC bins\n', thin_top_threshold);
-fprintf('  Thin RPC BOTTOM: %g ADC bins\n', thin_bot_threshold);
+log_debug('Efficiency thresholds (ADCbins) | Thick=%g | Thin top=%g | Thin bottom=%g', ...
+    thick_threshold, thin_top_threshold, thin_bot_threshold);
 
 % Map PMT channels to top/bottom (adjust if your ordering differs)
 pmt_top_cols = [1 2];
@@ -3285,8 +3356,18 @@ detectors = { ...
 nDet = size(detectors,1);
 nVar = numel(variantOrder);
 
-% Allocate with 3 extra columns for Mean/Median/Max (prev was +1 for StreamerPct)
-detRows = cell(nDet, 1 + 2*nVar + 4);
+% Allocate with additional columns for StreamerPct, charge stats, and time resolutions
+detRows = cell(nDet, 1 + 2*nVar + 6);
+
+% Time resolution values may be unavailable if the corresponding fits were skipped
+sigma_RPC_for_table = NaN;
+if exist('sigma_RPC','var') && isscalar(sigma_RPC) && isfinite(sigma_RPC)
+    sigma_RPC_for_table = sigma_RPC;
+end
+sigma_SC_for_table = NaN;
+if exist('sigma_SC','var') && isscalar(sigma_SC) && isfinite(sigma_SC)
+    sigma_SC_for_table = sigma_SC;
+end
 
 for i = 1:nDet
     detName    = detectors{i,1};
@@ -3311,6 +3392,20 @@ for i = 1:nDet
     detRows{i, 1 + 2*nVar + 2} = meanQ;     % MeanCharge
     detRows{i, 1 + 2*nVar + 3} = medianQ;   % MedianCharge
     detRows{i, 1 + 2*nVar + 4} = maxQ;      % MaxCharge
+
+    timeResRPC = NaN;
+    timeResSC  = NaN;
+    switch detName
+        case 'RPC_thick_center'
+            timeResRPC = sigma_RPC_for_table;
+        case 'PMT_top'
+            timeResSC = sigma_SC_for_table;
+        case 'PMT_bottom'
+            timeResSC = sigma_SC_for_table;
+    end
+
+    detRows{i, 1 + 2*nVar + 5} = timeResRPC; % time_res_RPC
+    detRows{i, 1 + 2*nVar + 6} = timeResSC;  % time_res_SC
 end
 
 % Column names
@@ -3319,7 +3414,7 @@ for c = 1:nVar
     varNames{end+1} = variantOrder{c};
     varNames{end+1} = [variantOrder{c} '_unc'];
 end
-varNames = [varNames, {'StreamerPct','MeanCharge','MedianCharge','MaxCharge'}];
+varNames = [varNames, {'StreamerPct','MeanCharge','MedianCharge','MaxCharge','time_res_RPC','time_res_SC'}];
 
 detTable = cell2table(detRows, 'VariableNames', varNames);
 
@@ -3344,7 +3439,7 @@ idxRPC   = ismember(detTable.Detector, rpcNames);
 detRPC   = detTable(idxRPC, :);
 
 % -------- Efficiency Summary (values in %) --------
-fprintf('\n==== Efficiency Summary (RPCs only; values in %%) ====\n');
+log_info('Efficiency summary (RPCs only; values in %%)');
 
 % Build headers: Detector + one column per variant (value (unc))
 colw_det = 17;
@@ -3383,7 +3478,7 @@ end
 fprintf('%s\n', repmat('=',1, sepLen));
 
 % -------- Charge Summary (ADCbins; streamer in %) --------
-fprintf('\n==== Charge Summary (RPCs only; ADC bins, streamer in %%) ====\n');
+log_info('Charge summary (RPCs only; ADC bins, streamer %%)');
 
 % Header
 fprintf('%-*s %-12s %-12s %-12s %-12s\n', colw_det, 'Detector', 'Mean', 'Median', 'Max', 'StreamerPct');
@@ -3431,29 +3526,34 @@ fclose(fid);
 
 writetable(detTable, outCsv, 'WriteMode','append');
 
+log_info('Summary CSV saved to %s', outCsv);
+
 if ~should_plot
-    fprintf('No-plot flag enabled; CSV saved to %s. Exiting before plot generation.\n', outCsv);
+    log_info('No-plot flag enabled; CSV saved to %s. Skipping figure generation.', outCsv);
+    log_banner('Completed caye_edits_minimal | Run %d | Input %s', run, input_dir);
     return;
 end
 
 
 % Print for verification
-fprintf('Save plots directory: %s\n', save_plots_dir);
-fprintf('PDF file name: %s\n', pdfFileName);
+log_debug('Figure export directory: %s', save_plots_dir);
+log_debug('Figure export filename: %s', pdfFileName);
 
 if should_plot && save_plots
     try
         if ~exist(save_plots_dir, 'dir'), mkdir(save_plots_dir); end
-        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName);
+        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName, log_debug);
         if figCount > 0 && ~isempty(pdfPath)
-            fprintf('Saved %d figure(s) to %s\n', figCount, pdfPath);
+            log_info('Saved %d figure(s) to %s', figCount, pdfPath);
         else
-            fprintf('No figures generated to save.\n');
+            log_info('No figures generated to save.');
         end
     catch saveErr
         warning('Failed to save figures.');
     end
 end
+
+log_banner('Completed caye_edits_minimal | Run %d | Input %s', run, input_dir);
 
 
 %%
@@ -3488,7 +3588,10 @@ end
 
 
 % Saves all open figures to a single multi-page PDF in targetDir/pdfFileName
-function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
+function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName, log_debug)
+    if nargin < 3 || isempty(log_debug)
+        log_debug = @(varargin) [];
+    end
     figs = findall(0, 'Type', 'figure');
     figCount = numel(figs);
     pdfPath = '';
@@ -3517,7 +3620,7 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
     % Temp folder for per-page PNGs
     tempDir = tempname(targetDir);
     mkdir(tempDir);
-    fprintf('Rasterizing %d figure(s) into %s (DPI=%d, bg=black)\n', figCount, tempDir, dpi);
+    log_debug('Rasterizing %d figure(s) into %s (DPI=%d, bg=black)', figCount, tempDir, dpi);
 
     keepRasterTemp = false;
     cleanupObj = [];
@@ -3527,7 +3630,7 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName)
         keepRasterTemp = false;
     end
     if keepRasterTemp
-        fprintf('keep_raster_temp is true; temporary PNGs will be left in place.\n');
+        log_debug('keep_raster_temp is true; temporary PNGs retained in %s', tempDir);
     else
         cleanupObj = onCleanup(@() cleanup_temp_directory(tempDir)); %#ok<NASGU>
     end

@@ -16,6 +16,15 @@ LOG_PATH = Path("LOG_FILES/DATA/big_log_lab_data.csv")
 RUN_DICT_PATH = Path("file_run_dictionary.csv")
 OUTLIER_ABS_LIMIT = 2000  # values above this (in absolute terms) are considered spurious
 
+ALPHA_P = 0.9
+ALPHA_T = 0.9
+REFERENCE_PRESSURE_PA = 9.6e4  # Pa
+REFERENCE_TEMPERATURE_K = 294.15  # K
+MBAR_TO_PA = 100.0
+CELSIUS_TO_KELVIN = 273.15
+PRESSURE_COLUMN = "sensors_Pressure_ext"  # mbar
+TEMPERATURE_COLUMN = "sensors_Temperature_ext"  # Celsius
+
 
 @dataclass(frozen=True)
 class RunSegment:
@@ -183,12 +192,61 @@ def create_figures(
                 clip_on=False,
             )
 
+    # Reduced HV (pressure/temperature corrected) with nominal overlays and currents
+    hvs = ["hv4_HVneg", "hv4_HVpos", "hv5_HVneg", "hv5_HVpos"]
+    currents = ["hv4_CurrentNeg", "hv4_CurrentPos", "hv5_CurrentNeg", "hv5_CurrentPos"]
+    has_env = PRESSURE_COLUMN in data and TEMPERATURE_COLUMN in data
+    if has_env:
+        pressure_pa = data[PRESSURE_COLUMN] * MBAR_TO_PA
+        temperature_k = data[TEMPERATURE_COLUMN] + CELSIUS_TO_KELVIN
+
+        # Median
+        REFERENCE_PRESSURE_PA = pressure_pa.median()
+        REFERENCE_TEMPERATURE_K = temperature_k.median()
+
+        factor = (1.0 + ALPHA_P * ( pressure_pa / REFERENCE_PRESSURE_PA - 1.0)) * (1.0 + ALPHA_T * ( REFERENCE_TEMPERATURE_K / temperature_k - 1.0))
+        factor = 1/factor
+
+        fig_reduced, (ax_reduced, ax_curr_norm) = plt.subplots(
+            2, 1, figsize=(10, 8), sharex=True, gridspec_kw={"hspace": 0.1}
+        )
+        add_run_spans(ax_reduced)
+        add_run_spans(ax_curr_norm)
+        for col in hvs:
+            if col in data:
+                reduced_series = data[col] * factor
+                line_reduced, = ax_reduced.plot(
+                    data[time_column],
+                    reduced_series,
+                    label=f"{col} reduced",
+                    linewidth=2.0,
+                )
+                ax_reduced.plot(
+                    data[time_column],
+                    data[col],
+                    label=f"{col} nominal",
+                    color=line_reduced.get_color(),
+                    alpha=0.35,
+                    linewidth=1.2,
+                    linestyle="--",
+                )
+        for col in currents:
+            if col in data:
+                ax_curr_norm.plot(data[time_column], data[col], label=col)
+        ax_reduced.set_ylabel("Reduced HV")
+        ax_curr_norm.set_ylabel("Currents")
+        ax_curr_norm.set_xlabel(xlabel)
+        # ax_reduced.legend(loc="upper left")
+        # ax_curr_norm.legend(loc="upper left")
+        add_midnight_lines(ax_reduced)
+        add_midnight_lines(ax_curr_norm)
+        fig_reduced.suptitle(f"Reduced HVs with Nominal Overlay and Currents{suffix}")
+        figures.append(fig_reduced)
+
     # HVs and Currents in stacked subplots
     fig, (ax_hv, ax_curr) = plt.subplots(
         2, 1, figsize=(10, 8), sharex=True, gridspec_kw={"hspace": 0.1}
     )
-    currents = ["hv4_CurrentNeg", "hv4_CurrentPos", "hv5_CurrentNeg", "hv5_CurrentPos"]
-    hvs = ["hv4_HVneg", "hv4_HVpos", "hv5_HVneg", "hv5_HVpos"]
     add_run_spans(ax_hv)
     add_run_spans(ax_curr)
     for col in currents:

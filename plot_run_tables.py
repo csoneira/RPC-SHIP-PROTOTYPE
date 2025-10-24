@@ -200,6 +200,124 @@ def _filter_detectors(
     return filtered, selected
 
 
+def plot_thick_rpc_summary(
+    table_frame: pd.DataFrame,
+    detectors: list[str],
+    pdf: PdfPages,
+) -> None:
+    thick_detector = next(
+        (det for det in detectors if "thick" in det.lower()), None
+    )
+    if thick_detector is None:
+        print("No thick RPC detector found; skipping combined thick RPC plot.")
+        return
+    required_columns = {"StreamerPct", "good", "time_res_RPC"}
+    missing = [col for col in required_columns if col not in table_frame.columns]
+    if missing:
+        print(
+            "Missing column(s) for thick RPC summary plot; "
+            f"skipping: {', '.join(missing)}"
+        )
+        return
+    det_data = (
+        table_frame.loc[table_frame["Detector"] == thick_detector]
+        .dropna(subset=["run"])
+        .sort_values("run")
+    )
+    if det_data.empty:
+        print(
+            f"No data available for thick detector {thick_detector}; "
+            "skipping combined thick RPC plot."
+        )
+        return
+
+    fig, axis_streamer = plt.subplots(figsize=(10, 5))
+
+    stream_series = (
+        det_data.loc[:, ["run", "StreamerPct"]].dropna(subset=["StreamerPct"])
+    )
+    good_series = det_data.loc[:, ["run", "good"]].dropna(subset=["good"])
+    sigma_series = det_data.loc[:, ["run", "time_res_RPC"]].dropna(
+        subset=["time_res_RPC"]
+    )
+
+    runs = det_data["run"].astype(int).to_numpy()
+    if runs.size:
+        axis_streamer.set_xticks(sorted(np.unique(runs)))
+
+    lines = []
+    labels: list[str] = []
+
+    if not stream_series.empty:
+        line_streamer, = axis_streamer.plot(
+            stream_series["run"],
+            stream_series["StreamerPct"],
+            "-o",
+            color="C3",
+            label="Streamer %",
+        )
+        axis_streamer.set_ylabel("Streamer %")
+        axis_streamer.spines["left"].set_color("C3")
+        axis_streamer.tick_params(axis="y", colors="C3")
+        lines.append(line_streamer)
+        labels.append("Streamer %")
+    else:
+        axis_streamer.set_ylabel("Streamer %")
+
+    axis_eff = axis_streamer.twinx()
+    if not good_series.empty:
+        line_eff, = axis_eff.plot(
+            good_series["run"],
+            good_series["good"],
+            "-s",
+            color="C0",
+            label="Eff good",
+        )
+        axis_eff.set_ylabel("Efficiency good (%)", color="C0")
+        axis_eff.spines["right"].set_color("C0")
+        axis_eff.tick_params(axis="y", colors="C0")
+        lines.append(line_eff)
+        labels.append("Eff good")
+    else:
+        axis_eff.set_ylabel("Efficiency good (%)", color="C0")
+
+    axis_sigma = axis_streamer.twinx()
+    axis_sigma.spines["right"].set_position(("axes", 1.1))
+    axis_sigma.spines["right"].set_visible(True)
+
+    if not sigma_series.empty:
+        sigma_ps = sigma_series["time_res_RPC"] * 1000.0
+        line_sigma, = axis_sigma.plot(
+            sigma_series["run"],
+            sigma_ps,
+            "-^",
+            color="C1",
+            label="σ_RPC",
+        )
+        axis_sigma.set_ylabel("σ_RPC (ps)", color="C1")
+        axis_sigma.spines["right"].set_color("C1")
+        axis_sigma.tick_params(axis="y", colors="C1")
+        lines.append(line_sigma)
+        labels.append("σ_RPC")
+    else:
+        axis_sigma.set_ylabel("σ_RPC (ps)", color="C1")
+
+    axis_streamer.set_xlabel("Run")
+    axis_streamer.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+    axis_streamer.set_title(f"{thick_detector}: Streamer %, Eff good, σ_RPC")
+
+    if lines:
+        axis_streamer.legend(lines, labels, loc="upper left")
+
+    axis_streamer.set_ylim(0, 100)
+    axis_eff.set_ylim(0, 100)
+    axis_sigma.set_ylim(50, 200)
+
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
 def plot_efficiency_grid(
     table_frame: pd.DataFrame,
     detectors: list[str],
@@ -371,6 +489,98 @@ def plot_streamer_and_charges(
     plt.close(fig)
 
 
+def plot_time_resolutions(
+    table_frame: pd.DataFrame,
+    pdf: PdfPages,
+) -> None:
+    required = {"time_res_RPC", "time_res_SC"}
+    missing = [col for col in required if col not in table_frame.columns]
+    if missing:
+        print(
+            f"Time resolution column(s) missing; skipping time resolution plots: {', '.join(missing)}"
+        )
+        return
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharex=True)
+    axes = np.atleast_1d(axes)
+    rpc_axis = axes[0]
+    sc_axis = axes[1]
+
+    rpc_series = (
+        table_frame.loc[table_frame["Detector"] == "RPC_thick_center", ["run", "time_res_RPC"]]
+        .dropna(subset=["time_res_RPC"])
+    )
+    if rpc_series.empty:
+        rpc_axis.text(
+            0.5,
+            0.5,
+            "time_res_RPC not available",
+            transform=rpc_axis.transAxes,
+            ha="center",
+            va="center",
+        )
+    else:
+        rpc_grouped = (
+            rpc_series.groupby("run", as_index=False)["time_res_RPC"]
+            .mean()
+            .sort_values("run")
+        )
+        runs = rpc_grouped["run"].astype(int).to_numpy()
+        rpc_values_ps = rpc_grouped["time_res_RPC"].to_numpy() * 1000.0
+        rpc_axis.plot(
+            runs,
+            rpc_values_ps,
+            "-o",
+            color="C4",
+        )
+        rpc_axis.set_xticks(runs)
+    rpc_axis.set_xlabel("Run")
+    rpc_axis.set_ylabel("σ_RPC (ps)")
+    rpc_axis.set_title("sigma_RPC vs Run")
+    rpc_axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+
+    sc_series = (
+        table_frame.loc[
+            table_frame["Detector"].isin(["PMT_top", "PMT_bottom"]),
+            ["run", "time_res_SC"],
+        ]
+        .dropna(subset=["time_res_SC"])
+    )
+    if sc_series.empty:
+        sc_axis.text(
+            0.5,
+            0.5,
+            "time_res_SC not available",
+            transform=sc_axis.transAxes,
+            ha="center",
+            va="center",
+        )
+    else:
+        sc_grouped = (
+            sc_series.groupby("run", as_index=False)["time_res_SC"]
+            .mean()
+            .sort_values("run")
+        )
+        runs = sc_grouped["run"].astype(int).to_numpy()
+        sc_values_ps = sc_grouped["time_res_SC"].to_numpy() * 1000.0
+        sc_axis.plot(
+            runs,
+            sc_values_ps,
+            "-o",
+            color="C5",
+        )
+        sc_axis.set_xticks(runs)
+    sc_axis.set_xlabel("Run")
+    sc_axis.set_ylabel("σ_SC (ps)")
+    sc_axis.set_title("sigma_SC vs Run")
+    sc_axis.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+
+    fig.suptitle("Time resolution vs Run", y=0.995)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    pdf.savefig(fig)
+    plt.close(fig)
+
+
 def _edges_from_sorted(values: np.ndarray) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     if values.size == 0:
@@ -446,7 +656,7 @@ def main() -> None:
     for item in run_files:
         print(f"  Run {item.run}: {item.path.name} (exec {item.exec_time.isoformat(sep=' ')})")
     table_frame, metadata_frame = load_run_tables(run_files)
-    table_frame, detectors = _filter_detectors(table_frame, args.detectors)
+    filtered_table, detectors = _filter_detectors(table_frame, args.detectors)
     charge_hist_frame = load_charge_histograms(run_files)
 
     if not metadata_frame.empty:
@@ -459,8 +669,10 @@ def main() -> None:
         print(formatted.to_string())
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with PdfPages(args.output) as pdf:
-        plot_efficiency_grid(table_frame, detectors, pdf)
-        plot_streamer_and_charges(table_frame, detectors, pdf)
+        plot_thick_rpc_summary(filtered_table, detectors, pdf)
+        plot_efficiency_grid(filtered_table, detectors, pdf)
+        plot_streamer_and_charges(filtered_table, detectors, pdf)
+        plot_time_resolutions(table_frame, pdf)
         plot_charge_heatmap(charge_hist_frame, pdf)
     print(f"\nSaved figures to {args.output}")
 
