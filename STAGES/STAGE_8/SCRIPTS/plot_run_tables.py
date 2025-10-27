@@ -11,8 +11,8 @@ import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 
-TABLE_DIR = Path("DATA_FILES/DATA/OUTPUTS_7/TABLES")
-CHARGE_DIR = Path("DATA_FILES/DATA/OUTPUTS_7/CHARGES")
+TABLE_DIR = Path("STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/TABLES")
+CHARGE_DIR = Path("STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/CHARGES")
 FILENAME_PATTERN = re.compile(
     r"^RUN_(?P<run>\d+)_summary_.*_exec_(?P<exec>\d{4}_\d{2}_\d{2}-\d{2}\.\d{2}\.\d{2})\.csv$"
 )
@@ -47,8 +47,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("DATA_FILES/DATA/OUTPUTS_8/run_summary_plots.pdf"),
-        help="Destination PDF path. Defaults to DATA_FILES/DATA/OUTPUTS_8/run_summary_plots.pdf.",
+        default=Path("STAGES/STAGE_8/DATA/DATA_FILES/OUTPUTS_8/run_summary_plots.pdf"),
+        help="Destination PDF path. Defaults to STAGES/STAGE_8/DATA/DATA_FILES/OUTPUTS_8/run_summary_plots.pdf.",
     )
     return parser.parse_args()
 

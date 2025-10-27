@@ -2,35 +2,37 @@
 
 set -euo pipefail
 
-PROJECT_ROOT="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP"
-ALL_UNPACKED_DIR="$PROJECT_ROOT/DATA_FILES/DATA/ALL_UNPACKED"
-RUNS_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/RUNS"
-JOINED_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/JOINED"
-LOGBOOK="$PROJECT_ROOT/file_logbook.csv"
-STORAGE_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+STAGE5_ROOT="$REPO_ROOT/STAGES/STAGE_5"
+STAGE6_ROOT="$REPO_ROOT/STAGES/STAGE_6"
+ALL_UNPACKED_DIR="$STAGE5_ROOT/DATA/DATA_FILES/ALL_UNPACKED"
+RUNS_ROOT="$STAGE6_ROOT/DATA/DATA_FILES/RUNS"
+JOINED_ROOT="$STAGE6_ROOT/DATA/DATA_FILES/JOINED"
+LOGBOOK="$STAGE6_ROOT/DATA/DATA_LOGS/file_logbook.csv"
+STORAGE_ROOT="$STAGE5_ROOT/DATA/DATA_FILES/ANCILLARY"
 
 declare -A PREMERGED_SOURCES=(
-  ["1"]="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY/RUN_1"
-  ["2"]="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY/RUN_2"
-  ["3"]="$PROJECT_ROOT/DATA_FILES/DATA/ANCILLARY/RUN_3"
+  ["1"]="$STORAGE_ROOT/RUN_1"
+  ["2"]="$STORAGE_ROOT/RUN_2"
+  ["3"]="$STORAGE_ROOT/RUN_3"
 )
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<EOF
 Usage: $0
 
-Tag unpacked datasets per run, populate DATA_FILES/DATA/RUNS/RUN_<id> with the
-corresponding MAT files, and invoke the joiner to write merged outputs under
-DATA_FILES/DATA/JOINED/RUN_<id>.
+Tag unpacked datasets per run, populate STAGES/STAGE_6/DATA/DATA_FILES/RUNS/RUN_<id>
+with the corresponding MAT files, and invoke the joiner to write merged outputs under
+STAGES/STAGE_6/DATA/DATA_FILES/JOINED/RUN_<id>.
 EOF
   exit 0
 fi
 
-mkdir -p "$RUNS_ROOT" "$JOINED_ROOT"
-mkdir -p "$STORAGE_ROOT"
+mkdir -p "$RUNS_ROOT" "$JOINED_ROOT" "$STORAGE_ROOT" "$(dirname "$LOGBOOK")"
 
 # Update tagging information
-python3 "$PROJECT_ROOT/run_tagger.py"
+python3 "$STAGE6_ROOT/SCRIPTS/run_tagger.py"
 
 if [[ ! -f "$LOGBOOK" ]]; then
   echo "Logbook $LOGBOOK not found; aborting."
@@ -110,5 +112,23 @@ for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
 
   ESC_RUN="${run_dir//\'/\'\'}"
   ESC_OUT="${output_dir//\'/\'\'}"
-  matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/SCRIPTS/join_mat_files.m'); exit;" || echo "Joiner encountered an issue for run ${run_id}; moving on."
+  matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('STAGES/STAGE_6/SCRIPTS/join_mat_files.m'); exit;" || echo "Joiner encountered an issue for run ${run_id}; moving on."
+
+  # Rename joined outputs to canonical RUN_<id> filenames
+  for subdir in time charge; do
+    target_dir="$output_dir/$subdir"
+    if [[ -d "$target_dir" ]]; then
+      shopt -s nullglob
+      for src_path in "$target_dir"/*_a*_*.*; do
+        [[ -f "$src_path" ]] || continue
+        filename=$(basename "$src_path")
+        suffix="${filename#*_}"
+        dest_path="$target_dir/RUN_${run_id}_${suffix}"
+        if [[ "$src_path" != "$dest_path" ]]; then
+          mv -f "$src_path" "$dest_path"
+        fi
+      done
+      shopt -u nullglob
+    fi
+  done
 done

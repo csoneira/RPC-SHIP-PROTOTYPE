@@ -37,39 +37,6 @@
 % };
 % file_paths = {}; % optional: mix in specific MAT files or additional directories
 
-
-% RUN 4
-% runs = {
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/TO_JOIN_OCT_17/dabc25281080959_2025-10-15_08h15m12s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/TO_JOIN_OCT_17/dabc25282152204_2025-10-15_08h17m46s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/TO_JOIN_OCT_17/dabc25283203259_2025-10-15_08h19m13s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/TO_JOIN_OCT_17/dabc25285040522_2025-10-15_08h30m37s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/TO_JOIN_OCT_17/dabc25286122758_2025-10-15_08h32m12s'
-%     };
-
-
-% runs = {
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/dabc25289014720.hld'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/dabc25290081026.hld'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/dabc25290151552.hld'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/dabc25291140248.hld'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/dabc25292123618.hld'
-%     };
-
-
-% Run 4
-% runs = {
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25282152204_2025-10-20_11h53m51s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25283203259_2025-10-20_11h54m47s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25285040522_2025-10-20_11h55m38s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25286122758_2025-10-20_11h56m33s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25287190025_2025-10-20_11h57m28s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25289014720_2025-10-20_11h48m38s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25290081026_2025-10-20_11h49m04s'
-%     '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/ALL/dabc25290151552_2025-10-20_11h50m22s'
-%     };
-
-
 % -------------------------------------------------------------------------
 
 if exist('runs', 'var') == 1 && ~isempty(runs)

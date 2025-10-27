@@ -4,17 +4,35 @@
 set -euo pipefail # Exit on error, undefined variable, or error in a pipeline
 IFS=$'\n\t' # Set IFS to handle spaces in filenames
 
-# Write a help message
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  echo "Usage: $0"
-  echo ""
-  echo "This script brings the laboratory log files of temperature, pressure, humidity,"
-  echo "high voltage and current and DAQ rates for monitoring."
-  echo "Only new log files (not yet recorded in log_database.csv) are transferred."
-  echo "Run using the line below:"
-  echo bash "$0"
-  exit 0
-fi
+usage() {
+  cat <<EOF
+Usage: $0 [--force]
+
+Bring laboratory log files from the remote host and update the aggregated
+datasets. Only new files are fetched by default. Use --force to reprocess the
+existing logs even when no new files are detected.
+EOF
+}
+
+FORCE_RUN=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --force)
+      FORCE_RUN=true
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
 
 # --------------------------------------------------------------------------------------------
 # Prevent the script from running multiple instances -----------------------------------------
@@ -53,9 +71,23 @@ echo $$ 1>&9
 #     fi
 # done
 
-PROJECT_ROOT="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP"
-LOG_ROOT="${PROJECT_ROOT}/LOG_FILES"
-LOG_DB="${LOG_ROOT}/log_database.csv"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+STAGE2_ROOT="$REPO_ROOT/STAGES/STAGE_2"
+LOG_DB="$STAGE2_ROOT/DATA/DATA_LOGS/log_database.csv"
+LOG_SCRIPT="$STAGE2_ROOT/SCRIPTS/log_bring_and_clean.sh"
+VENV_PATH="$REPO_ROOT/STAGES/STAGE_1/DATA/DATA_FILES/venv"
+
+if [[ ! -d "$VENV_PATH" ]]; then
+  echo "Virtual environment not found at $VENV_PATH" >&2
+  exit 1
+fi
+
+source "$VENV_PATH/bin/activate"
+cleanup_venv() {
+  deactivate 2>/dev/null || true
+}
+trap cleanup_venv EXIT
 
 declare -A ALREADY_IMPORTED
 if [[ -f "$LOG_DB" ]]; then
@@ -86,10 +118,16 @@ for file in "${REMOTE_FILES[@]}"; do
 done
 
 if [[ ${#NEW_FILES[@]} -eq 0 ]]; then
-  echo "All remote log files already imported. Nothing to do."
-  exit 0
+  if [[ "$FORCE_RUN" == "true" ]]; then
+    echo "No new log files detected; reprocessing current dataset."
+    FETCH_ONLY_FILES="" bash "$LOG_SCRIPT"
+    exit 0
+  else
+    echo "All remote log files already imported. Nothing to do."
+    exit 0
+  fi
 fi
 
 printf "Detected %d new log file(s) to fetch.\n" "${#NEW_FILES[@]}"
 FETCH_ONLY_FILES=$(printf "%s\n" "${NEW_FILES[@]}")
-FETCH_ONLY_FILES="$FETCH_ONLY_FILES" bash "$PROJECT_ROOT/LOG_FILES/SCRIPTS/log_bring_and_clean.sh"
+FETCH_ONLY_FILES="$FETCH_ONLY_FILES" bash "$LOG_SCRIPT"

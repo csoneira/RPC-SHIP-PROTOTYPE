@@ -75,19 +75,34 @@ echo $$ 1>&9
 # done
 
 
-PROJECT_ROOT="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP"
-HLD_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/HLD_FILES"
-HLD_SOURCE_DIR="$HLD_ROOT/NOT_UNPACKED"
-HLD_SENT_DIR="$HLD_ROOT/SENT_TO_UNPACKING"
-HLD_UNPACK_DIR="$PROJECT_ROOT/unpacker/hlds_toUnpack"
-UNPACKED_OUTPUT_DIR="$PROJECT_ROOT/unpacker/unpackedFiles"
-IDLE_DIR="$HLD_ROOT/IDLE_IN_UNPACKING_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+STAGE4_ROOT="$REPO_ROOT/STAGES/STAGE_4"
+STAGE5_ROOT="$REPO_ROOT/STAGES/STAGE_5"
+VENV_DIR="$REPO_ROOT/STAGES/STAGE_1/DATA/DATA_FILES/venv"
+HLD_SOURCE_DIR="$STAGE4_ROOT/DATA/DATA_FILES/HLD_FILES/NOT_UNPACKED"
+HLD_SENT_DIR="$STAGE4_ROOT/DATA/DATA_FILES/HLD_FILES/SENT_TO_UNPACKING"
+IDLE_DIR="$STAGE4_ROOT/DATA/DATA_FILES/HLD_FILES/IDLE_IN_UNPACKING_DIR"
+PROCESSING_ROOT="$STAGE5_ROOT/DATA/DATA_FILES/PROCESSING"
+HLD_UNPACK_DIR="$PROCESSING_ROOT/hlds_toUnpack"
+UNPACKED_OUTPUT_DIR="$PROCESSING_ROOT/unpackedFiles"
+CHARGE_TEMP_DIR="$PROCESSING_ROOT/charge"
+BLINE_TEMP_DIR="$PROCESSING_ROOT/baseLine"
+TIME_TEMP_DIR="$PROCESSING_ROOT/time"
+PLOTS_TEMP_DIR="$PROCESSING_ROOT/plots"
+ALL_UNPACKED_DIR="$STAGE5_ROOT/DATA/DATA_FILES/ALL_UNPACKED"
 
-mkdir -p "$HLD_SOURCE_DIR" "$HLD_UNPACK_DIR" "$UNPACKED_OUTPUT_DIR" "$IDLE_DIR" "$HLD_SENT_DIR"
+mkdir -p "$HLD_SOURCE_DIR" "$HLD_UNPACK_DIR" "$UNPACKED_OUTPUT_DIR" \
+         "$CHARGE_TEMP_DIR" "$BLINE_TEMP_DIR" "$TIME_TEMP_DIR" "$PLOTS_TEMP_DIR" \
+         "$IDLE_DIR" "$HLD_SENT_DIR" "$ALL_UNPACKED_DIR"
 
 # Ensure unpacking staging directories start clean
-rm -f "$HLD_UNPACK_DIR"/*
-rm -f "$UNPACKED_OUTPUT_DIR"/*
+rm -f "$HLD_UNPACK_DIR"/* 2>/dev/null || true
+rm -f "$UNPACKED_OUTPUT_DIR"/* 2>/dev/null || true
+rm -f "$CHARGE_TEMP_DIR"/* 2>/dev/null || true
+rm -f "$BLINE_TEMP_DIR"/* 2>/dev/null || true
+rm -f "$TIME_TEMP_DIR"/* 2>/dev/null || true
+rm -f "$PLOTS_TEMP_DIR"/* 2>/dev/null || true
 
 move_idle_contents() {
   shopt -s nullglob
@@ -113,9 +128,8 @@ process_single_hld() {
   cp -a "$hld_path" "$HLD_SENT_DIR/"
   mv "$hld_path" "$HLD_UNPACK_DIR/$filename"
 
-  cd "$PROJECT_ROOT"
-  source venv/bin/activate
-  python unpacker/unpackAll.py
+  cd "$REPO_ROOT"
+  "$VENV_DIR/bin/python" STAGES/STAGE_5/SCRIPTS/unpacker/unpackAll.py
 }
 
 process_next_hld() {

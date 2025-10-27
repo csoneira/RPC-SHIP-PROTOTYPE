@@ -55,16 +55,17 @@ fi
 
 
 # Create necessary directories if they don't exist
-PROJECT_ROOT="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP"
-HLD_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/HLD_FILES"
-HLD_SOURCE_DIR="$HLD_ROOT/NOT_UNPACKED"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+STAGE4_ROOT="$REPO_ROOT/STAGES/STAGE_4"
+HLD_SOURCE_DIR="$STAGE4_ROOT/DATA/DATA_FILES/HLD_FILES/NOT_UNPACKED"
 mkdir -p "$HLD_SOURCE_DIR"
 
 
 # First, bring new HLD files from the remote server, use the date filter if provided
 # because maybe $1 does not exist, so you should put nothing as argument
 
-bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/SCRIPTS/bring_hlds.sh "${1:-}"
+bash "$STAGE4_ROOT/SCRIPTS/bring_hlds.sh" "${1:-}"
 
 # Ensure lock is released and file removed on exit
 trap 'flock -u 9; rm -f "$lockfile"' EXIT

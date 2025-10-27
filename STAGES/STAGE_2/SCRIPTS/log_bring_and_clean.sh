@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # I want to use this script to retrieve logs from joao:/home/rpcuser/logs and place them under
-# /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/LOG_FILES/DATA/RAW
+# /home/csoneira/WORK_LIP_stuff/JOAO_SETUP/STAGES/STAGE_2/DATA/DATA_FILES/RAW
 
 set -euo pipefail
 
@@ -10,10 +10,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_ROOT="$(dirname "$SCRIPT_DIR")"
 DATA_ROOT="${LOG_ROOT}/DATA"
-STATUS_DIR="${DATA_ROOT}/STATUS"
-RAW_DIR="${DATA_ROOT}/RAW"
-CLEAN_DIR="${DATA_ROOT}/CLEAN"
-LOG_DB="${LOG_ROOT}/log_database.csv"
+DATA_FILES_ROOT="${DATA_ROOT}/DATA_FILES"
+STATUS_DIR="${DATA_FILES_ROOT}/STATUS"
+RAW_DIR="${DATA_FILES_ROOT}/RAW"
+CLEAN_DIR="${DATA_FILES_ROOT}/CLEAN"
+LOG_DB="${LOG_ROOT}/DATA/DATA_LOGS/log_database.csv"
 
 STATUS_HELPER="${SCRIPT_DIR}/status_csv.py"
 STATUS_TIMESTAMP=""

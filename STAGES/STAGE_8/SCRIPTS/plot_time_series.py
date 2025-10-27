@@ -12,10 +12,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 from matplotlib import colors as mcolors
 
-LOG_PATH = Path("LOG_FILES/DATA/big_log_lab_data.csv")
+LOG_PATH = Path("STAGES/STAGE_2/DATA/DATA_FILES/big_log_lab_data.csv")
 RUN_DICT_PATH = Path("file_run_dictionary.csv")
 OUTLIER_ABS_LIMIT = 2000  # values above this (in absolute terms) are considered spurious
-OUTPUTS_8_DIR = Path("DATA_FILES/DATA/OUTPUTS_8")
+OUTPUTS_8_DIR = Path("STAGES/STAGE_8/DATA/DATA_FILES/OUTPUTS_8")
 
 ALPHA_P = 0.9
 ALPHA_T = 0.9

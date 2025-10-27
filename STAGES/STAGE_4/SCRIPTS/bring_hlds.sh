@@ -12,8 +12,11 @@
 #!/bin/bash
 
 SRC="joao:/home/rpcuser/hlds/*.hld"
-DEST="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/NOT_UNPACKED"
-CSV="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/file_database.csv"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STAGE_ROOT="$(dirname "$SCRIPT_DIR")"
+DATA_ROOT="$STAGE_ROOT/DATA"
+DEST="$DATA_ROOT/DATA_FILES/HLD_FILES/NOT_UNPACKED"
+CSV="$DATA_ROOT/DATA_LOGS/file_database.csv"
 
 # Optional start date filter (format: YYYY-MM-DD)
 START_DATE_FILTER="$1"
@@ -110,6 +113,8 @@ else
     echo "[INFO] Destination directory exists: $DEST"
 fi
 echo ""
+
+mkdir -p "$(dirname "$CSV")"
 
 # Create the CSV file if it doesn't exist
 if [ ! -f "$CSV" ]; then

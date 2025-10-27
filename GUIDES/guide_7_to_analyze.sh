@@ -4,16 +4,17 @@ set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <1-5>] [--no-plot]
+Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <1-5>] [--no-plot] [--debug|-d]
 
 This script analyzes the unpacked HLD files.
 
 Arguments:
   --help, -h           Show this help message
   --save               Save the generated plots (default: do not save)
-  --save-dir <path>    Directory to save plots (default: DATA_FILES/DATA/PDF)
+  --save-dir <path>    Directory to save plots (default: STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/PDF)
   --no-plot            Skip all figure generation (only produce CSV output)
   --run, -r <1-5>      Analyze predefined test run number (enables test mode)
+  --debug, -d          Enable verbose debug output inside MATLAB
 EOF
     exit 1
 }
@@ -22,7 +23,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     usage
 fi
 
-echo "Selected input directory: $SELECTED_INPUT"
+SELECTED_INPUT=""
 
 # --------------------------------------------------------------------------------------------
 # Prevent the script from running multiple instances -----------------------------------------
@@ -62,15 +63,20 @@ echo $$ 1>&9
 # done
 
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$PROJECT_ROOT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$REPO_ROOT"
 
-DEFAULT_SAVE_DIR="$PROJECT_ROOT/DATA_FILES/DATA/PDF"
+DEFAULT_SAVE_DIR="$REPO_ROOT/STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/PDF"
 SAVE_FLAG=false
 NO_PLOT_FLAG=false
 SAVE_DIR="$DEFAULT_SAVE_DIR"
 RUN_OVERRIDE=""
 SELECTED_INPUT=""
+DEBUG_FLAG=false
+CLI_ARGS=()
+
+mkdir -p "$DEFAULT_SAVE_DIR"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -86,12 +92,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-plot)
             NO_PLOT_FLAG=true
+            CLI_ARGS+=("--no-plot")
             shift
             ;;
         -r|--run)
             [[ $# -ge 2 ]] || usage
             RUN_OVERRIDE="$2"
             shift 2
+            ;;
+        --debug|-d)
+            DEBUG_FLAG=true
+            CLI_ARGS+=("--debug")
+            shift
             ;;
         --help|-h)
             usage
@@ -108,10 +120,10 @@ if [[ "$NO_PLOT_FLAG" == "true" ]]; then
 fi
 
 
-MATLAB_SCRIPT="feval('run','DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m');"
+MATLAB_SCRIPT="feval('run','STAGES/STAGE_7/SCRIPTS/caye_edits_minimal.m');"
 MATLAB_WRAP="try, ${MATLAB_SCRIPT} catch ME, disp(getReport(ME,'extended')); exit(1); end"
 
-JOINED_ROOT="$PROJECT_ROOT/DATA_FILES/DATA/JOINED"
+JOINED_ROOT="$REPO_ROOT/STAGES/STAGE_6/DATA/DATA_FILES/JOINED"
 
 # --- helpers -----------------------------------------------------------------
 
@@ -158,7 +170,36 @@ else
 fi
 
 if [[ "$NO_PLOT_FLAG" == "true" ]]; then
-  MATLAB_PREFIX+=" no_plot=true; caye_cli_args={'--no-plot'};"
+  MATLAB_PREFIX+=" no_plot=true;"
+fi
+
+if [[ "$DEBUG_FLAG" == "true" ]]; then
+  MATLAB_PREFIX+=" debug_mode=true;"
+fi
+
+if [[ "$NO_PLOT_FLAG" == "true" && " ${CLI_ARGS[*]} " != *" --no-plot "* ]]; then
+  CLI_ARGS+=("--no-plot")
+fi
+
+if [[ "$DEBUG_FLAG" == "true" && " ${CLI_ARGS[*]} " != *" --debug "* ]]; then
+  CLI_ARGS+=("--debug")
+fi
+
+if [[ ${#CLI_ARGS[@]} -gt 0 ]]; then
+  cell_elems=()
+  for arg in "${CLI_ARGS[@]}"; do
+    escaped=${arg//\'/\'\'}
+    cell_elems+=("'${escaped}'")
+  done
+  old_ifs=$IFS
+  IFS=,
+  joined="${cell_elems[*]}"
+  IFS=$old_ifs
+  MATLAB_PREFIX+=" caye_cli_args={${joined}};"
+fi
+
+if [[ "$DEBUG_FLAG" == "true" ]]; then
+  echo "Debug logging enabled for MATLAB run."
 fi
 
 if command -v matlab >/dev/null 2>&1; then

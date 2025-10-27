@@ -2,10 +2,16 @@ from pathlib import Path
 import csv
 from datetime import datetime, timezone
 
-root = Path.cwd()
-run_path = root / "file_run_dictionary.csv"
-db_path = root / "file_database.csv"
-out_path = root / "file_logbook.csv"
+SCRIPT_DIR = Path(__file__).resolve().parent
+STAGE_ROOT = SCRIPT_DIR.parent
+REPO_ROOT = STAGE_ROOT.parents[1]
+STAGE4_ROOT = REPO_ROOT / "STAGES" / "STAGE_4"
+
+run_path = REPO_ROOT / "file_run_dictionary.csv"
+db_path = STAGE4_ROOT / "DATA" / "DATA_LOGS" / "file_database.csv"
+out_path = STAGE_ROOT / "DATA" / "DATA_LOGS" / "file_logbook.csv"
+
+out_path.parent.mkdir(parents=True, exist_ok=True)
 
 if not run_path.exists() or not db_path.exists():
     raise FileNotFoundError("Required input files are missing in the current directory.")

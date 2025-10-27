@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Aggregate and join log files stored in LOG_FILES/DATA.
+"""Aggregate and join log files stored in STAGES/STAGE_2/DATA.
 
-The script expects cleaned log files under LOG_FILES/DATA/CLEAN (as produced by
-``log_bring_and_clear.sh``) and will:
+The script expects cleaned log files under STAGES/STAGE_2/DATA/DATA_FILES/CLEAN (as produced by
+``log_bring_and_clean.sh``) and will:
   • move cleaned files to an UNPROCESSED staging area
   • aggregate each prefix into a single CSV in ACCUMULATED
   • merge all aggregated CSVs into ``big_log_lab_data.csv``
 
-If available, LOG_FILES/config.yaml can provide:
+If available, STAGES/STAGE_2/CONFIGS/config.yaml can provide:
   outlier_limits:
     <column_name>: [min_value, max_value]
   create_new_csv: true
@@ -34,10 +34,11 @@ except Exception:  # pragma: no cover - yaml is optional
 from status_csv import append_status_row, mark_status_complete
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-LOG_ROOT = SCRIPTS_DIR.parent
-DATA_ROOT = LOG_ROOT / "DATA"
-STATUS_DIR = DATA_ROOT / "STATUS"
-CONFIG_PATH = LOG_ROOT / "config.yaml"
+STAGE_ROOT = SCRIPTS_DIR.parent
+DATA_ROOT = STAGE_ROOT / "DATA"
+DATA_FILES_ROOT = DATA_ROOT / "DATA_FILES"
+STATUS_DIR = DATA_FILES_ROOT / "STATUS"
+CONFIG_PATH = STAGE_ROOT / "CONFIGS" / "config.yaml"
 
 
 @dataclass(frozen=True)
@@ -202,7 +203,7 @@ def append_dataframe_to_csv(df: pd.DataFrame, path: Path) -> None:
 
 
 def load_config() -> Dict[str, object]:
-    """Load optional configuration from LOG_FILES/config.yaml."""
+    """Load optional configuration from STAGES/STAGE_2/CONFIGS/config.yaml."""
     if not CONFIG_PATH.exists() or yaml is None:
         if CONFIG_PATH.exists() and yaml is None:
             print(f"Warning: PyYAML not available; ignoring {CONFIG_PATH}")
@@ -425,10 +426,10 @@ def main(argv: List[str]) -> int:
     if len(argv) > 1:
         print("Info: station argument ignored; single-host layout in use.")
 
-    clean_logs_directory = DATA_ROOT / "CLEAN"
-    unprocessed_logs_directory = DATA_ROOT / "UNPROCESSED"
-    accumulated_directory = DATA_ROOT / "ACCUMULATED"
-    final_output_path = DATA_ROOT / "big_log_lab_data.csv"
+    clean_logs_directory = DATA_FILES_ROOT / "CLEAN"
+    unprocessed_logs_directory = DATA_FILES_ROOT / "UNPROCESSED"
+    accumulated_directory = DATA_FILES_ROOT / "ACCUMULATED"
+    final_output_path = DATA_FILES_ROOT / "big_log_lab_data.csv"
     status_csv_path = STATUS_DIR / "log_aggregate_and_join.csv"
 
     ensure_directories(

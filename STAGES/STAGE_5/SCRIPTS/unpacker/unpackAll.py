@@ -56,15 +56,17 @@ from readDataFrame    import readDFrame
 t = time.time()
 
 #############
-homeOS = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/'
-home   = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/unpacker/'
-savesFolder  = homeOS + 'DATA_FILES/DATA/ALL_UNPACKED'        #at the end of unpacking, converting... all the created folders/files are moved to savesFolder (if saveAnalysis = 1)
-hldInFolder  = home   + 'hlds_toUnpack'    #hld (input) folder; expected extension of files in the folder: *.hld; if saveAnalysis = 1 -> all the *.hld are then moved to ./hld
-hldOutFolder = home   + 'unpackedFiles'    #path of the output folder for unpacked files (*.txt + *.adc + *.tdc ...)
-chargeFolder = home   + 'charge'           #path of the output folder for *.charge files   (for df_charge)
-bLineFolder  = home   + 'baseLine'         #path of the output folder for *.bLine files    (for df_baseLine)
-timeFolder   = home   + 'time'             #path of the output folder for *.time files     (for df_time)
-plotFolder   = home   + 'plots'            #path of the output folder for plots -> no figures will be saved IF not previously set to do so in plot.py
+repo_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/'
+stage5_data_root = os.path.join(repo_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES')
+processing_root = os.path.join(stage5_data_root, 'PROCESSING')
+home   = os.path.join(repo_root, 'STAGES', 'STAGE_5', 'SCRIPTS', 'unpacker') + '/'
+savesFolder  = os.path.join(stage5_data_root, 'ALL_UNPACKED')        #at the end of unpacking, converting... all the created folders/files are moved to savesFolder (if saveAnalysis = 1)
+hldInFolder  = os.path.join(processing_root, 'hlds_toUnpack')    #hld (input) folder; expected extension of files in the folder: *.hld; if saveAnalysis = 1 -> all the *.hld are then moved to ./hld
+hldOutFolder = os.path.join(processing_root, 'unpackedFiles')    #path of the output folder for unpacked files (*.txt + *.adc + *.tdc ...)
+chargeFolder = os.path.join(processing_root, 'charge')           #path of the output folder for *.charge files   (for df_charge)
+bLineFolder  = os.path.join(processing_root, 'baseLine')         #path of the output folder for *.bLine files    (for df_baseLine)
+timeFolder   = os.path.join(processing_root, 'time')             #path of the output folder for *.time files     (for df_time)
+plotFolder   = os.path.join(processing_root, 'plots')            #path of the output folder for plots -> no figures will be saved IF not previously set to do so in plot.py
 ######
 compress_hldOutFolder = 0    #0/1; 1: compress the folder hldOutFolder and the folder ./hlds where all the *.hld are moved to (done only if saveAnalysis = 1)
 unpack                = 1    #0/1/2/3/4; 0: don't do it; 1: extract (*.hld -> *.txt) + calibrate (*.fTime + calibrationFTime.tdc) + convert  (*.adc + *.tdc); 2: extract only (*.hld -> *.txt);
@@ -77,6 +79,9 @@ plotFrom              = 1    #1,2,3... (1 = first event in the file (which may h
 plotTo                = 5    #1,2,3...
 saveAnalysis          = 1    #0/1
 #############
+
+for folder in (hldInFolder, hldOutFolder, chargeFolder, bLineFolder, timeFolder, plotFolder):
+    os.makedirs(folder, exist_ok=True)
 
 if len(sys.argv) == 11:     #e.g. ./unpackAll.py /home/user/hlds_toUnpack /home/user/unpackedFiles 0 1 3 3 1 1 5 1
     hldInFolder           = sys.argv[1]

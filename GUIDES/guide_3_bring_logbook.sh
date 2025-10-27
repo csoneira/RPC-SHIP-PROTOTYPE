@@ -15,7 +15,11 @@ SHEET_ID="1exbML95XhVeCf_810DScvRs1JnUW8ke-efMeSlrKpZ8"
 GID="805688773"
 
 # Output filename
-OUTPUT="/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/file_online_logbook.csv"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+OUTPUT="$REPO_ROOT/STAGES/STAGE_3/DATA_LOGS/file_online_logbook.csv"
+
+mkdir -p "$(dirname "$OUTPUT")"
 
 # Download as CSV using available tool (curl, wget, or python)
 URL="https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}"
