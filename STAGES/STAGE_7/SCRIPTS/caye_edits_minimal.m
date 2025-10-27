@@ -585,13 +585,13 @@ try
     TBl_OG = [l3 l2 l1 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
     TBt_OG = [t3 t2 t1 t4 t5]; %trailing times back [ns]
 catch
-    warning('Variables l31/l32/l30/l28/l29 not found; using alternative channel order 24–28.');
+    warning('Variables 29-30-31-32 not found; using alternative channel order 24–25-26-27-28.');
 
     % % Print the length of l28 to l32 to check if they exist
     % fprintf('Lengths of alternative wide strip variables: l24=%d, l25=%d, l26=%d, l27=%d, l28=%d\n', ...
     %     length(l24), length(l25), length(l26), length(l27), length(l28));
     
-    % whos
+    whos
 
     % % Exit
     % return;
