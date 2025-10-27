@@ -90,7 +90,8 @@ end
 
 should_plot = ~no_plot_flag;
 
-save_plots_dir_default = [outputs7_root '/PDF'];
+outputs7_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7';
+save_plots_dir_default = fullfile(outputs7_root, 'PDF');
 if ~exist('save_plots','var')
     save_plots = false;
 end
@@ -101,7 +102,7 @@ if no_plot_flag
     save_plots = false;
 end
 
-clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag debug_flag debug_mode log_info log_debug log_banner;
+clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag debug_flag debug_mode log_info log_debug log_banner outputs7_root;
 close all; clc;
 
 
@@ -135,27 +136,23 @@ end
 if test
     if run == 1
         input_dir = 'dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s";
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', 'RUN_1');
     elseif run == 2
         input_dir = 'dabc25127151027-dabc25147011139_JOANA_RUN_2_2025-10-08_15h05m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/dabc25127151027-dabc25147011139_JOANA_RUN_2_2025-10-08_15h05m00s";
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', 'RUN_2');
     elseif run == 3
         input_dir = 'dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s";
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', 'RUN_3');
     elseif run == 4
         input_dir = 'dabc25282152204_RUN_4_2025-10-20_16h00m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/" + input_dir;
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ALL_UNPACKED', input_dir);
     elseif run == 5
         input_dir = 'dabc25291140248_RUN_5_2025-10-20_16h00m00s';
-        data_dir = "/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/UNPACKED/IMPORTANT/" + input_dir;
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ALL_UNPACKED', input_dir);
     else
         error('For test mode, set run to 1, 2, 3, 4, or 5.');
     end
-end
-
-% if run is not 1,2,3, then set run to 0
-if run ~= 1 && run ~= 2 && run ~= 3 && run ~=4 && run ~=5
-    run = 0;
+    data_dir = char(data_dir);
 end
 
 % Limit the events for testing purposes
@@ -185,13 +182,15 @@ DATA    = 'matFiles/time/';
 DATA_Q    = 'matFiles/charge/';
 % path(path,[HOME SCRIPTS 'util_matPlots/']);
 
-outputs7_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/OUTPUTS_7';
-summary_output_dir = [outputs7_root '/TABLES/'];
+summary_output_dir = fullfile(outputs7_root, 'TABLES');
 path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STORED_NOT_ESSENTIAL/util_matPlots');
 project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
-mst_saves_root = fullfile(project_root, 'MST_saves');
-unpacked_root = fullfile(project_root, 'DATA_FILES', 'DATA', 'UNPACKED', 'PROCESSING');
+mst_saves_root = fullfile(project_root, 'STAGES', 'STAGE_6', 'DATA', 'DATA_FILES', 'JOINED');
+unpacked_root = fullfile(project_root, 'STAGES', 'STAGE_6', 'DATA', 'DATA_FILES', 'JOINED');
 if ~exist(outputs7_root, 'dir'); mkdir(outputs7_root); end
+if ~exist(summary_output_dir, 'dir'); mkdir(summary_output_dir); end
+if ~exist(fullfile(outputs7_root, 'PDF'), 'dir'); mkdir(fullfile(outputs7_root, 'PDF')); end
+if ~exist(fullfile(outputs7_root, 'CHARGES'), 'dir'); mkdir(fullfile(outputs7_root, 'CHARGES')); end
 % ---------------------------------------------------------------------
 
 
@@ -218,10 +217,6 @@ if save_plots
     set(groot, 'DefaultFigureCreateFcn', @(fig, ~) set(fig, 'Visible', 'off'));
 end
 
-if ~exist(summary_output_dir, 'dir')
-    mkdir(summary_output_dir);
-end
-
 if ( ~exist('input_dir','var') || isempty(input_dir) ) && ~test
     if ~isfolder(mst_saves_root)
         error('The directory %s does not exist. Provide input_dir or ensure MST_saves is available.', mst_saves_root);
@@ -242,12 +237,16 @@ elseif isstring(input_dir)
 end
 
 if ~test
-    data_dir_candidates = {fullfile(unpacked_root, input_dir), fullfile(mst_saves_root, input_dir)};
-    existing_dirs = data_dir_candidates(cellfun(@isfolder, data_dir_candidates));
-    if isempty(existing_dirs)
-        error('Data directory "%s" not found in "%s" or "%s".', input_dir, unpacked_root, mst_saves_root);
+    if isfolder(input_dir)
+        data_dir = char(input_dir);
+    else
+        data_dir_candidates = {fullfile(unpacked_root, input_dir), fullfile(mst_saves_root, input_dir)};
+        existing_dirs = data_dir_candidates(cellfun(@isfolder, data_dir_candidates));
+        if isempty(existing_dirs)
+            error('Data directory "%s" not found in "%s" or "%s".', input_dir, unpacked_root, mst_saves_root);
+        end
+        data_dir = existing_dirs{1};
     end
-    data_dir = existing_dirs{1};
 end
 
 log_info('Processing run %d using input directory "%s".', run, input_dir);
@@ -263,63 +262,64 @@ if ~isfolder(charge_dir)
     error('Charge directory not found: %s', charge_dir);
 end
 
-underscore_idx = strfind(input_dir, '_');
-if isempty(underscore_idx)
-    name_prefix = input_dir;
-else
-    name_prefix = input_dir(1:underscore_idx(1)-1);
+dataset_basename = '';
+if run > 0
+    dataset_basename = sprintf('RUN_%d', run);
 end
-
-dash_idx = strfind(name_prefix, '-');
-if isempty(dash_idx)
-    dataset_basename = name_prefix;
-else
-    dataset_basename = name_prefix(1:dash_idx(1)-1);
+charge_listing = dir(fullfile(charge_dir, '*_joined*.mat'));
+if isempty(charge_listing)
+    charge_listing = dir(fullfile(time_dir, '*_joined*.mat'));
+end
+if ~isempty(charge_listing)
+    [~, candidate_name] = fileparts(charge_listing(1).name);
+    token = regexp(candidate_name, '(dabc\d+)', 'tokens', 'once');
+    if ~isempty(token)
+        dataset_basename = token{1};
+    end
+end
+if isempty(dataset_basename)
+    [~, dataset_basename] = fileparts(char(input_dir));
 end
 
 % Extract datetime from the basename and convert to 'yyyy-mm-dd_HH.MM.SS'
-datetime_str = regexp(dataset_basename, '\d{11,13}', 'match', 'once'); % Extract YYYYDOYHHMM[SS]
+datetime_str = regexp(dataset_basename, '\\d{11,13}', 'match', 'once'); % Extract YYYYDOYHHMM[SS]
 if isempty(datetime_str)
-    error('Failed to extract datetime from basename: %s', dataset_basename);
-end
-
-% Manually parse components to avoid the MATLAB warning triggered by mixing
-% day-of-year tokens with Gregorian year format specifiers.
-
-year_val = str2double(datetime_str(1:4));
-doy_val = str2double(datetime_str(5:7));
-if isnan(year_val) || isnan(doy_val)
-    error('Unable to parse year/day-of-year from token "%s".', datetime_str);
-end
-hour_val = 0;
-minute_val = 0;
-second_val = 0;
-if numel(datetime_str) >= 9
-    hour_val = str2double(datetime_str(8:9));
-    if isnan(hour_val)
-        error('Unable to parse hour from token "%s".', datetime_str);
+    warning('Failed to extract datetime from basename: %s. Using current timestamp.', dataset_basename);
+    file_datetime = datetime('now');
+else
+    year_val = str2double(datetime_str(1:4));
+    doy_val = str2double(datetime_str(5:7));
+    if isnan(year_val) || isnan(doy_val)
+        warning('Unable to parse timestamp token "%s". Using current timestamp.', datetime_str);
+        file_datetime = datetime('now');
+    else
+        hour_val = 0;
+        minute_val = 0;
+        second_val = 0;
+        if numel(datetime_str) >= 9
+            hour_val = str2double(datetime_str(8:9));
+        end
+        if numel(datetime_str) >= 11
+            minute_val = str2double(datetime_str(10:11));
+        end
+        if numel(datetime_str) >= 13
+            second_val = str2double(datetime_str(12:13));
+        end
+        if any(isnan([hour_val, minute_val, second_val]))
+            warning('Incomplete timestamp token "%s". Using current timestamp.', datetime_str);
+            file_datetime = datetime('now');
+        else
+            is_leap = (mod(year_val, 4) == 0 && (mod(year_val, 100) ~= 0 || mod(year_val, 400) == 0));
+            max_doy = 365 + double(is_leap);
+            if doy_val < 1 || doy_val > max_doy
+                warning('Day-of-year value %d out of range for year %d. Using current timestamp.', doy_val, year_val);
+                file_datetime = datetime('now');
+            else
+                file_datetime = datetime(year_val, 1, 1, hour_val, minute_val, second_val) + days(doy_val - 1);
+            end
+        end
     end
 end
-if numel(datetime_str) >= 11
-    minute_val = str2double(datetime_str(10:11));
-    if isnan(minute_val)
-        error('Unable to parse minute from token "%s".', datetime_str);
-    end
-end
-if numel(datetime_str) >= 13
-    second_val = str2double(datetime_str(12:13));
-    if isnan(second_val)
-        error('Unable to parse second from token "%s".', datetime_str);
-    end
-end
-
-is_leap = (mod(year_val, 4) == 0 && (mod(year_val, 100) ~= 0 || mod(year_val, 400) == 0));
-max_doy = 365 + double(is_leap);
-if doy_val < 1 || doy_val > max_doy
-    error('Day-of-year value %d out of range for year %d.', doy_val, year_val);
-end
-
-file_datetime = datetime(year_val, 1, 1, hour_val, minute_val, second_val) + days(doy_val - 1);
 
 % For readability in filenames
 formatted_datetime = datestr(file_datetime, 'yyyy-mm-dd_HH.MM.SS');
@@ -440,7 +440,7 @@ if isempty(thisFile)
         thisFile = which('caye_edits_minimal');
     end
 end
-config_file = fullfile(fileparts(thisFile), 'run_parameters_config.csv');
+config_file = fullfile(fileparts(fileparts(thisFile)), 'CONFIGS', 'run_parameters_config.csv');
 if ~exist(config_file, 'file')
     error('Parameter config not found: %s', config_file);
 end
@@ -586,10 +586,20 @@ try
     TBt_OG = [t3 t2 t1 t4 t5]; %trailing times back [ns]
 catch
     warning('Variables l31/l32/l30/l28/l29 not found; using alternative channel order 24–28.');
-    TFl_OG = [l28 l27 l26 l25 l24];
-    TFt_OG = [t28 t27 t26 t25 t24];
-    TBl_OG = [l1 l2 l3 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
-    TBt_OG = [t1 t2 t3 t4 t5]; %trailing times back [ns]
+
+    % % Print the length of l28 to l32 to check if they exist
+    % fprintf('Lengths of alternative wide strip variables: l24=%d, l25=%d, l26=%d, l27=%d, l28=%d\n', ...
+    %     length(l24), length(l25), length(l26), length(l27), length(l28));
+    
+    % whos
+
+    % % Exit
+    % return;
+
+    TFl_OG = [l26 l27 l28 l25 l24];
+    TFt_OG = [t26 t27 t28 t25 t24];
+    TBl_OG = [l3 l2 l1 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
+    TBt_OG = [t3 t2 t1 t4 t5]; %trailing times back [ns]
 end
 
 % Charge proxies per strip (front/back)
@@ -674,7 +684,6 @@ Tl_cint(Tt_cint == 0) = 0;
 Tt_cint(Tl_cint == 0) = 0;
 Tl_cint(Tt_cint == 0) = 0;
 Tt_cint(Tl_cint == 0) = 0;
-
 
 cond_pmt_bot = ( abs(Tl_cint(:,1) - Tl_cint(:,2)) > time_pmt_diff_thr );
 Tl_cint(cond_pmt_bot, 1) = 0;
@@ -823,7 +832,7 @@ clearvars l32 l31 l30 l29 l28 t32 t31 t30 t29 t28 l1 l2 l3 l4 l5 t1 t2 t3 t4 t5 
 QF  = TFt - TFl;
 QB  = TBt - TBl;
 
-% Zero BOTH QF and QB wherever |QF - QB| < threshold (column-wise, all 5 strips)
+% Zero BOTH QF and QB wherever |QF - QB| > threshold (column-wise, all 5 strips)
 msk = (abs(QF - QB) > charge_wide_strip_diff_thr);   % same size as QF/QB (Nx5)
 QF(msk) = 0;
 QB(msk) = 0;
@@ -1289,7 +1298,7 @@ charge_limits_pmt     = [q005_pmt q95_pmt];
 % ---------------------------------------------------------------------
 
 
-timing_studies = true;
+timing_studies = false;
 if timing_studies
 
 
@@ -1958,7 +1967,7 @@ if timing_studies
 
     sigma_RPC = sqrt( (sigma_RPC_SC^2) - (sigma_SC^2) );
 
-    log_info('Time resolution estimates (ns) under equal-PMT assumption | RPC=%.5f | SC=%.5f', sigma_RPC, sigma_SC);
+    log_info('Time resolution estimates under equal-PMT assumption | RPC=%.0f ps | SC=%.0f ps', sigma_RPC*1000, sigma_SC*1000);
 
 end
 
@@ -3005,12 +3014,12 @@ bin_edges = 0:0.5:100;
 bin_centers = edges(1:end-1) + diff(edges)/2;
 charge_histogram_table = table(bin_centers', counts', 'VariableNames', {'Charge_bin_center', 'Count'});
 
-outdir = [outputs7_root '/CHARGES/'];
+outdir = fullfile(outputs7_root, 'CHARGES');
 if ~exist(outdir, 'dir')
     mkdir(outdir);
 end
 
-outfile = sprintf('%sthick_strip_charge_histogram_run_%d.csv', outdir, run);
+outfile = sprintf('%s/thick_strip_charge_histogram_run_%d.csv', outdir, run);
 writetable(charge_histogram_table, outfile);
 
 %%
@@ -3590,6 +3599,11 @@ end
 
 
 % Saves all open figures to a single multi-page PDF in targetDir/pdfFileName
+% Workspace overrides (set in base workspace prior to running):
+%   save_dpi         -> scalar DPI (default 72) to balance quality/performance.
+%   save_background  -> color spec (e.g., 'black', 'white', [0 0 0]) or "current".
+%   save_pdf_mode    -> "stream" (default, low-memory exporter) or "legacy" (PNG staging).
+%   keep_raster_temp -> true to retain intermediate PNGs when in legacy mode.
 function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName, log_debug)
     if nargin < 3 || isempty(log_debug)
         log_debug = @(varargin) [];
@@ -3609,61 +3623,231 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName, l
     [~, sortIdx] = sort([figs.Number]);
     figs = figs(sortIdx);
 
-    % -------- Raster options (black bg + moderate DPI) --------
-    % Allow overriding from base workspace: save_dpi = 120/150/200 ...
+    % -------- Export tuning (prioritize low memory footprint) --------
+    % Allow overriding from base workspace: save_dpi = 72/96/120 ...
     try
         dpi = evalin('base', 'save_dpi');
-        if isempty(dpi) || ~isscalar(dpi), dpi = 100; end
+        if isempty(dpi) || ~isscalar(dpi) || ~isfinite(dpi)
+            dpi = [];
+        end
     catch
-        dpi = 100;
+        dpi = [];
     end
-    rasterOpts = {'ContentType','image','Resolution',dpi,'BackgroundColor','black'};
+    if isempty(dpi)
+        dpi = 72; % lower default DPI keeps exported rasters lightweight
+    end
+    dpi = max(36, min(200, double(dpi))); % clamp to sane bounds
 
-    % Temp folder for per-page PNGs
+    % Background color can still be overridden if the workspace defines it.
+    try
+        bgColor = evalin('base', 'save_background');
+        if ~(ischar(bgColor) || isstring(bgColor)) && ~isnumeric(bgColor)
+            bgColor = [];
+        end
+    catch
+        bgColor = [];
+    end
+    if isempty(bgColor)
+        bgColor = 'current'; % respect each figure's own color settings
+    end
+
+    exportOpts = {'ContentType','image','Resolution',dpi,'BackgroundColor',bgColor};
+
+    % We stream figures directly into the PDF to avoid high-memory PNG staging.
+    % Users can still opt-in to the legacy raster workflow by defining
+    % save_pdf_mode = "legacy" in the base workspace.
+    try
+        pdfMode = evalin('base', 'save_pdf_mode');
+        if ~isstring(pdfMode) && ~ischar(pdfMode)
+            pdfMode = "stream";
+        else
+            pdfMode = string(pdfMode);
+        end
+    catch
+        pdfMode = "stream";
+    end
+
+    if pdfMode == "legacy"
+        log_debug('save_pdf_mode set to legacy; using PNG staging workflow.');
+        pdfPath = run_legacy_pdf_export(figs, pdfPath, exportOpts, log_debug);
+        return;
+    end
+
+    try
+        stream_figures_to_pdf(figs, pdfPath, exportOpts, log_debug);
+    catch streamErr
+        warning(streamErr.identifier, 'Streaming PDF export failed: %s\nFalling back to legacy raster combine.', streamErr.message);
+        pdfPath = run_legacy_pdf_export(figs, pdfPath, exportOpts, log_debug);
+        return;
+    end
+    pdfPath = ensure_existing_pdf(pdfPath);
+end
+
+function pdfPath = run_legacy_pdf_export(figs, pdfPath, exportOpts, log_debug)
+    targetDir = fileparts(pdfPath);
+    dpi = exportOpts{4}; % exportOpts = {'ContentType','image','Resolution',dpi,'BackgroundColor',bgColor}
+    if isnumeric(dpi), dpiVal = dpi; else dpiVal = NaN; end
+    bgColorValue = exportOpts{end};
+
     tempDir = tempname(targetDir);
     mkdir(tempDir);
-    log_debug('Rasterizing %d figure(s) into %s (DPI=%d, bg=black)', figCount, tempDir, dpi);
+    log_debug('Legacy rasterization of %d figure(s) into %s (DPI=%s)', numel(figs), tempDir, mat2str(dpiVal));
 
     keepRasterTemp = false;
-    cleanupObj = [];
     try
         keepRasterTemp = evalin('base', "exist(''keep_raster_temp'',''var'') && logical(keep_raster_temp)");
     catch
         keepRasterTemp = false;
     end
-    if keepRasterTemp
-        log_debug('keep_raster_temp is true; temporary PNGs retained in %s', tempDir);
-    else
+
+    if ~keepRasterTemp
         cleanupObj = onCleanup(@() cleanup_temp_directory(tempDir)); %#ok<NASGU>
+    else
+        log_debug('keep_raster_temp is true; temporary PNGs retained in %s', tempDir);
     end
 
-    % Export each figure to a PNG with dark bg and close it
-    pngFiles = cell(figCount, 1);
-    for k = 1:figCount
+    pngFiles = cell(numel(figs), 1);
+    for k = 1:numel(figs)
         fig = figs(k);
-        % Ensure figure won’t invert colors on save (belt & suspenders)
-        try, set(fig, 'InvertHardcopy','off'); end
-        % If the figure wasn't created with dark defaults, force them now
-        try, set(fig, 'Color','k'); end
-        ax = findall(fig, 'Type','axes');
-        for a = reshape(ax,1,[])
-            try
-                set(a, 'Color','k', 'XColor','w','YColor','w','ZColor','w');
-            end
-        end
-
+        prepare_figure_colors(fig, bgColorValue);
         pngFiles{k} = fullfile(tempDir, sprintf('page_%04d.png', k));
-        exportgraphics(fig, pngFiles{k}, rasterOpts{:});
+        try
+            exportgraphics(fig, pngFiles{k}, exportOpts{:});
+        catch err
+            close(fig);
+            rethrow(err);
+        end
         close(fig);
     end
+    combine_images_to_pdf(pngFiles, pdfPath, exportOpts);
+    pdfPath = ensure_existing_pdf(pdfPath);
+end
 
-    % Combine into a multi-page PDF (also with black bg)
-    try
-        combine_images_to_pdf(pngFiles, pdfPath, rasterOpts);
-    catch combineErr
-        warning(combineErr.identifier, '%s', combineErr.message);
+function stream_figures_to_pdf(figs, pdfPath, exportOpts, log_debug)
+    if exist(pdfPath, 'file')
+        delete(pdfPath);
+    end
+    bgColorValue = exportOpts{end};
+    for idx = 1:numel(figs)
+        fig = figs(idx);
+        prepare_figure_colors(fig, bgColorValue);
+        opts = exportOpts;
+        if idx > 1
+            opts = [opts, {'Append', true}];
+        end
+        try
+            exportgraphics(fig, pdfPath, opts{:});
+        catch err
+            close(fig);
+            rethrow(err);
+        end
+        close(fig);
+        log_debug('Streamed figure %d/%d into %s', idx, numel(figs), pdfPath);
+    end
+end
+
+function prepare_figure_colors(fig, bgValue)
+    try, set(fig, 'InvertHardcopy','off'); end
+    resolvedBg = resolve_background_color(fig, bgValue);
+    if ~isempty(resolvedBg)
+        set(fig, 'Color', resolvedBg);
+    end
+    labelColor = pick_contrasting_color(resolvedBg);
+    ax = findall(fig, 'Type','axes');
+    for a = reshape(ax,1,[])
+        try
+            axColor = get(a, 'Color');
+            if ischar(axColor) || isstring(axColor)
+                if strcmpi(axColor, 'none') && ~isempty(resolvedBg)
+                    set(a, 'Color', resolvedBg);
+                end
+            elseif isnumeric(axColor)
+                % leave numeric colors as-is
+            else
+                if ~isempty(resolvedBg)
+                    set(a, 'Color', resolvedBg);
+                end
+            end
+            set(a, 'XColor', labelColor, 'YColor', labelColor, 'ZColor', labelColor);
+        catch
+        end
+    end
+end
+
+function pdfPath = ensure_existing_pdf(pdfPath)
+    if exist(pdfPath, 'file')
+        pdfPath = char(pdfPath);
+    else
         pdfPath = '';
     end
+end
+
+function resolvedBg = resolve_background_color(fig, bgValue)
+    resolvedBg = [];
+    if nargin < 2 || isempty(bgValue)
+        bgValue = 'current';
+    end
+
+    if isnumeric(bgValue) && numel(bgValue) == 3
+        resolvedBg = normalize_rgb(bgValue);
+        return;
+    end
+
+    if isstring(bgValue) || ischar(bgValue)
+        bgStr = lower(strtrim(string(bgValue)));
+        if bgStr == "current"
+            figColor = get(fig, 'Color');
+            if isnumeric(figColor) && numel(figColor) == 3
+                resolvedBg = normalize_rgb(figColor);
+            elseif ischar(figColor) || isstring(figColor)
+                if strcmpi(figColor, 'none')
+                    resolvedBg = [0 0 0];
+                else
+                    resolvedBg = safe_validate_color(figColor);
+                end
+            end
+        else
+            resolvedBg = safe_validate_color(bgValue);
+        end
+    end
+
+    if isempty(resolvedBg)
+        resolvedBg = [0 0 0];
+    end
+end
+
+function labelColor = pick_contrasting_color(bgColor)
+    if isempty(bgColor)
+        labelColor = [1 1 1];
+        return;
+    end
+    luminance = 0.2126*bgColor(1) + 0.7152*bgColor(2) + 0.0722*bgColor(3);
+    if luminance > 0.5
+        labelColor = [0 0 0];
+    else
+        labelColor = [1 1 1];
+    end
+end
+
+function rgb = safe_validate_color(colorSpec)
+    try
+        rgb = validatecolor(colorSpec, 'tuple');
+        rgb = normalize_rgb(rgb);
+    catch
+        rgb = [];
+    end
+end
+
+function rgb = normalize_rgb(rgb)
+    rgb = double(rgb(:))';
+    if numel(rgb) ~= 3
+        rgb = [];
+        return;
+    end
+    if any(rgb > 1)
+        rgb = rgb / 255;
+    end
+    rgb = min(max(rgb, 0), 1);
 end
 
 
