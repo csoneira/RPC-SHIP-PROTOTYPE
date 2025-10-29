@@ -336,6 +336,198 @@ log_info('Persisted full NaN diagnostics report to %s', report_mat_path);
 
 log_banner('NaN diagnostics complete');
 
+
+
+% ---------------------------------------------------------------------
+% NaN scrubber + NaN% summary + overlaid barplot with event filter
+% ---------------------------------------------------------------------
+
+ws   = 'base';                     % workspace to operate on
+vars = evalin(ws, 'whos');         % list all variables
+
+replaced_names   = {};
+nan_counts       = [];   % original NaN counts
+tot_counts       = [];   % original total element counts
+pct_nans         = [];   % original %NaNs
+
+% We'll also compute %NaNs AFTER filtering out "events" flagged by l*/t* rule
+pct_nans_filtered = NaN(0,1);  % filled later per var (if compatible with row-filter)
+
+skipped_names = {};
+skipped_types = {};
+
+% ---- Build the “event-removal” mask using your rule on l9..l12, t9..t12 ----
+% Fetch originals (without altering the workspace yet)
+need = {'l9','l10','l11','l12','t9','t10','t11','t12'};
+present = true(size(need));
+vals = cell(size(need));
+for i = 1:numel(need)
+    if evalin(ws, sprintf('exist(''%s'',''var'')', need{i}))
+        vals{i} = evalin(ws, need{i});
+    else
+        present(i) = false;
+        vals{i} = [];
+    end
+end
+
+% Default: no filtering if required vectors are missing or sizes inconsistent
+event_mask_bad = [];
+can_filter = all(present);
+
+if can_filter
+    % Basic sanity: all are vectors of the same length along the first dim
+    lens = cellfun(@(x) size(x,1), vals);
+    if ~all(lens == lens(1))
+        can_filter = false;
+    else
+        N = lens(1);
+
+        % Replace NaNs by 0 ONLY in temporary copies for mask construction
+        L9  = vals{1}; L9(isnan(L9)) = 0;
+        L10 = vals{2}; L10(isnan(L10)) = 0;
+        L11 = vals{3}; L11(isnan(L11)) = 0;
+        L12 = vals{4}; L12(isnan(L12)) = 0;
+
+        T9  = vals{5}; T9(isnan(T9)) = 0;
+        T10 = vals{6}; T10(isnan(T10)) = 0;
+        T11 = vals{7}; T11(isnan(T11)) = 0;
+        T12 = vals{8}; T12(isnan(T12)) = 0;
+
+        % Differences
+        q9  = T9  - L9;
+        q10 = T10 - L10;
+        q11 = T11 - L11;
+        q12 = T12 - L12;
+
+        % Events to REMOVE: any qk ~= 0 (interpreting your "…and then put to 0 if qk ~= 0")
+        % If you intended a tolerance, change to |qk| > tol
+        event_mask_bad = (q9 == 0) | (q10 == 0) | (q11 == 0) | (q12 == 0);
+
+        % (Optional) If you literally want to set those L/T entries to 0 in-base, uncomment:
+        % for idx = 1:numel(need)
+        %     v = evalin(ws, need{idx});
+        %     v(event_mask_bad) = 0;
+        %     assignin(ws, need{idx}, v);
+        % end
+    end
+end
+
+log_info('Scanning %d workspace variable(s) for NaNs', numel(vars));
+
+% We'll also store per-var filtered % if we can apply the row-mask cleanly
+filtered_names = {};
+
+for k = 1:numel(vars)
+    name = vars(k).name;
+    cls  = vars(k).class;
+
+    % Fetch value safely from the target workspace
+    val = evalin(ws, name);
+
+    if isfloat(val)   % double/single (incl. complex/sparse)
+        mask = isnan(val);
+        nans = nnz(mask);
+        total = numel(val);
+
+        % Save original stats (BEFORE mutation)
+        replaced_names{end+1,1} = name; %#ok<AGROW>
+        nan_counts(end+1,1)     = nans; %#ok<AGROW>
+        tot_counts(end+1,1)     = total; %#ok<AGROW>
+        pct_nans(end+1,1)       = 100 * (nans / max(total,1)); %#ok<AGROW>
+
+        % Compute filtered %NaNs if applicable:
+        % Only do this if we have a valid event_mask_bad and the variable
+        % has the same number of rows as the l*/t* vectors so we can "remove events"
+        if ~isempty(event_mask_bad)
+            % Try to interpret "events" as rows along first dimension
+            if size(val,1) == numel(event_mask_bad)
+                keep = ~event_mask_bad;
+                % Index along first dimension; retain shape in other dims
+                slicer = repmat({':'}, 1, ndims(val));
+                slicer{1} = keep;
+                val_kept = val(slicer{:});
+                nans_kept  = nnz(isnan(val_kept));
+                total_kept = numel(val_kept);
+                pct_nans_filtered(end+1,1) = 100 * (nans_kept / max(total_kept,1));
+                filtered_names{end+1,1}    = name; %#ok<AGROW>
+            else
+                % not compatible -> mark NaN (no filtered value)
+                pct_nans_filtered(end+1,1) = NaN; %#ok<AGROW>
+                filtered_names{end+1,1}    = name; %#ok<AGROW>
+            end
+        end
+
+        % Now perform the replacement (mutate workspace): NaNs -> 0
+        if nans > 0
+            val(mask) = 0;
+            assignin(ws, name, val);
+        end
+
+    else
+        skipped_names{end+1,1} = name;  %#ok<AGROW>
+        skipped_types{end+1,1} = cls;   %#ok<AGROW>
+    end
+end
+
+% Build table and save to base workspace
+nan_summary = table( ...
+    string(replaced_names), ...
+    nan_counts, ...
+    tot_counts, ...
+    pct_nans, ...
+    'VariableNames', {'Variable','NaN_Count','Total_Elements','Pct_NaNs_Original'});
+
+% Attach filtered percentages if we computed them (align names)
+if ~isempty(filtered_names)
+    % Ensure same order; fill with NaN if mismatch
+    pct_after = NaN(height(nan_summary),1);
+    [tf,loc] = ismember(nan_summary.Variable, string(filtered_names));
+    pct_after(tf) = pct_nans_filtered(loc(tf));
+    nan_summary.Pct_NaNs_AfterFilter = pct_after;
+end
+
+assignin(ws, 'nan_summary', nan_summary);
+
+% ------------- Summary log -------------
+total_nans = sum(nan_counts);
+log_debug('NaN replacement summary | float vars=%d | total replaced=%d | skipped=%d', ...
+    numel(nan_counts), total_nans, numel(skipped_names));
+
+% ------------- Plot -------------
+% Grouped bar: blue = original %NaNs, orange = after-filter %NaNs
+figure('Name','%NaNs per variable (original vs. after event filter)','Color','k');
+hold on;
+xnames = nan_summary.Variable;
+y1 = nan_summary.Pct_NaNs_Original;
+if ismember('Pct_NaNs_AfterFilter', nan_summary.Properties.VariableNames)
+    y2 = nan_summary.Pct_NaNs_AfterFilter;
+    Y  = [y1, y2];
+    hb = bar(categorical(xnames), Y, 'grouped'); % default color + second (we'll recolor)
+    % Set second series to orange
+    if numel(hb) >= 2
+        hb(2).FaceColor = [1.0, 0.5, 0.0];  % orange
+    end
+    legend({'Original','After event filter'}, 'Location','bestoutside');
+else
+    bar(categorical(xnames), y1);
+    legend({'Original'}, 'Location','bestoutside');
+end
+ylabel('NaNs (%)');
+title('% of NaNs by variable');
+xtickangle(90);
+grid on; box on;
+hold off;
+
+% ------------- Notes -------------
+% - "After event filter" removes rows where ANY(q9,q10,q11,q12) ~= 0,
+%   with qk = tk - lk computed after NaNs in l*/t* are replaced by 0 (temporary).
+% - If you want a tolerance around zero, replace (qk ~= 0) with (abs(qk) > tol).
+% - The script does NOT permanently zero out l*/t* entries for flagged rows.
+%   Uncomment the optional block above if you really want that side effect.
+
+
+
+
 %% Helper functions ----------------------------------------------------
 
 function specs = define_nan_categories()
@@ -551,7 +743,7 @@ function figure_paths = generate_nan_figures(column_stats, dataset_basename, run
         ax = gca;
         ax.XTick = 1:numel(labels);
         ax.XTickLabel = arrayfun(@(i) truncate_label(labels{i}, 60), 1:numel(labels), 'UniformOutput', false);
-        ax.XTickLabelRotation = 45;
+        ax.XTickLabelRotation = 90;
         ylabel('NaN events [%]');
         title(sprintf('NaN percentage per variable — %s', cat_name));
         grid on;

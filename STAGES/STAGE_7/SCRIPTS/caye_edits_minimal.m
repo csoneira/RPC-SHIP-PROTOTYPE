@@ -133,8 +133,8 @@ if isnan(run)
     run = 0;
 end
 
-run = 1;
-test = true; % Force test mode for development
+% run = 1;
+% test = true; % Force test mode for development
 
 project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
 
@@ -648,6 +648,116 @@ end
 % Pedestal addition
 Qt_OG = Qt_OG + charge_top_pedestal;
 Qb_OG = Qb_OG + charge_bot_pedestal;
+
+
+%%
+
+% % ---------------------------------------------------------------------
+% % ---------------------------------------------------------------------
+% % Time series plots for original data for comprobation
+% % ---------------------------------------------------------------------
+% % ---------------------------------------------------------------------
+
+% % ---------------- Wide strips (timing) ----------------
+% leading_front = {l30, l31, l32, l29, l28};
+% trailing_front = {t30, t31, t32, t29, t28};
+% leading_back  = {l3,  l2,  l1,  l4,  l5};
+% trailing_back = {t3,  t2,  t1,  t4,  t5};
+
+% labels_front = {'30','31','32','29','28'};
+% labels_back  = {'3','2','1','4','5'};
+
+% % ---------------- Narrow strips (charges) ----------------
+% % Bottom (b) and top (t) strips
+% b_labels = {'I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII', ...
+%             'XIII','XIV','XV','XVI','XVII','XVIII','XIX','XX','XXI','XXII','XXIII','XXIV'};
+% t_labels = b_labels;  % same indexing
+
+% % Collect bottom and top charge arrays dynamically from base workspace
+% b_vars = cell(1,numel(b_labels));
+% t_vars = cell(1,numel(t_labels));
+% for i = 1:numel(b_labels)
+%     bname = sprintf('%sb', b_labels{i});
+%     tname = sprintf('%st', t_labels{i});
+%     if evalin('base', sprintf('exist(''%s'',''var'')', bname))
+%         b_vars{i} = evalin('base', bname);
+%     else
+%         b_vars{i} = [];
+%         warning('Missing variable: %s', bname);
+%     end
+%     if evalin('base', sprintf('exist(''%s'',''var'')', tname))
+%         t_vars{i} = evalin('base', tname);
+%     else
+%         t_vars{i} = [];
+%         warning('Missing variable: %s', tname);
+%     end
+% end
+
+% % ---------------- Plot ----------------
+% figure('Name','Original time series – timing and charges','Color','w');
+% colors = lines(10);  % reusable color map
+
+% % (1) Leading times – front wide strips
+% subplot(6,1,1); hold on;
+% for i = 1:numel(leading_front)
+%     plot(leading_front{i}, 'Color', colors(i,:), 'LineWidth', 1.0);
+% end
+% title('Leading times – front wide strips (original data)');
+% xlabel('Event index'); ylabel('Leading time (ns)');
+% legend(strcat('l', labels_front), 'Location', 'best'); grid on;
+
+% % (2) Trailing times – front wide strips
+% subplot(6,1,2); hold on;
+% for i = 1:numel(trailing_front)
+%     plot(trailing_front{i}, 'Color', colors(i,:), 'LineWidth', 1.0);
+% end
+% title('Trailing times – front wide strips (original data)');
+% xlabel('Event index'); ylabel('Trailing time (ns)');
+% legend(strcat('t', labels_front), 'Location', 'best'); grid on;
+
+% % (3) Leading times – back wide strips
+% subplot(6,1,3); hold on;
+% for i = 1:numel(leading_back)
+%     plot(leading_back{i}, 'Color', colors(i,:), 'LineWidth', 1.0);
+% end
+% title('Leading times – back wide strips (original data)');
+% xlabel('Event index'); ylabel('Leading time (ns)');
+% legend(strcat('l', labels_back), 'Location', 'best'); grid on;
+
+% % (4) Trailing times – back wide strips
+% subplot(6,1,4); hold on;
+% for i = 1:numel(trailing_back)
+%     plot(trailing_back{i}, 'Color', colors(i,:), 'LineWidth', 1.0);
+% end
+% title('Trailing times – back wide strips (original data)');
+% xlabel('Event index'); ylabel('Trailing time (ns)');
+% legend(strcat('t', labels_back), 'Location', 'best'); grid on;
+
+% % (5) Bottom charges (Ib … XXIVb)
+% subplot(6,1,5); hold on;
+% for i = 1:numel(b_vars)
+%     if ~isempty(b_vars{i})
+%         plot(b_vars{i}, 'Color', colors(mod(i-1, size(colors,1))+1,:), 'LineWidth', 0.8);
+%     end
+% end
+% title('Bottom charge signals – Ib … XXIVb');
+% xlabel('Event index'); ylabel('Charge amplitude (a.u.)');
+% legend(strcat(b_labels, 'b'), 'Location', 'eastoutside', 'NumColumns', 2);
+% grid on;
+
+% % (6) Top charges (It … XXIVt)
+% subplot(6,1,6); hold on;
+% for i = 1:numel(t_vars)
+%     if ~isempty(t_vars{i})
+%         plot(t_vars{i}, 'Color', colors(mod(i-1, size(colors,1))+1,:), 'LineWidth', 0.8);
+%     end
+% end
+% title('Top charge signals – It … XXIVt');
+% xlabel('Event index'); ylabel('Charge amplitude (a.u.)');
+% legend(strcat(t_labels, 't'), 'Location', 'eastoutside', 'NumColumns', 2);
+% grid on;
+
+% sgtitle('Time series for timing (wide strips) and charges (top/bottom narrow strips)');
 
 
 %%

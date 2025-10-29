@@ -21,6 +21,7 @@ ALPHA_P = 0.9
 ALPHA_T = 0.9
 REFERENCE_PRESSURE_PA = 9.6e4  # Pa
 REFERENCE_TEMPERATURE_K = 294.15  # K
+GAP_IN_MM = 1.8
 MBAR_TO_PA = 100.0
 CELSIUS_TO_KELVIN = 273.15
 PRESSURE_COLUMN = "sensors_Pressure_ext"  # mbar
@@ -205,8 +206,10 @@ def create_figures(
         REFERENCE_PRESSURE_PA = pressure_pa.median()
         REFERENCE_TEMPERATURE_K = temperature_k.median()
 
-        factor = (1.0 + ALPHA_P * ( pressure_pa / REFERENCE_PRESSURE_PA - 1.0)) * (1.0 + ALPHA_T * ( REFERENCE_TEMPERATURE_K / temperature_k - 1.0))
-        factor = 1/factor
+        # factor = (1.0 + ALPHA_P * ( pressure_pa / REFERENCE_PRESSURE_PA - 1.0)) * (1.0 + ALPHA_T * ( REFERENCE_TEMPERATURE_K / temperature_k - 1.0))
+        # factor = 1/factor
+
+        factor = 138 / GAP_IN_MM * temperature_k / pressure_pa
 
         fig_reduced, (ax_reduced, ax_curr_norm) = plt.subplots(
             2, 1, figsize=(10, 8), sharex=True, gridspec_kw={"hspace": 0.1}
