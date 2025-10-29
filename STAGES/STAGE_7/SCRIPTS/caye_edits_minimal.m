@@ -133,16 +133,21 @@ if isnan(run)
     run = 0;
 end
 
+run = 1;
+test = true; % Force test mode for development
+
+project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
+
 if test
     if run == 1
-        input_dir = 'dabc25120133744-dabc25126121423_JOANA_RUN_1_2025-10-08_15h05m00s';
-        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', 'RUN_1');
+        input_dir = 'RUN_1';
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', input_dir);
     elseif run == 2
-        input_dir = 'dabc25127151027-dabc25147011139_JOANA_RUN_2_2025-10-08_15h05m00s';
-        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', 'RUN_2');
+        input_dir = 'RUN_2';
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', input_dir);
     elseif run == 3
-        input_dir = 'dabc25127151027-dabc25160092400_JOANA_RUN_3_2025-10-08_15h05m00s';
-        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', 'RUN_3');
+        input_dir = 'RUN_3';
+        data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ANCILLARY', input_dir);
     elseif run == 4
         input_dir = 'dabc25282152204_RUN_4_2025-10-20_16h00m00s';
         data_dir = fullfile(project_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES', 'ALL_UNPACKED', input_dir);
@@ -184,7 +189,6 @@ DATA_Q    = 'matFiles/charge/';
 
 summary_output_dir = fullfile(outputs7_root, 'TABLES');
 path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STORED_NOT_ESSENTIAL/util_matPlots');
-project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
 mst_saves_root = fullfile(project_root, 'STAGES', 'STAGE_6', 'DATA', 'DATA_FILES', 'JOINED');
 unpacked_root = fullfile(project_root, 'STAGES', 'STAGE_6', 'DATA', 'DATA_FILES', 'JOINED');
 if ~exist(outputs7_root, 'dir'); mkdir(outputs7_root); end
@@ -363,8 +367,6 @@ for idx = 1:numel(charge_files)
     load(charge_path);
 end
 
-% whos
-
 
 %%
 
@@ -400,6 +402,7 @@ for k = 1:numel(vars)
 
         if nans > 0
             val(mask) = 0;       % zero-out NaNs
+            log_debug('Replaced %d NaN(s) in %-25s with 0.\n', nans, name);
             assignin(ws, name, val);
         end
 
@@ -414,12 +417,6 @@ for k = 1:numel(vars)
         skipped_types{end+1} = cls;   %#ok<AGROW>
     end
 end
-
-% ------------- Summary -------------
-total_nans = sum(replaced_counts);
-log_debug( ...
-    'NaN replacement summary | float vars=%d | total replaced=%d | skipped=%d', ...
-    numel(replaced_names), total_nans, numel(skipped_names));
 
 
 %%
