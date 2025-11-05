@@ -18,16 +18,52 @@ declare -A PREMERGED_SOURCES=(
   ["3"]="$STORAGE_ROOT/RUN_3"
 )
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+show_help() {
   cat <<EOF
-Usage: $0
+Usage: $0 [options]
 
 Tag unpacked datasets per run, populate STAGES/STAGE_6/DATA/DATA_FILES/RUNS/RUN_<id>
 with the corresponding MAT files, and invoke the joiner to write merged outputs under
 STAGES/STAGE_6/DATA/DATA_FILES/JOINED/RUN_<id>.
+
+Options:
+  -r, --run <id>[,<id>...]   Only join the selected run ids (comma-separated or repeat flag).
+  -h, --help                 Show this help message and exit.
 EOF
-  exit 0
-fi
+}
+
+SELECTED_RUNS=()
+declare -A SELECTED_RUNS_MAP=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    -r|--run)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Error: --run requires one or more run ids." >&2
+        exit 1
+      fi
+      IFS=',' read -ra run_args <<< "$1"
+      for run in "${run_args[@]}"; do
+        trimmed="${run//[[:space:]]/}"
+        if [[ -n "$trimmed" ]]; then
+          SELECTED_RUNS+=("$trimmed")
+          SELECTED_RUNS_MAP["$trimmed"]=1
+        fi
+      done
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      show_help >&2
+      exit 1
+      ;;
+  esac
+  shift || true
+done
 
 mkdir -p "$RUNS_ROOT" "$JOINED_ROOT" "$STORAGE_ROOT" "$(dirname "$LOGBOOK")"
 
@@ -55,6 +91,10 @@ if [[ ${#RUN_FILES[@]} -eq 0 ]]; then
 fi
 
 for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
+  if [[ ${#SELECTED_RUNS[@]} -gt 0 && -z "${SELECTED_RUNS_MAP[$run_id]:-}" ]]; then
+    echo "Skipping run ${run_id}; not requested via --run."
+    continue
+  fi
   if [[ -n "${PREMERGED_SOURCES[$run_id]:-}" ]]; then
     source_dir="${PREMERGED_SOURCES[$run_id]}"
     storage_dir="$STORAGE_ROOT/RUN_${run_id}"
@@ -112,7 +152,7 @@ for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
 
   ESC_RUN="${run_dir//\'/\'\'}"
   ESC_OUT="${output_dir//\'/\'\'}"
-  matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('STAGES/STAGE_6/SCRIPTS/join_mat_files.m'); exit;" || echo "Joiner encountered an issue for run ${run_id}; moving on."
+  matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STAGES/STAGE_6/SCRIPTS/join_mat_files.m'); exit;" || echo "Joiner encountered an issue for run ${run_id}; moving on."
 
   # Rename joined outputs to canonical RUN_<id> filenames
   for subdir in time charge; do

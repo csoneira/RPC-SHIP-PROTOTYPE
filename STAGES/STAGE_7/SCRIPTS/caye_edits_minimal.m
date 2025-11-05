@@ -102,7 +102,18 @@ if no_plot_flag
     save_plots = false;
 end
 
-clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag debug_flag debug_mode log_info log_debug log_banner outputs7_root;
+debug_png_dir = '';
+debug_png_counter = 0;
+
+groot_default_visibility = get(groot, 'DefaultFigureVisible');
+cleanup_debug_fig_visibility = [];
+if debug_mode
+    set(groot, 'DefaultFigureVisible', 'off');
+    cleanup_debug_fig_visibility = onCleanup(@() set(groot, 'DefaultFigureVisible', groot_default_visibility));
+    log_info('Debug mode enabled: figures will be rendered off-screen while PNGs are saved.');
+end
+
+clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag debug_flag debug_mode log_info log_debug log_banner outputs7_root debug_png_dir debug_png_counter groot_default_visibility cleanup_debug_fig_visibility;
 close all; clc;
 
 
@@ -338,6 +349,27 @@ else
 end
 pdfPath = fullfile(save_plots_dir, pdfFileName);
 log_info('Planned PDF output: %s', pdfPath);
+
+if debug_mode
+    debug_png_root = fullfile(outputs7_root, 'DEBUG_PNG');
+    if ~exist(debug_png_root, 'dir')
+        mkdir(debug_png_root);
+    end
+    if run ~= 0
+        debug_folder_name = sprintf('RUN_%d_%s_exec_%s', run, formatted_datetime, execution_datetime);
+    else
+        debug_folder_name = sprintf('results_%s_exec_%s', formatted_datetime, execution_datetime);
+    end
+    debug_png_dir = fullfile(debug_png_root, debug_folder_name);
+    if ~exist(debug_png_dir, 'dir')
+        mkdir(debug_png_dir);
+    end
+    log_info('Debug PNGs will stream to %s', debug_png_dir);
+    debug_png_counter = 0;
+else
+    debug_png_dir = '';
+    debug_png_counter = 0;
+end
 
 % Dynamically detect time MAT files in the directory
 time_files = dir(fullfile(time_dir, sprintf('%s*_T.mat', dataset_basename)));
@@ -638,9 +670,11 @@ Q_thin_bot_event_test = sum(Qb_test, 2);
 edges = linspace(0, 50000, 150);
 
 if should_plot
-    figure; histogram(Q_thin_top_event_test, edges, 'Normalization', 'probability');
+    fig = figure;
+    histogram(Q_thin_top_event_test, edges, 'Normalization', 'probability');
     xlabel('Charge (ADC bins)'); ylabel('Probability'); title('Positive Charges (Thin)'); hold on;
     histogram(Q_thin_bot_event_test, edges, 'Normalization', 'probability');
+    capture_debug_png(fig, 'thin_charge_probability');
 end
 
 %%
@@ -823,7 +857,7 @@ for i = 1:length(tTH_values)
 end
 
 if should_plot
-    figure;
+    fig = figure;
     plot(tTH_values, percent_good_events, '-o'); hold on;
     % vertical line at tTH, orange dashed, thicker
     xline(tTH, '--', 'tTH chosen', ...
@@ -834,6 +868,7 @@ if should_plot
     xlabel('tTH [ns]');
     ylabel('% of good events');
     title('Good events vs tTH');
+    capture_debug_png(fig, 'tth_selection');
 end
 
 
@@ -1316,13 +1351,15 @@ Q_thin_bot_event_no_crosstalk(validEventsFiltered_thin_bot) = Q_thin_bot_event_g
 % ---------------------------------------------------------------------
 
 % Quantile limits (thin channels share limits)
-q005_b = quantile(Q_thin_bot_event_good, 0.01);
-q005_t = quantile(Q_thin_top_event_good, 0.01);
-q005   = min(q005_b, q005_t);
+q005_b_raw = quantile(Q_thin_bot_event_good, 0.01);
+q95_b_raw  = quantile(Q_thin_bot_event_good, 0.99);
+[q005_b, q95_b] = ensure_axis_limits(q005_b_raw, q95_b_raw);
 
-q95_b  = quantile(Q_thin_bot_event_good, 0.99);
-q95_t  = quantile(Q_thin_top_event_good, 0.99);
-q95    = max(q95_b, q95_t);
+q005_t_raw = quantile(Q_thin_top_event_good, 0.01);
+q95_t_raw  = quantile(Q_thin_top_event_good, 0.99);
+[q005_t, q95_t] = ensure_axis_limits(q005_t_raw, q95_t_raw);
+
+[q005, q95] = ensure_axis_limits(min(q005_b, q005_t), max(q95_b, q95_t));
 
 % Thick channel limits (separate scale)
 t_lead_back_left = min(quantile(TBl, 0.001));
@@ -1331,6 +1368,7 @@ t_lead_left = min(t_lead_back_left, t_lead_front_left);
 t_lead_back_right = min(quantile(TBl, 0.999));
 t_lead_front_right = min(quantile(TFl, 0.999));
 t_lead_right = max(t_lead_back_right, t_lead_front_right);
+[t_lead_left, t_lead_right] = ensure_axis_limits(t_lead_left, t_lead_right);
 
 t_trail_back_left = min(quantile(TBt, 0.001));
 t_trail_front_left = min(quantile(TFt, 0.001));
@@ -1338,11 +1376,14 @@ t_trail_left = min(t_trail_back_left, t_trail_front_left);
 t_trail_back_right = min(quantile(TBt, 0.999));
 t_trail_front_right = min(quantile(TFt, 0.999));
 t_trail_right = max(t_trail_back_right, t_trail_front_right);
+[t_trail_left, t_trail_right] = ensure_axis_limits(t_trail_left, t_trail_right);
 
-t005_thick = quantile(T_thick_strip_good, 0.001);
-t95_thick  = quantile(T_thick_strip_good, 0.999);
-q005_thick = quantile(Q_thick_strip_good, 0.001);
-q95_thick  = quantile(Q_thick_strip_good, 0.999);
+t005_thick_raw = quantile(T_thick_strip_good, 0.001);
+t95_thick_raw  = quantile(T_thick_strip_good, 0.999);
+[t005_thick, t95_thick] = ensure_axis_limits(t005_thick_raw, t95_thick_raw);
+q005_thick_raw = quantile(Q_thick_strip_good, 0.001);
+q95_thick_raw  = quantile(Q_thick_strip_good, 0.999);
+[q005_thick, q95_thick] = ensure_axis_limits(q005_thick_raw, q95_thick_raw);
 
 % Bin edges (match your “like this” snippet for thin; keep fine bins for thick)
 bin_number = 150; % number of bins
@@ -1439,7 +1480,7 @@ if timing_studies
     % Should be no correlation ideally
 
     if should_plot
-        figure;
+        fig = figure;
         tiledlayout(1,2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
         nexttile;
@@ -1463,6 +1504,7 @@ if timing_studies
         ylabel('Time Difference PMT1 - PMT2 [ns]');
         title(sprintf('Time Difference vs Sum of Times, Bottom scint (data from %s)', formatted_datetime_tex));
         grid on; box on;
+        capture_debug_png(fig, 'timing_sum_vs_difference');
     end
     
 
@@ -1523,7 +1565,7 @@ if timing_studies
 
     if should_plot
         % --- Plots (before/after) ---
-        figure;
+        fig = figure;
         tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
         ylimits = [-4 4];
@@ -1579,12 +1621,13 @@ if timing_studies
         ylabel('Corrected Time Difference (BOTTOM) [ns]');
         title('After charge correction (BOTTOM)');
         hold off;
+        capture_debug_png(fig, 'pmt_slewing_overview');
 
 
         % ========================
         %  HISTOGRAMS: before vs after correction (fixed binning)
         % =========================
-        figure('Name','Time-difference histograms before/after correction');
+        fig_hist = figure('Name','Time-difference histograms before/after correction');
         tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
 
         % Common binning
@@ -1617,6 +1660,7 @@ if timing_studies
         xlim([-5 5]);
 
         sgtitle(sprintf('Time difference improvement after charge correction (%s)', formatted_datetime_tex));
+        capture_debug_png(fig_hist, 'pmt_slewing_histograms');
     end
 
 
@@ -1681,7 +1725,7 @@ if timing_studies
     time_diff_sum_corr = T_cint_bot_corr - T_cint_top_corr;
 
     if should_plot
-        figure('Name','Time Difference Sum — Before/After with Gaussian fits (scaled properly)');
+        fig = figure('Name','Time Difference Sum — Before/After with Gaussian fits (scaled properly)');
         nexttile; hold on; grid on; box on;
 
         % Data and mask
@@ -1732,6 +1776,7 @@ if timing_studies
         title(sprintf('Time Difference Sum — Before vs After correction (data from %s)', formatted_datetime_tex));
         xlim([-3 3]);
         legend('Location','best');
+        capture_debug_png(fig, 'time_diff_sum_gaussian');
     end
 
 
@@ -1752,7 +1797,7 @@ if timing_studies
 
     if should_plot
         % Plot in 1 row and 3 cols the scatter plots of time differences vs charges
-        figure;
+        fig = figure;
         tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
         % (1) TOP - BOT vs PMT charges
         nexttile;
@@ -1791,6 +1836,7 @@ if timing_studies
         grid on; box on;
 
         sgtitle(sprintf('Time Differences vs Charges after Slewing Correction (data from %s)', formatted_datetime_tex));
+        capture_debug_png(fig, 'slewing_scatter_triptych');
     end
 
 
@@ -1854,7 +1900,7 @@ if timing_studies
 
     % ========= Quick checks / plots =========
     if should_plot
-        figure('Name','RPC slewing vs RPC charge');
+        fig_rpc_fit = figure('Name','RPC slewing vs RPC charge');
         tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
 
         % RPC - TOP
@@ -1872,7 +1918,9 @@ if timing_studies
         xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT [ns]');
         title(sprintf('RPC–BOT fit (deg=%d)', deg_rpc)); hold off;
 
-        figure('Name','After slewing correction (vs RPC charge)');
+        capture_debug_png(fig_rpc_fit, 'rpc_slewing_vs_charge');
+
+        fig_rpc_corr = figure('Name','After slewing correction (vs RPC charge)');
         tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
         nexttile; hold on; grid on; box on;
         scatter(charge_RPC(m_rt), time_diff_RPC_TOP_corr(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
@@ -1883,6 +1931,7 @@ if timing_studies
         scatter(charge_RPC(m_rb), time_diff_RPC_BOT_corr(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
         xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT (corr) [ns]');
         title('RPC–BOT after correction'); yline(0,'k:'); hold off;
+        capture_debug_png(fig_rpc_corr, 'rpc_slewing_corrected');
     end
 
 
@@ -1925,7 +1974,7 @@ if timing_studies
 
     % Plot the three scatter plots in a single row
     if should_plot
-        figure;
+        fig = figure;
         tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
 
         % (1) SC2 - SC1 vs PMT charges
@@ -1965,6 +2014,7 @@ if timing_studies
         grid on; box on;
 
         sgtitle(sprintf('Time Differences vs Charges (data from %s)', formatted_datetime_tex));
+        capture_debug_png(fig, 'time_diff_vs_charges');
     end
 
 
@@ -1982,7 +2032,7 @@ if timing_studies
 
     did_plot_time_fits = false;
     if should_plot
-        figure;
+        fig_timefits = figure;
         hold on;
         did_plot_time_fits = true;
     end
@@ -2054,6 +2104,7 @@ if timing_studies
         legend([td_labels, strcat(td_labels, ' fit')], 'Location','best');
         title(sprintf('Time Difference Histograms and Gaussian fits (data from %s)', formatted_datetime_tex));
         grid on; box on;
+        capture_debug_png(fig_timefits, 'time_diff_gaussian_fits');
         hold off;
     end
 
@@ -2097,7 +2148,7 @@ end
 % coincidence cut. In the same figure the 6 pairs
 
 if should_plot
-    figure;
+    fig = figure;
     subplot(2,2,1); plot(Tl_cint_OG(:,1), Tt_cint_OG(:,1),'.'); hold on; plot(Tl_cint(:,1), Tt_cint(:,1),'.');
     xlabel('Tl_cint1');ylabel('Tt_cint1'); title('Time lead vs trail PMT1');
     xlim(lead_time_limits_pmt); ylim(trail_time_limits_pmt);
@@ -2119,11 +2170,12 @@ if should_plot
     sgtitle(sprintf('PMT time lead vs trail (data from %s)', formatted_datetime_tex));
     xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
     yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
+    capture_debug_png(fig, 'pmt_time_lead_trail');
 end
 
 % Now plot the charge correlations for the same PMT pairs
 if should_plot
-    figure;
+    fig = figure;
     subplot(1,2,1); plot(Qcint_OG(:,1), Qcint_OG(:,2), '.'); hold on; plot(Qcint(:,1), Qcint(:,2), '.');
     xlabel('Qcint1'); ylabel('Qcint2'); title('Charge PMT1 vs PMT2');
     xlim(charge_limits_pmt); ylim(charge_limits_pmt);
@@ -2131,12 +2183,13 @@ if should_plot
     xlabel('Qcint3'); ylabel('Qcint4'); title('Charge PMT3 vs PMT4');
     xlim(charge_limits_pmt); ylim(charge_limits_pmt);
     sgtitle(sprintf('PMT charge correlations (data from %s)', formatted_datetime_tex));
+    capture_debug_png(fig, 'pmt_charge_correlations');
 end
 
 
 % Finally, plot the Tl_cint i vs Tl_cint j scatter plots for all PMT pairs
 if should_plot
-    figure;
+    fig = figure;
     subplot(1,2,1); plot(Tl_cint_OG(:,1), Tl_cint_OG(:,2),'.'); hold on; plot(Tl_cint(:,1), Tl_cint(:,2),'.');
     xlabel('Tl_cint1'); ylabel('Tl_cint2'); title('Time lead PMT1 vs PMT2');
     xlim(lead_time_limits_pmt); ylim(lead_time_limits_pmt);
@@ -2146,13 +2199,14 @@ if should_plot
     xlim(lead_time_limits_pmt); ylim(lead_time_limits_pmt);
     sgtitle(sprintf('PMT time coincidences (data from %s)', formatted_datetime_tex));
     refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
+    capture_debug_png(fig, 'pmt_time_coincidences');
 end
 
 
 % Histograms of Tl for each strip to see the distribution of the difference
 % Normalized histograms of the time lead differences for each PMT pair to verify the
 if should_plot
-    figure;
+    fig = figure;
     subplot(1,2,1);
     % Do not histogram zero values
     valid_diff_top = Tl_cint_OG(:,1) - Tl_cint_OG(:,2);
@@ -2178,6 +2232,7 @@ if should_plot
     xlabel('Time lead PMT 3 - PMT 4 [ns]'); ylabel('Counts');
     sgtitle(sprintf('Histograms of time lead differences for PMTs (data from %s)', formatted_datetime_tex));
     xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
+    capture_debug_png(fig, 'pmt_time_lead_histograms');
 end
 
 
@@ -2192,7 +2247,7 @@ end
 
 % Similar scatter subplot plots for the wide strips to verify no obvious problems.
 if should_plot
-    figure;
+    fig = figure;
     xlimits_1 = [t_lead_left t_lead_right];
     ylimits_1 = [t_trail_left t_trail_right];
     subplot(2,5,1); plot(TFl_OG(:,1), TFt_OG(:,1),'.'); hold on; plot(TFl(:,1), TFt(:,1),'.');
@@ -2246,41 +2301,46 @@ if should_plot
     sgtitle(sprintf('Thick strip time lead vs trail (data from %s)', formatted_datetime_tex));
     xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
     yline(trail_time_wide_strip_min, 'r--'); yline(trail_time_wide_strip_max, 'r--');
+    capture_debug_png(fig, 'thick_strip_lead_trail');
 end
 
 if should_plot
 
-figure;
-xlimits_1 = [t_lead_left t_lead_right];
-ylimits_1 = [t_lead_left t_lead_right];
-subplot(2,5,1); plot(TFl_OG(:,1), TBl_OG(:,1),'.'); hold on; plot(TFl(:,1), TBl(:,1),'.');
-xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip1');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
-subplot(2,5,2); plot(TFl_OG(:,2), TBl_OG(:,2),'.'); hold on; plot(TFl(:,2), TBl(:,2),'.');
-xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip2');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
-subplot(2,5,3); plot(TFl_OG(:,3), TBl_OG(:,3),'.'); hold on; plot(TFl(:,3), TBl(:,3),'.');
-xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip3');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
-subplot(2,5,4); plot(TFl_OG(:,4), TBl_OG(:,4),'.'); hold on; plot(TFl(:,4), TBl(:,4),'.');
-xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip4');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
-subplot(2,5,5); plot(TFl_OG(:,5), TBl_OG(:,5),'.'); hold on; plot(TFl(:,5), TBl(:,5),'.');
-xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip5');
-xlim(xlimits_1); ylim(ylimits_1);
-xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
-yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
+    fig = figure;
+    xlimits_1 = [t_lead_left t_lead_right];
+    ylimits_1 = [t_lead_left t_lead_right];
+    subplot(2,5,1); plot(TFl_OG(:,1), TBl_OG(:,1),'.'); hold on; plot(TFl(:,1), TBl(:,1),'.');
+    xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip1');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
+    subplot(2,5,2); plot(TFl_OG(:,2), TBl_OG(:,2),'.'); hold on; plot(TFl(:,2), TBl(:,2),'.');
+    xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip2');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
+    subplot(2,5,3); plot(TFl_OG(:,3), TBl_OG(:,3),'.'); hold on; plot(TFl(:,3), TBl(:,3),'.');
+    xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip3');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
+    subplot(2,5,4); plot(TFl_OG(:,4), TBl_OG(:,4),'.'); hold on; plot(TFl(:,4), TBl(:,4),'.');
+    xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip4');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
+    subplot(2,5,5); plot(TFl_OG(:,5), TBl_OG(:,5),'.'); hold on; plot(TFl(:,5), TBl(:,5),'.');
+    xlabel('TFl'); ylabel('TBl'); title('Time lead Front vs back strip5');
+    xlim(xlimits_1); ylim(ylimits_1);
+    xline(lead_time_wide_strip_min, 'r--'); xline(lead_time_wide_strip_max, 'r--');
+    yline(lead_time_wide_strip_min, 'r--'); yline(lead_time_wide_strip_max, 'r--');
 
-xlimits_2 = [q005_thick q95_thick];
-ylimits_2 = [q005_thick q95_thick];
+
+right_lim_q_wide = 150; %adjust as needed
+% xlimits_2 = [q005_thick q95_thick];
+% ylimits_2 = [q005_thick q95_thick];
+xlimits_2 = [-2 right_lim_q_wide];
+ylimits_2 = xlimits_2;
 subplot(2,5,6); plot(QF_OG(:,1), QB_OG(:,1),'.'); hold on; plot(QF(:,1), QB(:,1),'.');
 xlabel('QF'); ylabel('QB'); title('Charge Front vs back strip1');
 xlim(xlimits_2); ylim(ylimits_2);
@@ -2297,11 +2357,10 @@ subplot(2,5,10); plot(QF_OG(:,5), QB_OG(:,5),'.'); hold on; plot(QF(:,5), QB(:,5
 xlabel('QF'); ylabel('QB'); title('Charge Front vs back strip5');
 xlim(xlimits_2); ylim(ylimits_2);
 sgtitle(sprintf('Thick strip time and charge front vs back (data from %s)', formatted_datetime_tex));
-
+    capture_debug_png(fig, 'thick_strip_front_back');
 
 right_lim_q_wide = 100; %adjust as needed
-
-figure;
+fig = figure;
 for strip = 1:5
     % Left column: uncalibrated
     subplot(5,2,strip*2-1);
@@ -2327,8 +2386,10 @@ for strip = 1:5
     sgtitle(sprintf('Wide strip charge spectra and calibration (data from %s)', formatted_datetime_tex));
 end
 
+capture_debug_png(fig, 'wide_strip_charge_calibration');
 
-figure;
+
+fig = figure;
 % Avoid plotting zero values in histograms, take ~= 0 values
 Q_nonzero = Q_thick_strip_OG; Q_nonzero(Q_nonzero==0) = [];
 X_nonzero = X_thick_strip_OG; X_nonzero(X_nonzero==0) = [];
@@ -2339,9 +2400,10 @@ subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); 
 subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
 subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
 sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime_tex));
+capture_debug_png(fig, 'thick_strip_observables_raw');
 
 
-figure;
+fig = figure;
 % Avoid plotting zero values in histograms, take ~= 0 values
 Q_nonzero = Q_thick_strip_good; Q_nonzero(Q_nonzero==0) = [];
 X_nonzero = X_thick_strip_good; X_nonzero(X_nonzero==0) = [];
@@ -2352,11 +2414,12 @@ subplot(2,2,2); histogram(X_nonzero, 1:0.5:5.5); xlabel('X (strip with Qmax)'); 
 subplot(2,2,3); histogram(T_nonzero, -220:1:-100); xlabel('T [ns]'); ylabel('# of events'); title('T (mean of Tfl and Tbl)');
 subplot(2,2,4); histogram(Y_nonzero, -2:0.01:2); xlabel('Y [ns]'); ylabel('# of events'); title('Y (Tfl-Tbl)/2');
 sgtitle(sprintf('THICK STRIP OBSERVABLES (data from %s)', formatted_datetime_tex));
+capture_debug_png(fig, 'thick_strip_observables_filtered');
 
 
 % Histograms of QF-QB for each strip to see the distribution of the difference
 % Normalized histograms for better comparison
-figure;
+fig = figure;
 for i = 1:5
     subplot(5,1,i);
     % Do not histogram zero values
@@ -2373,6 +2436,7 @@ for i = 1:5
     xline(charge_wide_strip_diff_thr, 'r--'); xline(-charge_wide_strip_diff_thr, 'r--');
 end
 sgtitle(sprintf('Histograms of QF - QB for all WIDE strips (data from %s)', formatted_datetime_tex));
+capture_debug_png(fig, 'wide_strip_qf_qb_histograms');
 
 % Scatter plots of all pairs of Q, X, T, Y for the thick strips (always color version)
 Qv = Q(:); Xv = X(:); Tv = T(:); Yv = Y(:);
@@ -2384,7 +2448,7 @@ names = {'Q','X','T','Y'};
 vals  = {Qv,  Xv,  Tv,  Yv};
 pairs = [1 2; 1 3; 1 4; 2 3; 2 4; 3 4];  % (Q,X), (Q,T), (Q,Y), (X,T), (X,Y), (T,Y)
 
-figure('Name','Scatter pairs: Q, X, T, Y');
+fig = figure('Name','Scatter pairs: Q, X, T, Y');
 tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
 
 % config outside the loop
@@ -2437,6 +2501,7 @@ for i = 1:size(pairs,1)
 end
 
 sgtitle(sprintf('All 2D scatter combinations (zeros removed) — run %s', run));
+capture_debug_png(fig, 'thick_strip_scatter_matrix');
 
 end
 
@@ -2453,19 +2518,19 @@ end
 
 if should_plot
 
-figure;
-subplot(4,6,1); plot(Qt(:,1), Qb(:,1),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip I');
-xlim([q005_t q95_t]); ylim([q005_b q95_b]);
-subplot(4,6,2); plot(Qt(:,2), Qb(:,2),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip II');
-xlim([q005_t q95_t]); ylim([q005_b q95_b]);
-subplot(4,6,3); plot(Qt(:,3), Qb(:,3),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip III');
-xlim([q005_t q95_t]); ylim([q005_b q95_b]);
-subplot(4,6,4); plot(Qt(:,4), Qb(:,4),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip IV');
-xlim([q005_t q95_t]); ylim([q005_b q95_b]);
-subplot(4,6,5); plot(Qt(:,5), Qb(:,5),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip V');
-xlim([q005_t q95_t]); ylim([q005_b q95_b]);
-subplot(4,6,6); plot(Qt(:,6), Qb(:,6),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip VI');
-xlim([q005_t q95_t]); ylim([q005_b q95_b]);
+    fig = figure;
+    subplot(4,6,1); plot(Qt(:,1), Qb(:,1),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip I');
+    xlim([q005_t q95_t]); ylim([q005_b q95_b]);
+    subplot(4,6,2); plot(Qt(:,2), Qb(:,2),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip II');
+    xlim([q005_t q95_t]); ylim([q005_b q95_b]);
+    subplot(4,6,3); plot(Qt(:,3), Qb(:,3),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip III');
+    xlim([q005_t q95_t]); ylim([q005_b q95_b]);
+    subplot(4,6,4); plot(Qt(:,4), Qb(:,4),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip IV');
+    xlim([q005_t q95_t]); ylim([q005_b q95_b]);
+    subplot(4,6,5); plot(Qt(:,5), Qb(:,5),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip V');
+    xlim([q005_t q95_t]); ylim([q005_b q95_b]);
+    subplot(4,6,6); plot(Qt(:,6), Qb(:,6),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip VI');
+    xlim([q005_t q95_t]); ylim([q005_b q95_b]);
 subplot(4,6,7); plot(Qt(:,7), Qb(:,7),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip VII');
 xlim([q005_t q95_t]); ylim([q005_b q95_b]);
 subplot(4,6,8); plot(Qt(:,8), Qb(:,8),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip VIII');
@@ -2503,11 +2568,12 @@ xlim([q005_t q95_t]); ylim([q005_b q95_b]);
 subplot(4,6,24); plot(Qt(:,24), Qb(:,24),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XXIV');
 xlim([q005_t q95_t]); ylim([q005_b q95_b]);
 sgtitle(sprintf('Narrow strip charge top vs bottom (data from %s)', formatted_datetime_tex));
+    capture_debug_png(fig, 'narrow_strip_top_vs_bottom');
 
 
 
 % FIGURE 1 — Thin bottom / Thin top (hist + hist + scatter), with valid overlays
-figure;
+fig = figure;
 subplot(1,3,1);
 histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
@@ -2530,9 +2596,10 @@ xlabel('Q (bottom)'); ylabel('Q (top)');
 title('Q bottom vs Q top');
 xlim([q005_b q95_b]); ylim([q005_t q95_t]); legend('show');
 sgtitle(sprintf('Charge of the event (thin only; all vs valid; run %s)', run));
+capture_debug_png(fig, 'thin_bottom_vs_top');
 
 % FIGURE 2 — Thin bottom vs Thick
-figure;
+fig = figure;
 subplot(1,3,1);
 histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
@@ -2554,9 +2621,10 @@ xlabel('Q (bottom)'); ylabel('Q (thick)');
 title('Q bottom vs Q thick');
 xlim([q005_b q95_b]); ylim([q005_thick q95_thick]); legend('show');
 sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid; run %s)', run));
+capture_debug_png(fig, 'thin_bottom_vs_thick');
 
 % FIGURE 3 — Thick vs Thin top
-figure;
+fig = figure;
 subplot(1,3,1);
 histogram(Q_thick_strip_signal_hist, thickEdges, 'DisplayName','all events'); hold on;
 histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
@@ -2578,10 +2646,11 @@ xlabel('Q (thick)'); ylabel('Q (top)');
 title('Q thick vs Q top');
 xlim([q005_thick q95_thick]); ylim([q005 q95]); legend('show');
 sgtitle(sprintf('Charge of the event (thick vs top; all vs valid; run %s)', run));
+capture_debug_png(fig, 'thick_vs_thin_top');
 
 
 % PMT 2x2 charge CDFs with binning_pmt and the _signal, _good, _range versions
-figure;
+fig = figure;
 titles = {'Q pmt1','Q pmt2','Q pmt3','Q pmt4'};
 
 for k = 1:4
@@ -2599,6 +2668,7 @@ for k = 1:4
 end
 
 sgtitle(sprintf('PMT charge (data from %s)', formatted_datetime_tex));
+capture_debug_png(fig, 'pmt_charge_cdfs');
 
 end
 
@@ -2736,7 +2806,7 @@ if position_from_narrow_strips && should_plot
 
     percentile_position = 5;  % use 5%/95% caps (change if needed)
 
-    figure('Name','Fits matrix (6x6): top/bottom variables');
+    fig = figure('Name','Fits matrix (6x6): top/bottom variables');
     tiledlayout(6,6,'TileSpacing','compact','Padding','compact');
 
     for r = 1:6
@@ -2814,6 +2884,7 @@ if position_from_narrow_strips && should_plot
             end
         end
     end
+    capture_debug_png(fig, 'fits_matrix_top_bottom');
 
     sgtitle(sprintf('Fits matrix (6x6) — run %s', run));
 
@@ -2926,7 +2997,7 @@ if position_from_narrow_strips && should_plot
     log_debug('Selection rectangle (axes units): center=(%.1f, %.1f) | base=%.1f | height=%.1f', ...
             center_ax(1), center_ax(2), base_ax, height_ax);
 
-    figure('Name','Original thin vs thick (top row) → Final thin vs thick (bottom row)');
+    fig = figure('Name','Original thin vs thick (top row) → Final thin vs thick (bottom row)');
     tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
 
     % (a) THIN X (original 1..24 repeated) vs THICK Y
@@ -2994,6 +3065,7 @@ if position_from_narrow_strips && should_plot
     xlim(lims); ylim(lims); grid off; box on; axis square;
 
     sgtitle(sprintf('Original thin vs thick → Final thin vs thick (run %s)', run));
+    capture_debug_png(fig, 'thin_vs_thick_wraps');
 
     %%
 
@@ -3008,7 +3080,7 @@ if position_from_narrow_strips && should_plot
     X_final_mm = to_mm(X_final_ax(valid));
     Y_final_mm = to_mm(Y_final_ax(valid));
 
-    figure('Name','Final XY map');
+    fig = figure('Name','Final XY map');
     scatter(X_final_mm, Y_final_mm, 6, 'filled', 'MarkerFaceAlpha',0.4); hold on;
     % Add xlines not dashed and dashed ylines each 24 strip interval, transforming from strip to mm
     for k = 0:nWraps
@@ -3022,6 +3094,7 @@ if position_from_narrow_strips && should_plot
     title(sprintf('Disambiguated thin positions using thick constraints — run %s', run));
     rectangle('Position', [center_mm(1)-base_mm/2, center_mm(2)-height_mm/2, base_mm, height_mm], ...
               'EdgeColor', 'r', 'LineWidth', 2);
+    capture_debug_png(fig, 'final_xy_map');
 
 end
 
@@ -3064,7 +3137,7 @@ Q_thin_bot_plot = Q_thin_bot(isfinite(Q_thin_bot) & Q_thin_bot > 0);
 
 if should_plot
     % the streamer % in the histogram title with no decimals
-    figure;
+    fig = figure;
     subplot(2,3,1); histogram(Q_thick_plot, 0:1:200); set(gca, 'YScale', 'log'); xlabel('Q_{thick\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thick RPC Q, streamer <%d%%> (run %s)', round(percentage_streamer_thick), run));
     hold on; xline(Q_thick_streamer_threshold, 'r--', 'Streamer Threshold');
     subplot(2,3,2); histogram(Q_thin_top_plot, 0:100:10E4); set(gca, 'YScale', 'log'); xlabel('Q_{thin\_top\_event} [ADC bins]'); ylabel('# of events'); title(sprintf('Thin RPC TOP Q, streamer <%d%%> (run %s)', round(percentage_streamer_thin_top), run));
@@ -3080,6 +3153,7 @@ if should_plot
     hold on; xline(Q_thin_bot_streamer_threshold, 'r--', 'Streamer Threshold'); ylim([0 1]);
 
     sgtitle(sprintf('RPC Charge Spectra and cumulative distributions (data from %s)', formatted_datetime_tex));
+    capture_debug_png(fig, 'rpc_charge_streamers');
 end
 
 
@@ -3203,7 +3277,7 @@ end
 
 % --- Plot ---
 if should_plot
-    figure('Name','Efficiency vs Thresholds');
+    fig = figure('Name','Efficiency vs Thresholds');
     tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
 
     % THIN TOP
@@ -3323,6 +3397,7 @@ if should_plot
     grid on; box on;
 
     sgtitle('Efficiency vs Threshold for Different Event Classes');
+    capture_debug_png(fig, 'efficiency_vs_thresholds_full');
 end
 
 
@@ -3331,7 +3406,7 @@ end
 
 % --- Plot ---
 if should_plot
-    figure('Name','Efficiency vs Thresholds');
+    fig = figure('Name','Efficiency vs Thresholds');
     tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
 
     % THICK
@@ -3375,6 +3450,7 @@ if should_plot
 
 
     sgtitle('Efficiency vs Threshold for Different Event Classes');
+    capture_debug_png(fig, 'efficiency_vs_thresholds_zoom');
 end
 
 
@@ -3674,13 +3750,124 @@ end
 log_banner('Completed caye_edits_minimal | Run %d | Input %s', run, input_dir);
 
 
-%%
+%% 
 
 % -------------------------------------------------------------------------
 % -------------------------------------------------------------------------
 % Functions ---------------------------------------------------------------
 % -------------------------------------------------------------------------
 % -------------------------------------------------------------------------
+
+function [low, high] = ensure_axis_limits(low, high)
+    % Ensure axis bounds are strictly increasing by padding symmetrically when necessary.
+    if ~isfinite(low) || ~isfinite(high)
+        return;
+    end
+
+    span = high - low;
+    if span > 0 && isfinite(span)
+        return;
+    end
+
+    magnitude = max([abs(low), abs(high), 1]);
+    pad = max(magnitude * 0.05, eps(magnitude) * 10);
+    if ~isfinite(pad) || pad <= 0
+        pad = 1e-3;
+    end
+
+    mid = (low + high) / 2;
+    if ~isfinite(mid)
+        mid = 0;
+    end
+
+    low = mid - pad;
+    high = mid + pad;
+end
+
+function capture_debug_png(figHandle, label)
+    if nargin < 2
+        label = '';
+    end
+    if ~(ishandle(figHandle) && strcmp(get(figHandle, 'Type'), 'figure'))
+        return;
+    end
+
+    try
+        debug_enabled = evalin('base', 'exist(''debug_mode'',''var'') && logical(debug_mode)');
+    catch
+        debug_enabled = false;
+    end
+    if ~debug_enabled
+        return;
+    end
+
+    try
+        debug_dir = evalin('base', 'debug_png_dir');
+    catch
+        debug_dir = '';
+    end
+    if isempty(debug_dir)
+        return;
+    end
+    if ~exist(debug_dir, 'dir')
+        mkdir(debug_dir);
+    end
+
+    if nargin < 2 || isempty(label)
+        figName = get(figHandle, 'Name');
+        if isempty(figName)
+            label = sprintf('figure_%d', get(figHandle, 'Number'));
+        else
+            label = figName;
+        end
+    end
+    label = sanitize_debug_label(label);
+
+    try
+        counter = evalin('base', 'debug_png_counter');
+    catch
+        counter = 0;
+    end
+    counter = counter + 1;
+    assignin('base', 'debug_png_counter', counter);
+
+    pngFile = sprintf('%03d_%s.png', counter, label);
+    pngPath = fullfile(debug_dir, pngFile);
+
+    try
+        drawnow;
+        exportgraphics(figHandle, pngPath, 'Resolution', 144);
+    catch
+        try
+            saveas(figHandle, pngPath);
+        catch saveErr
+            warning('capture_debug_png:saveFailed', 'Unable to save figure %d: %s', get(figHandle, 'Number'), saveErr.message);
+            return;
+        end
+    end
+
+    fprintf('[DEBUG] Saved PNG #%d -> %s\n', counter, pngPath);
+end
+
+function clean = sanitize_debug_label(label)
+    if nargin == 0 || isempty(label)
+        clean = 'figure';
+        return;
+    end
+    label = char(label);
+    label = strtrim(label);
+    if isempty(label)
+        clean = 'figure';
+        return;
+    end
+
+    clean = regexprep(label, '[^A-Za-z0-9_-]', '_');
+    clean = regexprep(clean, '_+', '_');
+    clean = regexprep(clean, '^_+|_+$', '');
+    if isempty(clean)
+        clean = 'figure';
+    end
+end
 
 
 % Define a function called mm_to_strip that converts mm to strip number
