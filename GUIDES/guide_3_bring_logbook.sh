@@ -17,7 +17,7 @@ GID="805688773"
 # Output filename
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-OUTPUT="$REPO_ROOT/STAGES/STAGE_3/DATA_LOGS/file_online_logbook.csv"
+OUTPUT="$REPO_ROOT/STAGES/STAGE_3/DATA/DATA_LOGS/file_online_logbook.csv"
 
 mkdir -p "$(dirname "$OUTPUT")"
 

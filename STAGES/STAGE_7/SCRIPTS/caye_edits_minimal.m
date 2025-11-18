@@ -89,6 +89,68 @@ if debug_mode
 end
 
 should_plot = ~no_plot_flag;
+simple_pdf_flag = any(strcmpi(cli_args, '--simple-pdf'));
+full_pdf_flag = any(strcmpi(cli_args, '--full-pdf'));
+DEFAULT_SIMPLE_PDF_LIMIT = 24;
+pdf_limit_arg = NaN;
+limit_flags = ["--pdf-limit", "--pdf-max-pages"];
+for idx = 1:numel(cli_args)
+    token = cli_args{idx};
+    if ~(isstring(token) || ischar(token))
+        continue;
+    end
+    tokenStr = string(token);
+    for fIdx = 1:numel(limit_flags)
+        flagStr = string(limit_flags(fIdx));
+        equalPrefix = flagStr + "=";
+        if startsWith(tokenStr, equalPrefix, 'IgnoreCase', true)
+            valueStr = extractAfter(tokenStr, equalPrefix);
+            candidate = str2double(valueStr);
+            if ~isnan(candidate)
+                pdf_limit_arg = candidate;
+                break;
+            end
+        elseif strcmpi(tokenStr, flagStr)
+            if idx < numel(cli_args)
+                nextToken = cli_args{idx+1};
+                candidate = str2double(string(nextToken));
+                if ~isnan(candidate)
+                    pdf_limit_arg = candidate;
+                    break;
+                end
+            end
+        end
+    end
+    if ~isnan(pdf_limit_arg)
+        break;
+    end
+end
+pdf_page_limit = NaN;
+if ~isnan(pdf_limit_arg)
+    pdf_page_limit = pdf_limit_arg;
+elseif full_pdf_flag
+    pdf_page_limit = Inf;
+elseif simple_pdf_flag
+    pdf_page_limit = DEFAULT_SIMPLE_PDF_LIMIT;
+else
+    try
+        if evalin('base', 'exist(''save_pdf_max_pages'',''var'')')
+            base_pdf_limit = evalin('base', 'save_pdf_max_pages');
+            if ~isempty(base_pdf_limit) && isfinite(base_pdf_limit) && isnumeric(base_pdf_limit)
+                pdf_page_limit = base_pdf_limit;
+            end
+        end
+    catch
+    end
+end
+if isnan(pdf_page_limit)
+    pdf_page_limit = Inf;
+end
+if isfinite(pdf_page_limit)
+    pdf_page_limit = max(0, floor(double(pdf_page_limit)));
+else
+    pdf_page_limit = Inf;
+end
 
 outputs7_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7';
 save_plots_dir_default = fullfile(outputs7_root, 'PDF');
@@ -113,7 +175,7 @@ if debug_mode
     log_info('Debug mode enabled: figures will be rendered off-screen while PNGs are saved.');
 end
 
-clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag debug_flag debug_mode log_info log_debug log_banner outputs7_root debug_png_dir debug_png_counter groot_default_visibility cleanup_debug_fig_visibility;
+clearvars -except save_plots save_plots_dir save_plots_dir_default input_dir keep_raster_temp test run should_plot no_plot_flag debug_flag debug_mode log_info log_debug log_banner outputs7_root debug_png_dir debug_png_counter groot_default_visibility cleanup_debug_fig_visibility pdf_page_limit;
 close all; clc;
 
 
@@ -1446,7 +1508,7 @@ charge_limits_pmt     = [q005_pmt q95_pmt];
 % ---------------------------------------------------------------------
 
 
-timing_studies = false;
+timing_studies = true;
 if timing_studies
 
 
@@ -3704,11 +3766,14 @@ fprintf('%s\n', repmat('=',1, sepLen2));
 
 % CSV output
 if run ~= 0
-    summaryFileName = sprintf('RUN_%d_summary_%s_exec_%s.csv', run, formatted_datetime, execution_datetime);
+    summaryFileName = sprintf('RUN_%d_summary.csv', run);
 else
-    summaryFileName = sprintf('summary_%s_exec_%s.csv', formatted_datetime, execution_datetime);
+    summaryFileName = 'summary.csv';
 end
 outCsv = fullfile(summary_output_dir, summaryFileName);
+if exist(outCsv, 'file')
+    delete(outCsv);
+end
 
 fid = fopen(outCsv, 'w');
 % Update header comment with new column ordering
@@ -3736,9 +3801,13 @@ log_debug('Figure export filename: %s', pdfFileName);
 if should_plot && save_plots
     try
         if ~exist(save_plots_dir, 'dir'), mkdir(save_plots_dir); end
-        [pdfPath, figCount] = save_all_figures_to_pdf(save_plots_dir, pdfFileName, log_debug);
-        if figCount > 0 && ~isempty(pdfPath)
-            log_info('Saved %d figure(s) to %s', figCount, pdfPath);
+        [pdfPath, exportedCount, totalFigures] = save_all_figures_to_pdf(save_plots_dir, pdfFileName, log_debug, pdf_page_limit);
+        if exportedCount > 0 && ~isempty(pdfPath)
+            if totalFigures > exportedCount
+                log_info('Saved %d of %d figure(s) to %s (PDF limited).', exportedCount, totalFigures, pdfPath);
+            else
+                log_info('Saved %d figure(s) to %s', exportedCount, pdfPath);
+            end
         else
             log_info('No figures generated to save.');
         end
@@ -3898,14 +3967,31 @@ end
 %   save_background  -> color spec (e.g., 'black', 'white', [0 0 0]) or "current".
 %   save_pdf_mode    -> "stream" (default, low-memory exporter) or "legacy" (PNG staging).
 %   keep_raster_temp -> true to retain intermediate PNGs when in legacy mode.
-function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName, log_debug)
+function [pdfPath, exportedCount, totalCount] = save_all_figures_to_pdf(targetDir, pdfFileName, log_debug, maxPages)
     if nargin < 3 || isempty(log_debug)
         log_debug = @(varargin) [];
     end
+    if nargin < 4 || isempty(maxPages)
+        maxPages = Inf;
+    end
+    if ~isnumeric(maxPages) || isempty(maxPages)
+        maxPages = Inf;
+    end
+    if isfinite(maxPages)
+        maxPages = max(0, floor(double(maxPages)));
+    else
+        maxPages = Inf;
+    end
     figs = findall(0, 'Type', 'figure');
-    figCount = numel(figs);
+    totalCount = numel(figs);
+    exportedCount = 0;
     pdfPath = '';
-    if figCount == 0
+    if totalCount == 0
+        log_debug('No figures available for export.');
+        return;
+    end
+    if maxPages == 0
+        log_debug('PDF page limit is zero; skipping export.');
         return;
     end
     if ~exist(targetDir, 'dir')
@@ -3916,6 +4002,11 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName, l
     % Sort by figure number for stable ordering
     [~, sortIdx] = sort([figs.Number]);
     figs = figs(sortIdx);
+    if isfinite(maxPages) && totalCount > maxPages
+        limit = min(totalCount, maxPages);
+        figs = figs(1:limit);
+        log_debug('Limiting PDF export to %d of %d figure(s).', limit, totalCount);
+    end
 
     % -------- Export tuning (prioritize low memory footprint) --------
     % Allow overriding from base workspace: save_dpi = 72/96/120 ...
@@ -3964,6 +4055,7 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName, l
     if pdfMode == "legacy"
         log_debug('save_pdf_mode set to legacy; using PNG staging workflow.');
         pdfPath = run_legacy_pdf_export(figs, pdfPath, exportOpts, log_debug);
+        exportedCount = numel(figs);
         return;
     end
 
@@ -3972,9 +4064,11 @@ function [pdfPath, figCount] = save_all_figures_to_pdf(targetDir, pdfFileName, l
     catch streamErr
         warning(streamErr.identifier, 'Streaming PDF export failed: %s\nFalling back to legacy raster combine.', streamErr.message);
         pdfPath = run_legacy_pdf_export(figs, pdfPath, exportOpts, log_debug);
+        exportedCount = numel(figs);
         return;
     end
     pdfPath = ensure_existing_pdf(pdfPath);
+    exportedCount = numel(figs);
 end
 
 function pdfPath = run_legacy_pdf_export(figs, pdfPath, exportOpts, log_debug)

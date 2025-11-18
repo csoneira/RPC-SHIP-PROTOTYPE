@@ -122,7 +122,7 @@ process_file() {
 
     local already_recorded="${PROCESSED_FILES[$filename]:-}"
 
-    if [[ -n "$already_recorded" && -f "$OUTPUT_DIR/$filename" ]]; then
+    if [[ -n "$already_recorded" ]]; then
         return
     fi
 
@@ -194,7 +194,6 @@ process_directory() {
 }
 
 process_directory "$local_destination"
-process_directory "$DONE_DIR"
 
 echo "Files cleaned into $OUTPUT_DIR"
 

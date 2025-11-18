@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import csv
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Iterable
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+STAGE3_ROOT = SCRIPT_DIR.parent
+DATA_LOG_ROOT = STAGE3_ROOT / "DATA" / "DATA_LOGS"
+DATA_FILE_ROOT = STAGE3_ROOT / "DATA" / "DATA_FILES"
+
+DEFAULT_LOGBOOK = DATA_LOG_ROOT / "file_online_logbook.csv"
+DEFAULT_OUTPUT = DATA_FILE_ROOT / "file_run_dictionary.csv"
+TIMESTAMP_FMT = "%Y-%m-%d %H:%M:%S"
+OBS_INDEX = 17  # column containing operator comments inside the online logbook
+
+JOANA_RUNS: list[dict[str, str]] = [
+    {
+        "run": "1",
+        "start": "2025-04-30 13:37:44",
+        "end": "2025-05-06 12:14:23",
+        "comment": "Joana run 1. HV was high in both RPCs",
+    },
+    # {
+    #     "run": "2",
+    #     "start": "2025-05-07 15:10:27",
+    #     "end": "2025-05-27 01:11:39",
+    #     "comment": "Joana run 2. HV was high only in bottom RPC",
+    # },
+    {
+        "run": "2",
+        "start": "2025-05-07 15:10:27",
+        "end": "2025-06-09 09:24:00",
+        "comment": "Joana run 2 (former Run 3, which was like the 2 but longer). HV was high only in bottom RPC",
+    },
+]
+
+
+@dataclass
+class PendingRun:
+    start: datetime
+    comment: str
+    file_hint: str
+    notes: list[str]
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Generate a compact run dictionary by reading the Stage 3 online logbook."
+    )
+    parser.add_argument(
+        "--logbook",
+        type=Path,
+        default=DEFAULT_LOGBOOK,
+        help=f"CSV with the online operations log (default: {DEFAULT_LOGBOOK})",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help=f"Destination CSV containing run,start,end,comment columns (default: {DEFAULT_OUTPUT})",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress informational logging.",
+    )
+    return parser.parse_args()
+
+
+def normalize_timestamp(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    compact = " ".join(raw.strip().split())
+    if not compact:
+        return None
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+        try:
+            return datetime.strptime(compact, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def clean_cell(row: list[str], index: int) -> str:
+    if index >= len(row):
+        return ""
+    return row[index].strip()
+
+
+def build_comment(pending: PendingRun, observation: str, file_hint: str) -> str:
+    candidates: list[str] = []
+    for value in (pending.comment, observation, pending.file_hint, file_hint):
+        value = (value or "").strip()
+        if value:
+            candidates.append(value)
+    for note in pending.notes:
+        clean = note.strip()
+        if clean:
+            candidates.append(clean)
+    merged: list[str] = []
+    for entry in candidates:
+        if entry not in merged:
+            merged.append(entry)
+    if merged:
+        return " | ".join(merged)
+    return f"DAQ run starting {pending.start.strftime(TIMESTAMP_FMT)}"
+
+
+def extract_runs_from_logbook(path: Path) -> list[dict[str, datetime | str | None]]:
+    runs: list[dict[str, datetime | str | None]] = []
+    pending: PendingRun | None = None
+
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        for row in reader:
+            if len(row) < 3:
+                continue
+            row = [cell.strip() for cell in row]
+            observation = clean_cell(row, OBS_INDEX) if len(row) > OBS_INDEX else ""
+            file_hint = clean_cell(row, 6)
+
+            row_type = (row[2] or "").lower()
+            if row_type != "daq":
+                if pending and observation:
+                    pending.notes.append(observation)
+                continue
+
+            action = clean_cell(row, 3).upper()
+            timestamp = normalize_timestamp(row[1])
+            if action not in {"START", "STOP"} or timestamp is None:
+                continue
+
+            if action == "START":
+                if pending is not None:
+                    runs.append(
+                        {
+                            "start": pending.start,
+                            "end": timestamp,
+                            "comment": build_comment(pending, "", ""),
+                        }
+                    )
+                pending = PendingRun(
+                    start=timestamp,
+                    comment=observation,
+                    file_hint=file_hint,
+                    notes=[],
+                )
+            elif action == "STOP" and pending:
+                comment = build_comment(pending, observation, file_hint)
+                runs.append(
+                    {
+                        "start": pending.start,
+                        "end": timestamp,
+                        "comment": comment or f"DAQ run starting {pending.start.strftime(TIMESTAMP_FMT)}",
+                    }
+                )
+                pending = None
+
+    if pending:
+        runs.append(
+            {
+                "start": pending.start,
+                "end": None,
+                "comment": build_comment(pending, "", ""),
+            }
+        )
+    return sorted(runs, key=lambda entry: entry["start"] or datetime.max)
+
+
+def write_runs(rows: Iterable[dict[str, str]], destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["run", "start", "end", "comment"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def log(message: str, quiet: bool = False) -> None:
+    if not quiet:
+        print(message)
+
+
+def main() -> None:
+    args = parse_args()
+    if not args.logbook.exists():
+        raise FileNotFoundError(f"Logbook not found: {args.logbook}")
+
+    log(f"[INFO] Reading logbook: {args.logbook}", args.quiet)
+    computed_runs = extract_runs_from_logbook(args.logbook)
+
+    output_rows: list[dict[str, str]] = list(JOANA_RUNS)
+    next_run_id = len(output_rows) + 1
+    for entry in computed_runs:
+        start_dt = entry.get("start")
+        end_dt = entry.get("end")
+        if not isinstance(start_dt, datetime):
+            continue
+        row = {
+            "run": str(next_run_id),
+            "start": start_dt.strftime(TIMESTAMP_FMT),
+            "end": end_dt.strftime(TIMESTAMP_FMT) if isinstance(end_dt, datetime) else "",
+            "comment": (entry.get("comment") or "").strip(),
+        }
+        output_rows.append(row)
+        next_run_id += 1
+
+    write_runs(output_rows, args.output)
+    log(f"[INFO] Wrote {len(output_rows)} run entries to {args.output}", args.quiet)
+
+
+if __name__ == "__main__":
+    main()

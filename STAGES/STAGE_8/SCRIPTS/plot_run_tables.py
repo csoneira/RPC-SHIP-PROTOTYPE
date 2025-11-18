@@ -13,7 +13,8 @@ import numpy as np
 
 TABLE_DIR = Path("STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/TABLES")
 CHARGE_DIR = Path("STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/CHARGES")
-FILENAME_PATTERN = re.compile(
+NEW_FILENAME_PATTERN = re.compile(r"^RUN_(?P<run>\d+)_summary\.csv$")
+LEGACY_FILENAME_PATTERN = re.compile(
     r"^RUN_(?P<run>\d+)_summary_.*_exec_(?P<exec>\d{4}_\d{2}_\d{2}-\d{2}\.\d{2}\.\d{2})\.csv$"
 )
 
@@ -45,6 +46,13 @@ def parse_args() -> argparse.Namespace:
         help="Explicit list of detectors to plot. Defaults to detectors starting with 'RPC_'.",
     )
     parser.add_argument(
+        "-r",
+        "--runs",
+        type=int,
+        nargs="+",
+        help="Only include the specified run ids when building plots.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("STAGES/STAGE_8/DATA/DATA_FILES/OUTPUTS_8/run_summary_plots.pdf"),
@@ -59,12 +67,20 @@ def _parse_exec_timestamp(value: str) -> datetime:
 
 def find_latest_run_files(directory: Path) -> list[RunFile]:
     latest: dict[int, RunFile] = {}
-    for path in directory.glob("RUN_*_exec_*.csv"):
-        match = FILENAME_PATTERN.match(path.name)
-        if not match:
+    for path in directory.glob("RUN_*_summary*.csv"):
+        run: int | None = None
+        exec_time: datetime | None = None
+        match = NEW_FILENAME_PATTERN.match(path.name)
+        if match:
+            run = int(match.group("run"))
+            exec_time = datetime.fromtimestamp(path.stat().st_mtime)
+        else:
+            legacy = LEGACY_FILENAME_PATTERN.match(path.name)
+            if legacy:
+                run = int(legacy.group("run"))
+                exec_time = _parse_exec_timestamp(legacy.group("exec"))
+        if run is None or exec_time is None:
             continue
-        run = int(match.group("run"))
-        exec_time = _parse_exec_timestamp(match.group("exec"))
         current = latest.get(run)
         if current is None or exec_time > current.exec_time:
             latest[run] = RunFile(run=run, exec_time=exec_time, path=path)
@@ -652,6 +668,16 @@ def plot_charge_heatmap(
 def main() -> None:
     args = parse_args()
     run_files = find_latest_run_files(args.directory)
+    if args.runs:
+        requested = {int(run) for run in args.runs}
+        available = {item.run for item in run_files}
+        missing = sorted(requested - available)
+        if missing:
+            missing_str = ", ".join(str(run) for run in missing)
+            raise FileNotFoundError(f"Requested run(s) not found: {missing_str}")
+        run_files = [item for item in run_files if item.run in requested]
+    if not run_files:
+        raise FileNotFoundError("No run files available after applying filters.")
     print("Selected files:")
     for item in run_files:
         print(f"  Run {item.run}: {item.path.name} (exec {item.exec_time.isoformat(sep=' ')})")

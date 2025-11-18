@@ -40,32 +40,134 @@ echo $$ 1>&9
 # done
 
 
-# Write a help message
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  echo "Usage: $0 [START_DATE]"
-  echo ""
-  echo "This script moves the oldest .hld file from the source directory to the unpacking directory,"
-  echo "then runs the unpacking process."
-  echo ""  echo "Arguments:"
-  echo "  START_DATE (optional): If provided, only .hld files from this date onwards will be considered."
-  echo "                        Format: YYYY-MM-DD"
-  echo "                        Example: $0 2025-01-15"
-  exit 0
-fi
+usage() {
+  cat <<EOF
+Usage: $0 [options]
 
+Bring HLD files from the remote storage, optionally filtering by run id and/or start date.
 
-# Create necessary directories if they don't exist
+Options:
+  -r, --run <id>[,<id>...]   Only bring files assigned to the selected run ids.
+  -s, --start-date <YYYY-MM-DD>
+                             Copy files newer than or equal to the provided date.
+  -h, --help                 Show this help message and exit.
+
+You may also pass a bare YYYY-MM-DD argument for backward compatibility.
+EOF
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+STAGE3_ROOT="$REPO_ROOT/STAGES/STAGE_3"
 STAGE4_ROOT="$REPO_ROOT/STAGES/STAGE_4"
+STAGE5_ROOT="$REPO_ROOT/STAGES/STAGE_5"
 HLD_SOURCE_DIR="$STAGE4_ROOT/DATA/DATA_FILES/HLD_FILES/NOT_UNPACKED"
+HLD_SENT_DIR="$STAGE4_ROOT/DATA/DATA_FILES/HLD_FILES/SENT_TO_UNPACKING"
+ALL_UNPACKED_DIR="$STAGE5_ROOT/DATA/DATA_FILES/ALL_UNPACKED"
+HLD_ERROR_DIR="$STAGE4_ROOT/DATA/DATA_FILES/HLD_FILES/ERROR"
+EXCLUDE_CONFIG="$STAGE4_ROOT/DATA/CONFIGS/hld_exclude_patterns.txt"
+FILE_DATABASE="$STAGE4_ROOT/DATA/DATA_LOGS/file_database.csv"
+REMOTE_DB="$STAGE4_ROOT/DATA/DATA_LOGS/remote_file_database.csv"
+REMOTE_LOG="$STAGE4_ROOT/DATA/DATA_LOGS/remote_run_logbook.csv"
+RUN_DICT="$STAGE3_ROOT/DATA/DATA_FILES/file_run_dictionary.csv"
+RUN_DICT_GENERATOR="$STAGE3_ROOT/SCRIPTS/run_dictionary_creator"
+RUN_TAGGER_SCRIPT="$STAGE4_ROOT/SCRIPTS/run_tagger.py"
+UNPACK_LOG_PATH="$STAGE5_ROOT/DATA/DATA_LOGS/unpack_database.csv"
 mkdir -p "$HLD_SOURCE_DIR"
 
+declare -a SELECTED_RUNS=()
+SELECTED_MAP=()
+START_DATE_FILTER=""
+POSITIONAL_ARGS=()
 
-# First, bring new HLD files from the remote server, use the date filter if provided
-# because maybe $1 does not exist, so you should put nothing as argument
+parse_run_list() {
+  IFS=',' read -ra parts <<< "$1"
+  for candidate in "${parts[@]}"; do
+    trimmed="${candidate//[[:space:]]/}"
+    if [[ -n "$trimmed" ]]; then
+      SELECTED_RUNS+=("$trimmed")
+      SELECTED_MAP["$trimmed"]=1
+    fi
+  done
+}
 
-bash "$STAGE4_ROOT/SCRIPTS/bring_hlds.sh" "${1:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -r|--run)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --run expects a value." >&2
+        exit 1
+      fi
+      parse_run_list "$2"
+      shift 2
+      ;;
+    -s|--start-date)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --start-date expects a value." >&2
+        exit 1
+      fi
+      START_DATE_FILTER="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --*)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$START_DATE_FILTER" && ${#POSITIONAL_ARGS[@]} -gt 0 ]]; then
+  START_DATE_FILTER="${POSITIONAL_ARGS[0]}"
+fi
+
+echo "[STEP] Generating run dictionary from the Stage 3 logbook..."
+if [[ -x "$RUN_DICT_GENERATOR" ]]; then
+  "$RUN_DICT_GENERATOR" --quiet
+else
+  echo "[WARN] Run dictionary generator not found at $RUN_DICT_GENERATOR; continuing with existing CSV."
+fi
+
+RUN_ARG=()
+if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
+  RUN_ARG+=(--run "$(IFS=','; echo "${SELECTED_RUNS[*]}")")
+fi
+
+echo "[STEP] Inventorying remote HLD directory..."
+bash "$STAGE4_ROOT/SCRIPTS/remote_inventory.sh"
+
+echo "[STEP] Tagging remote HLD listings..."
+python3 "$RUN_TAGGER_SCRIPT" \
+  --runs-file "$RUN_DICT" \
+  --database "$REMOTE_DB" \
+  --output "$REMOTE_LOG"
+
+export HLD_FILE_DATABASE="$FILE_DATABASE"
+export HLD_REMOTE_RUN_LOG="$REMOTE_LOG"
+export HLD_SENT_DIR
+export HLD_UNPACK_LOG="$UNPACK_LOG_PATH"
+export HLD_ERROR_DIR
+export HLD_ALL_UNPACKED="$ALL_UNPACKED_DIR"
+export HLD_EXCLUDE_CONFIG="$EXCLUDE_CONFIG"
+echo "[INFO] Tracking fetched files in: $HLD_FILE_DATABASE"
+
+BRING_ARGS=()
+if [[ -n "$START_DATE_FILTER" ]]; then
+  BRING_ARGS+=(--start-date "$START_DATE_FILTER")
+fi
+if [[ ${#RUN_ARG[@]} -gt 0 ]]; then
+  BRING_ARGS+=("${RUN_ARG[@]}")
+fi
+
+bash "$STAGE4_ROOT/SCRIPTS/bring_hlds.sh" "${BRING_ARGS[@]}"
 
 # Ensure lock is released and file removed on exit
 trap 'flock -u 9; rm -f "$lockfile"' EXIT

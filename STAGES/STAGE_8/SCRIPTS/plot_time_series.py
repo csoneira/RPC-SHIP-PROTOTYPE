@@ -12,10 +12,16 @@ from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 from matplotlib import colors as mcolors
 
-LOG_PATH = Path("STAGES/STAGE_2/DATA/DATA_FILES/big_log_lab_data.csv")
-RUN_DICT_PATH = Path("file_run_dictionary.csv")
+SCRIPT_PATH = Path(__file__).resolve()
+REPO_ROOT = SCRIPT_PATH.parents[3]
+STAGES_ROOT = REPO_ROOT / "STAGES"
+
+LOG_PATH = STAGES_ROOT / "STAGE_2" / "DATA" / "DATA_FILES" / "big_log_lab_data.csv"
+RUN_DICT_PATH = (
+    STAGES_ROOT / "STAGE_3" / "DATA" / "DATA_FILES" / "file_run_dictionary.csv"
+)
 OUTLIER_ABS_LIMIT = 2000  # values above this (in absolute terms) are considered spurious
-OUTPUTS_8_DIR = Path("STAGES/STAGE_8/DATA/DATA_FILES/OUTPUTS_8")
+OUTPUTS_8_DIR = STAGES_ROOT / "STAGE_8" / "DATA" / "DATA_FILES" / "OUTPUTS_8"
 
 ALPHA_P = 0.9
 ALPHA_T = 0.9
@@ -38,15 +44,60 @@ class RunSegment:
     display_end: pd.Timestamp
 
 
+def _parse_run_arguments(raw: list[str] | None) -> list[int]:
+    if not raw:
+        return []
+    runs: list[int] = []
+    for chunk in raw:
+        for token in chunk.split(","):
+            stripped = token.strip()
+            if not stripped:
+                continue
+            value = int(stripped)
+            if value not in runs:
+                runs.append(value)
+    return runs
+
+
+def _resolve_single_run_output(base: Path | None, run_number: int) -> Path:
+    if base is None:
+        path = OUTPUTS_8_DIR / f"time_series_run_{run_number}.pdf"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+    if base.suffix:
+        base.parent.mkdir(parents=True, exist_ok=True)
+        return base
+    base.mkdir(parents=True, exist_ok=True)
+    path = base / f"time_series_run_{run_number}.pdf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _resolve_multi_run_output(base: Path | None, label: str) -> Path:
+    filename = f"time_series_{label}.pdf"
+    if base is None:
+        path = OUTPUTS_8_DIR / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+    if base.suffix:
+        base.parent.mkdir(parents=True, exist_ok=True)
+        return base
+    base.mkdir(parents=True, exist_ok=True)
+    path = base / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plot time series from lab logs.")
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "-r",
         "--run",
-        type=int,
-        help="Run number defined in file_run_dictionary.csv. "
-        "When provided, data are clipped to the run window and charts are saved to a PDF.",
+        action="append",
+        help="Run number(s) defined in file_run_dictionary.csv. "
+        "Accepts comma-separated lists or repeated flags. "
+        "Data are clipped to each run window and charts are saved to PDFs.",
     )
     group.add_argument(
         "-a",
@@ -145,13 +196,25 @@ def create_figures(
     run_segments: list[RunSegment] | None = None,
     ellipsis_positions: list[pd.Timestamp] | None = None,
     time_column: str = "Time",
-) -> list[plt.Figure]:
+    max_figures: int | None = None,
+) -> tuple[list[plt.Figure], bool]:
     figures: list[plt.Figure] = []
-    suffix = f" — {title_suffix}" if title_suffix else ""
-    day_boundaries = _compute_midnight_boundaries(data[time_column])
     background_rgba = (
         _background_rgba(background_color) if background_color is not None else None
     )
+
+    def append_and_check(fig: plt.Figure) -> bool:
+        figures.append(fig)
+        return max_figures is not None and len(figures) >= max_figures
+
+    def finalize(truncated_flag: bool) -> tuple[list[plt.Figure], bool]:
+        if background_rgba is not None:
+            for fig in figures:
+                _apply_background(fig, background_rgba)
+        return figures, truncated_flag
+
+    suffix = f" — {title_suffix}" if title_suffix else ""
+    day_boundaries = _compute_midnight_boundaries(data[time_column])
     run_segment_rgba = []
     if run_segments:
         for segment in run_segments:
@@ -354,9 +417,19 @@ def save_figures_to_pdf(figures: list[plt.Figure], output_path: Path) -> None:
 def main() -> None:
     args = parse_args()
     data = load_data()
+    selected_runs = _parse_run_arguments(args.run)
 
-    if args.all:
-        run_rows = load_all_runs()
+    if args.all or len(selected_runs) > 1:
+        run_rows = load_all_runs().copy()
+        if len(selected_runs) > 1:
+            filtered = run_rows[run_rows["run"].isin(selected_runs)].copy()
+            missing = sorted(set(selected_runs) - set(filtered["run"]))
+            if missing:
+                raise ValueError(f"Requested run(s) not found: {', '.join(str(r) for r in missing)}")
+            run_rows = filtered
+        if run_rows.empty:
+            raise ValueError("No runs available for plotting.")
+        run_rows = run_rows.sort_values("start")
         data_segments: list[pd.DataFrame] = []
         run_segments: list[RunSegment] = []
         ellipsis_positions: list[pd.Timestamp] = []
@@ -412,26 +485,23 @@ def main() -> None:
             ellipsis_positions=ellipsis_positions,
             time_column="TimeDisplay",
         )
-        output_path = (
-            args.output
-            if args.output
-            else OUTPUTS_8_DIR / "time_series_all_runs.pdf"
-        )
+        if args.all and len(selected_runs) <= 1:
+            label = "all_runs"
+        else:
+            label = "runs_" + "_".join(str(segment.run) for segment in run_segments)
+        output_path = _resolve_multi_run_output(args.output, label)
         save_figures_to_pdf(figures, output_path)
         return
 
-    if args.run is not None:
-        data, start, end = filter_for_run(data, args.run)
+    if selected_runs:
+        run_number = selected_runs[0]
+        data, start, end = filter_for_run(data, run_number)
         end_str = end.strftime("%Y-%m-%d %H:%M:%S")
         start_str = start.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"Plotting run {args.run} window: {start_str} -> {end_str}")
-        output_path = (
-            args.output
-            if args.output
-            else OUTPUTS_8_DIR / f"time_series_run_{args.run}.pdf"
-        )
+        print(f"Plotting run {run_number} window: {start_str} -> {end_str}")
+        output_path = _resolve_single_run_output(args.output, run_number)
         figures = create_figures(
-            data, title_suffix=f"Run {args.run} ({start_str} -> {end_str})"
+            data, title_suffix=f"Run {run_number} ({start_str} -> {end_str})"
         )
         save_figures_to_pdf(figures, output_path)
     else:

@@ -15,9 +15,9 @@
 %
 % Example usage inside MATLAB:
 %   runs = {
-%       '/.../STAGE_6/DATA/DATA_FILES/RUNS/RUN_5'
+%       '/.../STAGE_6/DATA/DATA_FILES/TO_JOIN/RUN_5'
 %   };
-%   output_root = '/.../STAGE_6/DATA/DATA_FILES/JOINED/RUN_5';
+%   output_root = '/.../STAGE_6/DATA/DATA_FILES/ALREADY_JOINED/RUN_5';
 %   run('join_mat_files.m');
 %
 % Notes:
@@ -39,11 +39,11 @@ stage6_root = fileparts(script_dir);
 stages_root = fileparts(stage6_root);
 repo_root = fileparts(stages_root);
 
-default_logbook = fullfile(stage6_root, 'DATA', 'DATA_LOGS', 'file_logbook.csv');
-runs_root = fullfile(stage6_root, 'DATA', 'DATA_FILES', 'RUNS');
-joined_root = fullfile(stage6_root, 'DATA', 'DATA_FILES', 'JOINED');
-% Allow fall-back to ALL_UNPACKED if RUN folders are absent.
 stage5_root = fullfile(repo_root, 'STAGES', 'STAGE_5');
+default_logbook = fullfile(stage5_root, 'DATA', 'DATA_LOGS', 'file_logbook.csv');
+runs_root = fullfile(stage6_root, 'DATA', 'DATA_FILES', 'TO_JOIN');
+joined_root = fullfile(stage6_root, 'DATA', 'DATA_FILES', 'ALREADY_JOINED');
+% Allow fall-back to ALL_UNPACKED if RUN folders are absent.
 unpacked_root = fullfile(stage5_root, 'DATA', 'DATA_FILES', 'ALL_UNPACKED');
 
 has_runs = exist('runs', 'var') == 1;
@@ -378,12 +378,12 @@ function local_join_single(job)
         end
         field_names = fieldnames(data_struct);
 
-        if isempty(field_names)
-            fprintf('%s\n\t%s\n', mat_path, '[no variables found]');
-        else
-            sorted_names = sort(field_names);
-            fprintf('%s\n\t%s\n', mat_path, strjoin(sorted_names', ', '));
-        end
+        % if isempty(field_names)
+        %     fprintf('%s\n\t%s\n', mat_path, '[no variables found]');
+        % else
+        %     sorted_names = sort(field_names);
+        %     fprintf('%s\n\t%s\n', mat_path, strjoin(sorted_names', ', '));
+        % end
 
         [~, file_base, ~] = fileparts(mat_path);
         if ~isempty(regexp(file_base, '_T$', 'once'))
@@ -530,6 +530,10 @@ function local_join_single(job)
             mkdir(charge_output_dir);
         end
     end
+
+    fprintf('-------------------------------------------------------------------\n');
+    fprintf('-------------------------------------------------------------------\n');
+    fprintf('-------------------------------------------------------------------\n');
 
     if ~isempty(run_label)
         fprintf('Joining files for %s\n', run_label);
