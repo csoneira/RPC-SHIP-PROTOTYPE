@@ -16,12 +16,16 @@ Options:
   --help, -h    Show this help message and exit.
   --all,  -a    Process every .hld found in the source directory sequentially.
   --run,  -r    Only unpack files that belong to the specified run id(s). Accepts comma lists.
+  --force-run   Force re-unpacking for the specified run id(s), even if already processed.
 EOF
 }
 
 PROCESS_ALL=false
 declare -a SELECTED_RUNS=()
 declare -A SELECTED_RUN_MAP=()
+declare -a FORCE_RUNS=()
+declare -A FORCE_RUN_MAP=()
+declare -A FORCE_WARNED_NO_TAG=()
 
 parse_runs() {
   IFS=',' read -ra parts <<< "$1"
@@ -30,6 +34,17 @@ parse_runs() {
     if [[ -n "$trimmed" ]]; then
       SELECTED_RUNS+=("$trimmed")
       SELECTED_RUN_MAP["$trimmed"]=1
+    fi
+  done
+}
+
+parse_force_runs() {
+  IFS=',' read -ra parts <<< "$1"
+  for run in "${parts[@]}"; do
+    trimmed="${run//[[:space:]]/}"
+    if [[ -n "$trimmed" ]]; then
+      FORCE_RUNS+=("$trimmed")
+      FORCE_RUN_MAP["$trimmed"]=1
     fi
   done
 }
@@ -50,6 +65,14 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       parse_runs "$2"
+      shift 2
+      ;;
+    --force-run)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --force-run expects a value." >&2
+        exit 1
+      fi
+      parse_force_runs "$2"
       shift 2
       ;;
     *)
@@ -249,6 +272,15 @@ load_unpacked_database
 echo "[INFO] Tracking unpacked files in: $UNPACK_LOG"
 refresh_run_tags
 load_run_tags
+if [[ ${#FORCE_RUNS[@]} -gt 0 ]]; then
+  if [[ ${#filename_run_map[@]} -eq 0 ]]; then
+      echo "[WARN] Force-run requested but run tagging data unavailable; ignoring force list."
+      FORCE_RUNS=()
+      FORCE_RUN_MAP=()
+  else
+      echo "[INFO] Force re-unpack runs: ${FORCE_RUNS[*]}"
+  fi
+fi
 load_sent_excludes
 load_error_excludes
 if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
@@ -276,6 +308,18 @@ process_single_hld() {
   local filename
   filename=$(basename "$hld_path")
   local prefix="${filename%%.*}"
+  local run_tag="${filename_run_map[$filename]:-}"
+  local forced=false
+
+  if [[ ${#FORCE_RUNS[@]} -gt 0 ]]; then
+    if [[ -n "$run_tag" && -n "${FORCE_RUN_MAP[$run_tag]:-}" ]]; then
+      forced=true
+      echo "  [FORCE] Run ${run_tag} requested for re-unpack."
+    elif [[ -z "$run_tag" && -z "${FORCE_WARNED_NO_TAG[$filename]:-}" ]]; then
+      echo "  [WARN] Force-run active but no run tag for $filename; cannot force this file."
+      FORCE_WARNED_NO_TAG["$filename"]=1
+    fi
+  fi
 
   if [[ -n "${error_file_exclude[$filename]:-}" ]]; then
     echo "  [SKIP] $filename — previously marked with errors."
@@ -284,13 +328,16 @@ process_single_hld() {
   fi
 
   if [[ -n "${sent_prefix_exclude[$prefix]:-}" ]]; then
-    echo "  [SKIP] $filename — recorded in SENT_TO_UNPACKING archive."
-    skipped_sent_archive=$((skipped_sent_archive + 1))
-    return 0
+    if [[ "$forced" == true ]]; then
+      echo "  [FORCE] $filename recorded in SENT_TO_UNPACKING; reprocessing anyway."
+    else
+      echo "  [SKIP] $filename — recorded in SENT_TO_UNPACKING archive."
+      skipped_sent_archive=$((skipped_sent_archive + 1))
+      return 0
+    fi
   fi
 
   if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
-    local run_tag="${filename_run_map[$filename]:-}"
     if [[ -z "$run_tag" ]]; then
       echo "Skipping $filename — no run tag available."
       skipped_unmapped=$((skipped_unmapped + 1))
@@ -306,21 +353,34 @@ process_single_hld() {
 
   if [[ -n "${already_unpacked[$filename]+x}" ]]; then
     local ts="${unpacked_timestamps[$filename]}"
-    if [[ -n "$ts" ]]; then
-      echo "Skipping $filename — already unpacked at $ts"
+    if [[ "$forced" == true ]]; then
+      if [[ -n "$ts" ]]; then
+        echo "  [FORCE] Previously unpacked at $ts; reprocessing."
+      else
+        echo "  [FORCE] Previously recorded as unpacked; reprocessing."
+      fi
     else
-      echo "Skipping $filename — already recorded as unpacked"
+      if [[ -n "$ts" ]]; then
+        echo "Skipping $filename — already unpacked at $ts"
+      else
+        echo "Skipping $filename — already recorded as unpacked"
+      fi
+      return 0
     fi
-    return 0
   fi
 
   move_idle_contents
 
   echo "Moving $filename to unpack queue"
   if [[ -f "$HLD_SENT_DIR/$filename" ]]; then
-    echo "SENT_TO_UNPACKING already has $filename; skipping re-unpack."
-    skipped_sent_archive=$((skipped_sent_archive + 1))
-    return 0
+    if [[ "$forced" == true ]]; then
+      echo "[FORCE] Removing previous SENT_TO_UNPACKING copy of $filename."
+      rm -f "$HLD_SENT_DIR/$filename"
+    else
+      echo "SENT_TO_UNPACKING already has $filename; skipping re-unpack."
+      skipped_sent_archive=$((skipped_sent_archive + 1))
+      return 0
+    fi
   fi
   cp -a "$hld_path" "$HLD_SENT_DIR/"
   mv "$hld_path" "$HLD_UNPACK_DIR/$filename"
@@ -367,13 +427,17 @@ process_next_hld() {
       skipped_error_archive=$((skipped_error_archive + 1))
       continue
     fi
-    if [[ -n "${sent_prefix_exclude[$prefix]:-}" ]]; then
+    local run_tag="${filename_run_map[$fname]:-}"
+    local forced=false
+    if [[ ${#FORCE_RUNS[@]} -gt 0 && -n "$run_tag" && -n "${FORCE_RUN_MAP[$run_tag]:-}" ]]; then
+      forced=true
+    fi
+    if [[ -n "${sent_prefix_exclude[$prefix]:-}" && "$forced" != true ]]; then
       echo "Skipping $fname — recorded in SENT_TO_UNPACKING archive."
       skipped_sent_archive=$((skipped_sent_archive + 1))
       continue
     fi
     if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
-      local run_tag="${filename_run_map[$fname]:-}"
       if [[ -z "$run_tag" ]]; then
         echo "Skipping $fname — missing run tag."
         skipped_unmapped=$((skipped_unmapped + 1))
@@ -386,13 +450,17 @@ process_next_hld() {
       fi
     fi
     if [[ -n "${already_unpacked[$fname]+x}" ]]; then
-      local ts="${unpacked_timestamps[$fname]}"
-      if [[ -n "$ts" ]]; then
-        echo "Skipping $fname — already unpacked at $ts"
+      if [[ "$forced" == true ]]; then
+        :
       else
-        echo "Skipping $fname — already recorded as unpacked"
+        local ts="${unpacked_timestamps[$fname]}"
+        if [[ -n "$ts" ]]; then
+          echo "Skipping $fname — already unpacked at $ts"
+        else
+          echo "Skipping $fname — already recorded as unpacked"
+        fi
+        continue
       fi
-      continue
     fi
     candidate="$path"
     break

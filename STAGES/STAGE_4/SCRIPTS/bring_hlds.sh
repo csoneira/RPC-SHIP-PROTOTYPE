@@ -18,6 +18,7 @@ Usage: $0 [options]
 Options:
   -s, --start-date <YYYY-MM-DD>   Only consider files with dates on/after this day.
   -r, --run <id>[,<id>...]        Only copy files tagged for the selected runs.
+      --force-run <id>[,<id>...]  Re-fetch files tagged for the given run ids even if already processed.
   -h, --help                      Show this message and exit.
 
 The legacy positional START_DATE argument remains supported.
@@ -42,6 +43,9 @@ ALL_UNPACKED_DIR="${HLD_ALL_UNPACKED:-$STAGE5_ROOT/DATA/DATA_FILES/ALL_UNPACKED}
 START_DATE_FILTER=""
 declare -a SELECTED_RUNS=()
 declare -A SELECTED_RUN_MAP=()
+declare -a FORCE_RUNS=()
+declare -A FORCE_RUN_MAP=()
+declare -A FORCE_WARNED_NO_TAG=()
 POS_ARGS=()
 
 parse_runs() {
@@ -51,6 +55,17 @@ parse_runs() {
     if [[ -n "$trimmed" ]]; then
       SELECTED_RUNS+=("$trimmed")
       SELECTED_RUN_MAP["$trimmed"]=1
+    fi
+  done
+}
+
+parse_force_runs() {
+  IFS=',' read -ra parts <<< "$1"
+  for run in "${parts[@]}"; do
+    trimmed="${run//[[:space:]]/}"
+    if [[ -n "$trimmed" ]]; then
+      FORCE_RUNS+=("$trimmed")
+      FORCE_RUN_MAP["$trimmed"]=1
     fi
   done
 }
@@ -71,6 +86,14 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       parse_runs "$2"
+      shift 2
+      ;;
+    --force-run)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --force-run expects a value." >&2
+        exit 1
+      fi
+      parse_force_runs "$2"
       shift 2
       ;;
     -h|--help)
@@ -153,9 +176,9 @@ if [[ -f "$EXCLUDE_CONFIG" ]]; then
   fi
 fi
 
-if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
+if [[ ${#SELECTED_RUNS[@]} -gt 0 || ${#FORCE_RUNS[@]} -gt 0 ]]; then
   if [[ ! -f "$REMOTE_RUN_LOG" ]]; then
-    echo "[ERROR] Run selection requested but remote run log not found at $REMOTE_RUN_LOG" >&2
+    echo "[ERROR] Run selection/forcing requested but remote run log not found at $REMOTE_RUN_LOG" >&2
     exit 1
   fi
   while IFS=',' read -r filename ts run_id; do
@@ -173,7 +196,7 @@ if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
     fi
   done < "$REMOTE_RUN_LOG"
 
-  if [[ ${#allowed_files[@]} -eq 0 ]]; then
+  if [[ ${#SELECTED_RUNS[@]} -gt 0 && ${#allowed_files[@]} -eq 0 ]]; then
     echo "[WARN] No remote files matched the requested runs (${SELECTED_RUNS[*]})." >&2
   fi
 fi
@@ -403,27 +426,47 @@ for file in "${remote_file_list[@]}"; do
         fi
     fi
 
+    run_tag="${file_run_map[$filename]:-}"
+    force_fetch=false
+    if [[ ${#FORCE_RUNS[@]} -gt 0 ]]; then
+        if [[ -n "$run_tag" && -n "${FORCE_RUN_MAP[$run_tag]:-}" ]]; then
+            force_fetch=true
+            echo "  [FORCE] Run ${run_tag} requested for re-fetch."
+        elif [[ -z "$run_tag" && -z "${FORCE_WARNED_NO_TAG[$filename]:-}" ]]; then
+            echo "  [WARN] Force-run active but no run tag available for $filename; cannot force this file."
+            FORCE_WARNED_NO_TAG["$filename"]=1
+        fi
+    fi
+
     prefix="${filename%.hld}"
     if [[ -d "$ALL_UNPACKED_DIR" ]]; then
         shopt -s nullglob
         matches=("$ALL_UNPACKED_DIR/${prefix}"*)
         shopt -u nullglob
         if [[ ${#matches[@]} -gt 0 ]]; then
-            echo "  [SKIP] Directory exists in ALL_UNPACKED for prefix ${prefix}; skipping fetch."
-            if [[ -f "$DEST/$filename" ]]; then
-                rm -f "$DEST/$filename"
+            if [[ "$force_fetch" == true ]]; then
+                echo "  [FORCE] Directory exists in ALL_UNPACKED for prefix ${prefix}; re-fetching anyway."
+            else
+                echo "  [SKIP] Directory exists in ALL_UNPACKED for prefix ${prefix}; skipping fetch."
+                if [[ -f "$DEST/$filename" ]]; then
+                    rm -f "$DEST/$filename"
+                fi
+                skipped_already_unpacked_count=$((skipped_already_unpacked_count + 1))
+                echo ""
+                continue
             fi
-            skipped_already_unpacked_count=$((skipped_already_unpacked_count + 1))
-            echo ""
-            continue
         fi
     fi
 
     if [[ -n "${sent_exclude_map[$filename]:-}" ]]; then
-        echo "  [SKIP] File is already stored in SENT_TO_UNPACKING; skipping."
-        skipped_sent_archive_count=$((skipped_sent_archive_count + 1))
-        echo ""
-        continue
+        if [[ "$force_fetch" == true ]]; then
+            echo "  [FORCE] File already recorded in SENT_TO_UNPACKING; re-fetching anyway."
+        else
+            echo "  [SKIP] File is already stored in SENT_TO_UNPACKING; skipping."
+            skipped_sent_archive_count=$((skipped_sent_archive_count + 1))
+            echo ""
+            continue
+        fi
     fi
     
     # Check if file passes date filter
@@ -447,7 +490,6 @@ for file in "${remote_file_list[@]}"; do
     fi
    
     if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
-        run_tag="${file_run_map[$filename]:-}"
         if [[ -z "$run_tag" ]]; then
             echo "  [SKIP] No run tag available; cannot map to requested runs"
             skipped_unmapped_count=$((skipped_unmapped_count + 1))
@@ -465,6 +507,13 @@ for file in "${remote_file_list[@]}"; do
     if [[ -n "${recorded_files[$filename]+x}" ]]; then
         if [[ -z "${unpacked_files[$filename]:-}" ]]; then
             echo "  [INFO] File logged previously but no unpack record found; re-copying."
+        elif [[ "$force_fetch" == true ]]; then
+            seen_ts="${recorded_timestamps[$filename]}"
+            if [ -n "$seen_ts" ]; then
+                echo "  [FORCE] Previously logged/unpacked ($seen_ts); re-copying anyway."
+            else
+                echo "  [FORCE] Previously logged/unpacked; re-copying anyway."
+            fi
         else
             seen_ts="${recorded_timestamps[$filename]}"
             if [ -n "$seen_ts" ]; then
@@ -479,31 +528,38 @@ for file in "${remote_file_list[@]}"; do
     fi
 
     if [ -f "$DEST/$filename" ]; then
-        echo "  [SKIP] File already exists locally"
-        skipped_local_count=$((skipped_local_count + 1))
-    else
-        # Get file size from remote
-        file_size=$(ssh joao "stat -c%s /home/rpcuser/hlds/$filename 2>/dev/null")
-        if [ -n "$file_size" ]; then
-            file_size_mb=$(echo "scale=2; $file_size / 1048576" | bc)
-            echo "  [COPY] File size: ${file_size_mb} MB"
-        fi
-        
-        echo "  [COPY] Starting transfer at $(date '+%H:%M:%S')..."
-        
-        # Use scp (will show progress automatically if terminal supports it)
-        if scp "joao:/home/rpcuser/hlds/$filename" "$DEST/" ; then
-            copy_date=$(date +%Y-%m-%d)
-            copy_time=$(date '+%H:%M:%S')
-            echo "$filename,$copy_date,$copy_time" >> "$CSV"
-            echo "  [SUCCESS] Copied to $DEST at $copy_time"
-            copied_count=$((copied_count + 1))
-            recorded_files["$filename"]=1
-            recorded_timestamps["$filename"]="$copy_date $copy_time"
+        if [[ "$force_fetch" == true ]]; then
+            echo "  [FORCE] Local copy exists; removing and re-fetching."
+            rm -f "$DEST/$filename"
         else
-            echo "  [ERROR] Failed to copy $filename (exit code: $?)"
-            failed_count=$((failed_count + 1))
+            echo "  [SKIP] File already exists locally"
+            skipped_local_count=$((skipped_local_count + 1))
+            echo ""
+            continue
         fi
+    fi
+
+    # Get file size from remote
+    file_size=$(ssh joao "stat -c%s /home/rpcuser/hlds/$filename 2>/dev/null")
+    if [ -n "$file_size" ]; then
+        file_size_mb=$(echo "scale=2; $file_size / 1048576" | bc)
+        echo "  [COPY] File size: ${file_size_mb} MB"
+    fi
+    
+    echo "  [COPY] Starting transfer at $(date '+%H:%M:%S')..."
+    
+    # Use scp (will show progress automatically if terminal supports it)
+    if scp "joao:/home/rpcuser/hlds/$filename" "$DEST/" ; then
+        copy_date=$(date +%Y-%m-%d)
+        copy_time=$(date '+%H:%M:%S')
+        echo "$filename,$copy_date,$copy_time" >> "$CSV"
+        echo "  [SUCCESS] Copied to $DEST at $copy_time"
+        copied_count=$((copied_count + 1))
+        recorded_files["$filename"]=1
+        recorded_timestamps["$filename"]="$copy_date $copy_time"
+    else
+        echo "  [ERROR] Failed to copy $filename (exit code: $?)"
+        failed_count=$((failed_count + 1))
     fi
     echo ""
 done

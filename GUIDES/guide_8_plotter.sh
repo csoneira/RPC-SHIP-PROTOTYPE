@@ -14,11 +14,21 @@ Generate run summary and time-series plots (Stage 8 outputs).
 
 Options:
   -r, --run <id>[,<id>...]   Restrict plots to specific run ids (comma-separated or repeat flag).
+      --runs <id>[,<id>...]  Alias for --run.
+  --full-pdf                 Export every figure (can be heavy).
+  --simple-pdf               Limit PDFs to a lightweight subset (default).
+  --pdf-max-pages <n>        Hard cap on exported PDF pages for both plotters.
+  --png-only                 Stream Stage 8 plots directly to PNGs (skips PDF export).
+  --vs-hv                    Use HV setpoint for the X axis instead of run id in run-summary plots.
   -h, --help                 Show this help message and exit.
 USAGE
 }
 
 declare -a SELECTED_RUNS=()
+PDF_MODE="simple"
+PDF_MAX_PAGES=""
+PNG_ONLY_MODE=false
+VS_HV_MODE=false
 
 parse_runs() {
   IFS=',' read -ra parts <<< "$1"
@@ -39,6 +49,38 @@ while [[ $# -gt 0 ]]; do
       fi
       parse_runs "$2"
       shift 2
+      ;;
+    --runs)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --runs expects a value." >&2
+        exit 1
+      fi
+      parse_runs "$2"
+      shift 2
+      ;;
+    --simple-pdf)
+      PDF_MODE="simple"
+      shift
+      ;;
+    --full-pdf)
+      PDF_MODE="full"
+      shift
+      ;;
+    --pdf-max-pages)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --pdf-max-pages expects a value." >&2
+        exit 1
+      fi
+      PDF_MAX_PAGES="$2"
+      shift 2
+      ;;
+    --png-only)
+      PNG_ONLY_MODE=true
+      shift
+      ;;
+    --vs-hv)
+      VS_HV_MODE=true
+      shift
       ;;
     -h|--help)
       usage
@@ -65,6 +107,28 @@ if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
   RUN_TIME_ARGS+=(--run "$RUN_LIST")
 else
   RUN_TIME_ARGS+=(--all)
+fi
+
+if [[ "$PDF_MODE" == "simple" ]]; then
+  RUN_TABLE_ARGS+=(--simple-pdf)
+  RUN_TIME_ARGS+=(--simple-pdf)
+elif [[ "$PDF_MODE" == "full" ]]; then
+  RUN_TABLE_ARGS+=(--full-pdf)
+  RUN_TIME_ARGS+=(--full-pdf)
+fi
+
+if [[ -n "$PDF_MAX_PAGES" ]]; then
+  RUN_TABLE_ARGS+=(--pdf-max-pages "$PDF_MAX_PAGES")
+  RUN_TIME_ARGS+=(--pdf-max-pages "$PDF_MAX_PAGES")
+fi
+
+if [[ "$PNG_ONLY_MODE" == "true" ]]; then
+  RUN_TABLE_ARGS+=(--png-only)
+  RUN_TIME_ARGS+=(--png-only)
+fi
+
+if [[ "$VS_HV_MODE" == "true" ]]; then
+  RUN_TABLE_ARGS+=(--vs-hv)
 fi
 
 python3 "$STAGE8_ROOT/SCRIPTS/plot_run_tables.py" "${RUN_TABLE_ARGS[@]}"

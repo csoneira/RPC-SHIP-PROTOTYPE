@@ -128,30 +128,37 @@ def parse_hld_timestamp(filename: str) -> datetime | None:
     return timestamp
 
 
-def tag_files(filenames: Iterable[str], runs: list[RunWindow]) -> list[tuple[str, datetime, str]]:
+def build_log_entries(filenames: Iterable[str], runs: list[RunWindow]) -> list[tuple[str, datetime | None, str]]:
+    """Return log entries for every filename, tagged when inside a run window."""
     seen: set[str] = set()
-    tagged: list[tuple[str, datetime, str]] = []
+    tagged: list[tuple[str, datetime | None, str]] = []
     for name in sorted(filenames):
         if name in seen:
             continue
+        seen.add(name)
         timestamp = parse_hld_timestamp(name)
-        if timestamp is None:
-            continue
+        matched_run = ""
         for window in runs:
-            if window.start <= timestamp <= window.end:
-                tagged.append((name, timestamp, window.run_id))
-                seen.add(name)
+            if timestamp is not None and window.start <= timestamp <= window.end:
+                matched_run = window.run_id
                 break
+        tagged.append((name, timestamp, matched_run))
     return tagged
 
 
-def write_log(entries: list[tuple[str, datetime, str]], destination: Path) -> None:
+def _format_timestamp(timestamp: datetime | None) -> str:
+    if timestamp is None:
+        return ""
+    return timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def write_log(entries: list[tuple[str, datetime | None, str]], destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(["filename", "timestamp_utc", "run_id"])
-        for filename, timestamp, run_id in sorted(entries, key=lambda item: (int(item[2]) if item[2].isdigit() else item[2], item[1], item[0])):
-            writer.writerow([filename, timestamp.strftime("%Y-%m-%d %H:%M:%S"), run_id])
+        for filename, timestamp, run_id in sorted(entries, key=lambda item: item[0]):
+            writer.writerow([filename, _format_timestamp(timestamp), run_id])
 
 
 def main() -> None:
@@ -172,7 +179,7 @@ def main() -> None:
     if not filenames:
         log(f"[INFO] No filenames found in {args.database}; output will be empty.", args.quiet)
 
-    entries = tag_files(filenames, runs)
+    entries = build_log_entries(filenames, runs)
     write_log(entries, args.output)
     log(f"[INFO] Wrote {len(entries)} tagged entries to {args.output}", args.quiet)
 

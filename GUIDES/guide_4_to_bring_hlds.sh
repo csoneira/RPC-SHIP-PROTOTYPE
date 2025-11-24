@@ -50,6 +50,7 @@ Options:
   -r, --run <id>[,<id>...]   Only bring files assigned to the selected run ids.
   -s, --start-date <YYYY-MM-DD>
                              Copy files newer than or equal to the provided date.
+  --force-run <id>[,<id>...] Always re-fetch files tagged for the provided run ids.
   -h, --help                 Show this help message and exit.
 
 You may also pass a bare YYYY-MM-DD argument for backward compatibility.
@@ -70,7 +71,7 @@ FILE_DATABASE="$STAGE4_ROOT/DATA/DATA_LOGS/file_database.csv"
 REMOTE_DB="$STAGE4_ROOT/DATA/DATA_LOGS/remote_file_database.csv"
 REMOTE_LOG="$STAGE4_ROOT/DATA/DATA_LOGS/remote_run_logbook.csv"
 RUN_DICT="$STAGE3_ROOT/DATA/DATA_FILES/file_run_dictionary.csv"
-RUN_DICT_GENERATOR="$STAGE3_ROOT/SCRIPTS/run_dictionary_creator"
+RUN_DICT_GENERATOR="$STAGE3_ROOT/SCRIPTS/run_dictionary_creator.py"
 RUN_TAGGER_SCRIPT="$STAGE4_ROOT/SCRIPTS/run_tagger.py"
 UNPACK_LOG_PATH="$STAGE5_ROOT/DATA/DATA_LOGS/unpack_database.csv"
 mkdir -p "$HLD_SOURCE_DIR"
@@ -79,6 +80,8 @@ declare -a SELECTED_RUNS=()
 SELECTED_MAP=()
 START_DATE_FILTER=""
 POSITIONAL_ARGS=()
+declare -a FORCE_RUNS=()
+declare -A FORCE_RUN_MAP=()
 
 parse_run_list() {
   IFS=',' read -ra parts <<< "$1"
@@ -87,6 +90,17 @@ parse_run_list() {
     if [[ -n "$trimmed" ]]; then
       SELECTED_RUNS+=("$trimmed")
       SELECTED_MAP["$trimmed"]=1
+    fi
+  done
+}
+
+parse_force_run_list() {
+  IFS=',' read -ra parts <<< "$1"
+  for candidate in "${parts[@]}"; do
+    trimmed="${candidate//[[:space:]]/}"
+    if [[ -n "$trimmed" ]]; then
+      FORCE_RUNS+=("$trimmed")
+      FORCE_RUN_MAP["$trimmed"]=1
     fi
   done
 }
@@ -107,6 +121,14 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       START_DATE_FILTER="$2"
+      shift 2
+      ;;
+    --force-run)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --force-run expects a value." >&2
+        exit 1
+      fi
+      parse_force_run_list "$2"
       shift 2
       ;;
     -h|--help)
@@ -140,6 +162,10 @@ RUN_ARG=()
 if [[ ${#SELECTED_RUNS[@]} -gt 0 ]]; then
   RUN_ARG+=(--run "$(IFS=','; echo "${SELECTED_RUNS[*]}")")
 fi
+FORCE_ARG=()
+if [[ ${#FORCE_RUNS[@]} -gt 0 ]]; then
+  FORCE_ARG+=(--force-run "$(IFS=','; echo "${FORCE_RUNS[*]}")")
+fi
 
 echo "[STEP] Inventorying remote HLD directory..."
 bash "$STAGE4_ROOT/SCRIPTS/remote_inventory.sh"
@@ -165,6 +191,9 @@ if [[ -n "$START_DATE_FILTER" ]]; then
 fi
 if [[ ${#RUN_ARG[@]} -gt 0 ]]; then
   BRING_ARGS+=("${RUN_ARG[@]}")
+fi
+if [[ ${#FORCE_ARG[@]} -gt 0 ]]; then
+  BRING_ARGS+=("${FORCE_ARG[@]}")
 fi
 
 bash "$STAGE4_ROOT/SCRIPTS/bring_hlds.sh" "${BRING_ARGS[@]}"

@@ -29,12 +29,15 @@ STAGES/STAGE_6/DATA/DATA_FILES/ALREADY_JOINED/RUN_<id>.
 
 Options:
   -r, --run <id>[,<id>...]   Only join the selected run ids (comma-separated or repeat flag).
+      --force-run <ids>      Re-merge the listed runs even if inputs appear unchanged.
   -h, --help                 Show this help message and exit.
 EOF
 }
 
 SELECTED_RUNS=()
 declare -A SELECTED_RUNS_MAP=()
+FORCE_RUNS=()
+declare -A FORCE_RUNS_MAP=()
 declare -A JOIN_HISTORY=()
 
 while [[ $# -gt 0 ]]; do
@@ -55,6 +58,21 @@ while [[ $# -gt 0 ]]; do
         if [[ -n "$trimmed" ]]; then
           SELECTED_RUNS+=("$trimmed")
           SELECTED_RUNS_MAP["$trimmed"]=1
+        fi
+      done
+      ;;
+    --force-run)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Error: --force-run requires one or more run ids." >&2
+        exit 1
+      fi
+      IFS=',' read -ra run_args <<< "$1"
+      for run in "${run_args[@]}"; do
+        trimmed="${run//[[:space:]]/}"
+        if [[ -n "$trimmed" ]]; then
+          FORCE_RUNS+=("$trimmed")
+          FORCE_RUNS_MAP["$trimmed"]=1
         fi
       done
       ;;
@@ -101,7 +119,11 @@ if [[ ${#RUN_FILES[@]} -eq 0 ]]; then
 fi
 
 for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
-  if [[ ${#SELECTED_RUNS[@]} -gt 0 && -z "${SELECTED_RUNS_MAP[$run_id]:-}" ]]; then
+  force_join=false
+  if [[ -n "${FORCE_RUNS_MAP[$run_id]:-}" ]]; then
+    force_join=true
+  fi
+  if [[ ${#SELECTED_RUNS[@]} -gt 0 && -z "${SELECTED_RUNS_MAP[$run_id]:-}" && "$force_join" != true ]]; then
     echo "Skipping run ${run_id}; not requested via --run."
     continue
   fi
@@ -172,7 +194,7 @@ for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
   fi
 
   PREVIOUS_SIGNATURE="${JOIN_HISTORY[$run_id]:-}"
-  if [[ -n "$PREVIOUS_SIGNATURE" && "$PREVIOUS_SIGNATURE" == "$NEW_SIGNATURE" ]]; then
+  if [[ -n "$PREVIOUS_SIGNATURE" && "$PREVIOUS_SIGNATURE" == "$NEW_SIGNATURE" && "$force_join" != true ]]; then
     echo "Run ${run_id}: HLD inputs unchanged since last join; skipping merge."
     continue
   fi

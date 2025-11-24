@@ -18,10 +18,11 @@ All keys are optional. ``outlier_limits`` defaults to an empty mapping.
 from __future__ import annotations
 
 import csv
+import os
 import string
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Set
 
 import numpy as np
 import pandas as pd
@@ -169,27 +170,64 @@ FILE_SCHEMAS: List[FileSchema] = [
 
 
 def get_last_timestamp(path: Path) -> Optional[pd.Timestamp]:
-    """Return the last valid timestamp stored in a CSV file."""
+    """Return the last valid timestamp stored in a CSV file, scanning from the end."""
     if not path.exists():
         return None
     try:
         with path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.reader(handle)
             header = next(reader, None)
-            if not header or "Time" not in header:
-                return None
-            time_idx = header.index("Time")
-            last_time: Optional[pd.Timestamp] = None
-            for row in reader:
-                if len(row) <= time_idx:
-                    continue
-                value = pd.to_datetime(row[time_idx], errors="coerce")
-                if pd.isna(value):
-                    continue
-                last_time = value
-            return last_time
     except Exception:
         return None
+
+    if not header or "Time" not in header:
+        return None
+
+    time_idx = header.index("Time")
+
+    def _tail_nonempty_line(file_path: Path, chunk_size: int = 8192) -> Optional[str]:
+        try:
+            with file_path.open("rb") as handle:
+                file_size = handle.seek(0, os.SEEK_END)
+                if file_size == 0:
+                    return None
+
+                buffer = b""
+                position = file_size
+                while position > 0:
+                    read_size = min(chunk_size, position)
+                    position -= read_size
+                    handle.seek(position)
+                    chunk = handle.read(read_size)
+                    buffer = chunk + buffer
+                    lines = buffer.split(b"\n")
+                    buffer = lines[0]
+                    for line in reversed(lines[1:]):
+                        if line.strip():
+                            return line.decode("utf-8", errors="ignore")
+
+                if buffer.strip():
+                    return buffer.decode("utf-8", errors="ignore")
+        except Exception:
+            return None
+        return None
+
+    last_line = _tail_nonempty_line(path)
+    if not last_line:
+        return None
+
+    try:
+        row = next(csv.reader([last_line]))
+    except Exception:
+        return None
+
+    if len(row) <= time_idx:
+        return None
+
+    value = pd.to_datetime(row[time_idx], errors="coerce")
+    if pd.isna(value):
+        return None
+    return value
 
 
 def append_dataframe_to_csv(df: pd.DataFrame, path: Path) -> None:
@@ -258,8 +296,13 @@ def process_files(
     source_dir: Path,
     last_timestamp: Optional[pd.Timestamp] = None,
     archive_dir: Optional[Path] = None,
+    allowed_files: Optional[Set[str]] = None,
 ) -> pd.DataFrame:
-    """Aggregate new rows for ``schema`` from ``source_dir``."""
+    """Aggregate new rows for ``schema`` from ``source_dir``.
+
+    When ``allowed_files`` is provided, only those files are processed; any other
+    file that already has an archived copy is moved aside without reprocessing.
+    """
     candidate_files = sorted(
         p
         for p in source_dir.glob(f"{schema.prefix}*")
@@ -267,7 +310,10 @@ def process_files(
     )
 
     if not candidate_files:
+        print(f"[{schema.label}] No unprocessed files found in {source_dir}.")
         return pd.DataFrame()
+
+    print(f"[{schema.label}] Processing {len(candidate_files)} file(s) from {source_dir} ...")
 
     if archive_dir is None:
         archive_dir = source_dir / "processed"
@@ -275,6 +321,28 @@ def process_files(
 
     dataframes: List[pd.DataFrame] = []
     processed_files: List[Path] = []
+    skipped_existing: List[str] = []
+
+    filtered_candidates: List[Path] = []
+    for file_path in candidate_files:
+        archive_path = archive_dir / file_path.name
+        if allowed_files is not None and file_path.name not in allowed_files and archive_path.exists():
+            try:
+                archive_path.unlink()
+            except FileNotFoundError:
+                pass
+            try:
+                file_path.replace(archive_path)
+                skipped_existing.append(file_path.name)
+                continue
+            except Exception as exc:
+                print(f"[{schema.label}] Warning: failed to archive {file_path.name} without reprocessing: {exc}")
+        filtered_candidates.append(file_path)
+
+    candidate_files = filtered_candidates
+
+    if skipped_existing:
+        print(f"[{schema.label}] Skipped {len(skipped_existing)} already-processed file(s).")
 
     for file_path in candidate_files:
         try:
@@ -308,7 +376,7 @@ def process_files(
                         if col.lower().startswith(('unused'))]
         if cols_to_drop:
             df.drop(columns=cols_to_drop, inplace=True)
-            print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
+            print(f"[{schema.label}] Dropped {len(cols_to_drop)} unused column(s): {cols_to_drop}")
 
         dataframes.append(df)
         processed_files.append(file_path)
@@ -328,6 +396,7 @@ def process_files(
     if "Time" in combined_df.columns and last_timestamp is not None:
         combined_df = combined_df[combined_df["Time"] > last_timestamp]
     if combined_df.empty:
+        print(f"[{schema.label}] No new rows after filtering by timestamp.")
         return pd.DataFrame()
 
     combined_df = combined_df.sort_values("Time")
@@ -336,8 +405,9 @@ def process_files(
     cols_to_drop = [col for col in combined_df.columns if col.lower().startswith(('unused', 'unknown'))]
     if cols_to_drop:
         combined_df.drop(columns=cols_to_drop, inplace=True)
-        print(f"  Dropped {len(cols_to_drop)} not used columns: {cols_to_drop}")
+        print(f"[{schema.label}] Dropped {len(cols_to_drop)} unused column(s) after merge: {cols_to_drop}")
 
+    print(f"[{schema.label}] Aggregated {len(combined_df)} new row(s).")
     return combined_df
 
 
@@ -422,6 +492,46 @@ def merge_dataframes(
     return merged_df
 
 
+def merge_incremental_frames(
+    schema_frames: Dict[str, pd.DataFrame],
+    outlier_limits: Dict[str, Iterable[float]],
+) -> pd.DataFrame:
+    frames: List[pd.DataFrame] = []
+    for name, df in schema_frames.items():
+        if df is None or df.empty:
+            continue
+        if "Time" not in df.columns:
+            continue
+        chunk = df.copy()
+        chunk["Time"] = pd.to_datetime(chunk["Time"], errors="coerce")
+        chunk = chunk.dropna(subset=["Time"])
+        if chunk.empty:
+            continue
+        chunk.set_index("Time", inplace=True)
+        for column in chunk.columns:
+            chunk[column] = pd.to_numeric(chunk[column], errors="coerce")
+        chunk.columns = [f"{name}_{col}" for col in chunk.columns]
+
+        for column, limits in outlier_limits.items():
+            if column not in chunk.columns:
+                continue
+            if isinstance(limits, (list, tuple)) and len(limits) == 2:
+                lower, upper = limits
+                chunk[column] = chunk[column].where(
+                    (chunk[column] >= lower) & (chunk[column] <= upper), np.nan
+                )
+        frames.append(chunk)
+
+    if not frames:
+        return pd.DataFrame()
+
+    merged = pd.concat(frames, axis=1)
+    merged = merged.sort_index()
+    if not merged.index.is_unique:
+        merged = merged.groupby(level=0).mean()
+    return merged
+
+
 def main(argv: List[str]) -> int:
     if len(argv) > 1:
         print("Info: station argument ignored; single-host layout in use.")
@@ -444,6 +554,7 @@ def main(argv: List[str]) -> int:
             p for p in clean_logs_directory.glob("*") if p.is_file() and not p.name.startswith(".")
         ]
         print(f"Files to move: {len(files_to_move)}")
+        moved_file_names: Set[str] = {p.name for p in files_to_move}
 
         for src_path in files_to_move:
             dest_path = unprocessed_logs_directory / src_path.name
@@ -472,19 +583,30 @@ def main(argv: List[str]) -> int:
 
         print("Processing files...")
 
+        if files_to_move:
+            print(f"Moved {len(files_to_move)} file(s) into {unprocessed_logs_directory}.")
+        else:
+            print("No cleaned files were pending move; using existing UNPROCESSED data.")
+
         produced_paths: Dict[str, Path] = {}
         aggregated_last_cache: Dict[str, Optional[pd.Timestamp]] = {}
+        schema_new_frames: Dict[str, pd.DataFrame] = {}
+
+        print("Aggregating per-prefix log files ...")
         for schema in FILE_SCHEMAS:
             output_path = accumulated_directory / schema.output
             last_timestamp = get_last_timestamp(output_path)
             archive_dir = unprocessed_logs_directory / "processed" / schema.prefix
+            incremental_rows: Optional[pd.DataFrame] = None
             new_rows = process_files(
                 schema,
                 unprocessed_logs_directory,
                 last_timestamp=last_timestamp,
                 archive_dir=archive_dir,
+                allowed_files=moved_file_names,
             )
             if not new_rows.empty:
+                incremental_rows = new_rows.copy()
                 latest_time = new_rows["Time"].max() if "Time" in new_rows.columns else None
                 if "Time" in new_rows.columns:
                     new_rows = new_rows.copy()
@@ -496,6 +618,8 @@ def main(argv: List[str]) -> int:
             aggregated_last_cache[schema.label] = last_timestamp
             if output_path.exists():
                 produced_paths[schema.label] = output_path
+            if incremental_rows is not None and not incremental_rows.empty:
+                schema_new_frames[schema.label] = incremental_rows
 
         print("All files processed...")
 
@@ -517,11 +641,28 @@ def main(argv: List[str]) -> int:
             success = True
             return 0
 
-        merged_df = merge_dataframes(
-            produced_paths,
-            outlier_limits,
-            start_time=None if create_new_csv else final_last_timestamp,
+        incremental_candidates: Dict[str, pd.DataFrame] = {
+            label: schema_new_frames[label]
+            for label in produced_paths.keys()
+            if label in schema_new_frames and not schema_new_frames[label].empty
+        }
+
+        use_incremental_merge = (
+            not create_new_csv
+            and final_last_timestamp is not None
+            and bool(incremental_candidates)
         )
+
+        if use_incremental_merge:
+            print("Merging incremental new rows (skipping full aggregated CSV read).")
+            merged_df = merge_incremental_frames(incremental_candidates, outlier_limits)
+        else:
+            print("Merging aggregated CSV files (full read) ...")
+            merged_df = merge_dataframes(
+                produced_paths,
+                outlier_limits,
+                start_time=None if create_new_csv else final_last_timestamp,
+            )
 
         if merged_df.empty:
             print("No data available after aggregation. Skipping final CSV generation.")

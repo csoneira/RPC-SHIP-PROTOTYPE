@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 from itertools import cycle
 from dataclasses import dataclass
@@ -22,6 +23,8 @@ RUN_DICT_PATH = (
 )
 OUTLIER_ABS_LIMIT = 2000  # values above this (in absolute terms) are considered spurious
 OUTPUTS_8_DIR = STAGES_ROOT / "STAGE_8" / "DATA" / "DATA_FILES" / "OUTPUTS_8"
+PNG_SUBDIR_NAME = "RUN_SUMMARY_PNG"
+PNG_OUTPUT_DIRS = [OUTPUTS_8_DIR / PNG_SUBDIR_NAME]
 
 ALPHA_P = 0.9
 ALPHA_T = 0.9
@@ -33,6 +36,8 @@ CELSIUS_TO_KELVIN = 273.15
 PRESSURE_COLUMN = "sensors_Pressure_ext"  # mbar
 TEMPERATURE_COLUMN = "sensors_Temperature_ext"  # Celsius
 
+DEFAULT_TIME_SERIES_SIMPLE_PAGES = 4
+
 
 @dataclass(frozen=True)
 class RunSegment:
@@ -42,6 +47,29 @@ class RunSegment:
     color: tuple[float, float, float]
     display_start: pd.Timestamp
     display_end: pd.Timestamp
+
+
+def _png_dirs_for_run(run_number: int) -> list[Path]:
+    suffix = f"RUN_{run_number:04d}"
+    return [base / suffix for base in PNG_OUTPUT_DIRS]
+
+
+def _sanitize_label(value: str) -> str:
+    cleaned = re.sub(r"[^0-9A-Za-z_]+", "_", value).strip("_")
+    return cleaned or "figure"
+
+
+def _figure_label(fig: plt.Figure) -> str:
+    suptitle = getattr(fig, "_suptitle", None)
+    if suptitle is not None:
+        text = suptitle.get_text()
+        if text:
+            return text
+    for axis in fig.get_axes():
+        title = axis.get_title()
+        if title:
+            return title
+    return "figure"
 
 
 def _parse_run_arguments(raw: list[str] | None) -> list[int]:
@@ -94,6 +122,7 @@ def parse_args() -> argparse.Namespace:
     group.add_argument(
         "-r",
         "--run",
+        "--runs",
         action="append",
         help="Run number(s) defined in file_run_dictionary.csv. "
         "Accepts comma-separated lists or repeated flags. "
@@ -110,6 +139,29 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         help="Optional PDF output path. Used when --run/-r or --all/-a is supplied.",
+    )
+    parser.add_argument(
+        "--simple-pdf",
+        action="store_true",
+        help=(
+            "Limit PDF export to a lightweight subset of figures. "
+            f"Caps at {DEFAULT_TIME_SERIES_SIMPLE_PAGES} pages unless overridden."
+        ),
+    )
+    parser.add_argument(
+        "--full-pdf",
+        action="store_true",
+        help="Force export of every available figure (disables --simple-pdf defaults).",
+    )
+    parser.add_argument(
+        "--pdf-max-pages",
+        type=int,
+        help="Hard cap on the number of figure pages written to the PDF.",
+    )
+    parser.add_argument(
+        "--png-only",
+        action="store_true",
+        help="Export per-run PNG figures instead of PDF documents.",
     )
     return parser.parse_args()
 
@@ -308,7 +360,8 @@ def create_figures(
         add_midnight_lines(ax_reduced)
         add_midnight_lines(ax_curr_norm)
         fig_reduced.suptitle(f"Reduced HVs with Nominal Overlay and Currents{suffix}")
-        figures.append(fig_reduced)
+        if append_and_check(fig_reduced):
+            return finalize(True)
 
     # HVs and Currents in stacked subplots
     fig, (ax_hv, ax_curr) = plt.subplots(
@@ -332,7 +385,8 @@ def create_figures(
     add_midnight_lines(ax_hv)
     add_midnight_lines(ax_curr)
     fig.suptitle(f"Currents and HVs{suffix}")
-    figures.append(fig)
+    if append_and_check(fig):
+        return finalize(True)
 
     # Rates (Asserted, Edge, Accepted)
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -346,7 +400,8 @@ def create_figures(
     ax.legend()
     add_midnight_lines(ax)
     fig.suptitle(f"Rates (Asserted, Edge, Accepted){suffix}")
-    figures.append(fig)
+    if append_and_check(fig):
+        return finalize(True)
 
     # Rates Multiplexer and CM separated
     fig, (ax_mux, ax_cm) = plt.subplots(
@@ -370,7 +425,8 @@ def create_figures(
     add_midnight_lines(ax_mux)
     add_midnight_lines(ax_cm)
     fig.suptitle(f"Rates Multiplexer and CM{suffix}")
-    figures.append(fig)
+    if append_and_check(fig):
+        return finalize(True)
 
     # Sensors
     fig, axes = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
@@ -396,13 +452,10 @@ def create_figures(
         add_midnight_lines(axis)
     axes[-1].set_xlabel(xlabel)
     fig.suptitle(f"Sensors{suffix}")
-    figures.append(fig)
+    if append_and_check(fig):
+        return finalize(True)
 
-    if background_rgba is not None:
-        for fig in figures:
-            _apply_background(fig, background_rgba)
-
-    return figures
+    return finalize(False)
 
 
 def save_figures_to_pdf(figures: list[plt.Figure], output_path: Path) -> None:
@@ -414,12 +467,95 @@ def save_figures_to_pdf(figures: list[plt.Figure], output_path: Path) -> None:
     print(f"Saved plots to {output_path}")
 
 
+def save_figures_to_png(
+    figures: list[plt.Figure],
+    filename_prefix: str,
+    directories: list[Path],
+    dpi: int = 150,
+) -> None:
+    if not figures:
+        return
+    sanitized_prefix = _sanitize_label(filename_prefix)
+    ensured_dirs: list[Path] = []
+    for directory in directories:
+        directory.mkdir(parents=True, exist_ok=True)
+        ensured_dirs.append(directory)
+    exported = 0
+    for idx, fig in enumerate(figures, start=1):
+        label = _sanitize_label(_figure_label(fig))
+        filename = f"{sanitized_prefix}_{label}_{idx:02d}.png"
+        for directory in ensured_dirs:
+            target = directory / filename
+            fig.savefig(target, dpi=dpi, bbox_inches="tight")
+        plt.close(fig)
+        exported += 1
+    dir_str = ", ".join(str(path) for path in ensured_dirs)
+    print(f"Saved {exported} PNG figure(s) to {dir_str} (prefix {sanitized_prefix}).")
+
+
 def main() -> None:
     args = parse_args()
     data = load_data()
     selected_runs = _parse_run_arguments(args.run)
+    pdf_limit: int | None
+    if args.pdf_max_pages is not None:
+        pdf_limit = max(0, int(args.pdf_max_pages))
+    elif args.full_pdf:
+        pdf_limit = None
+    elif args.simple_pdf:
+        pdf_limit = DEFAULT_TIME_SERIES_SIMPLE_PAGES
+    else:
+        pdf_limit = None
+
+    if args.png_only:
+        if pdf_limit == 0:
+            print("Figure limit set to 0; skipping time-series export.")
+            return
+        if args.all:
+            run_rows = load_all_runs()
+            run_numbers = run_rows["run"].astype(int).tolist()
+        elif selected_runs:
+            run_numbers = selected_runs
+        else:
+            raise ValueError("--png-only requires --run/-r or --all/-a.")
+        seen: set[int] = set()
+        exported_runs = 0
+        for run_number in run_numbers:
+            if run_number in seen:
+                continue
+            seen.add(run_number)
+            try:
+                run_data, start, end = filter_for_run(data, run_number)
+            except ValueError as exc:
+                print(f"Skipping run {run_number}: {exc}")
+                continue
+            start_str = start.strftime("%Y-%m-%d %H:%M:%S")
+            end_str = end.strftime("%Y-%m-%d %H:%M:%S")
+            print(f"PNG mode: run {run_number} window {start_str} -> {end_str}")
+            figures, truncated = create_figures(
+                run_data,
+                title_suffix=f"Run {run_number} ({start_str} -> {end_str})",
+                max_figures=pdf_limit,
+            )
+            if not figures:
+                print(f"No figures generated for run {run_number}; skipping PNG export.")
+                continue
+            prefix = f"run_{run_number:04d}_time_series"
+            save_figures_to_png(figures, prefix, _png_dirs_for_run(run_number))
+            if truncated:
+                print(
+                    f"Limited PNG export for run {run_number} to first {len(figures)} figure(s); "
+                    "rerun with --full-pdf or a higher --pdf-max-pages value for more."
+                )
+            exported_runs += 1
+        if exported_runs == 0:
+            print("No runs produced PNG figures.")
+        return
 
     if args.all or len(selected_runs) > 1:
+        if pdf_limit == 0:
+            print("PDF max pages set to 0; skipping time-series export.")
+            return
         run_rows = load_all_runs().copy()
         if len(selected_runs) > 1:
             filtered = run_rows[run_rows["run"].isin(selected_runs)].copy()
@@ -478,12 +614,13 @@ def main() -> None:
             .reset_index(drop=True)
         )
         title_runs = ", ".join(str(segment.run) for segment in run_segments)
-        figures = create_figures(
+        figures, truncated = create_figures(
             combined,
             title_suffix=f"Runs {title_runs}",
             run_segments=run_segments,
             ellipsis_positions=ellipsis_positions,
             time_column="TimeDisplay",
+            max_figures=pdf_limit,
         )
         if args.all and len(selected_runs) <= 1:
             label = "all_runs"
@@ -491,6 +628,11 @@ def main() -> None:
             label = "runs_" + "_".join(str(segment.run) for segment in run_segments)
         output_path = _resolve_multi_run_output(args.output, label)
         save_figures_to_pdf(figures, output_path)
+        if truncated:
+            print(
+                f"Limited PDF to first {len(figures)} figure(s); "
+                "rerun with --full-pdf or a higher --pdf-max-pages value for the rest."
+            )
         return
 
     if selected_runs:
@@ -500,13 +642,23 @@ def main() -> None:
         start_str = start.strftime("%Y-%m-%d %H:%M:%S")
         print(f"Plotting run {run_number} window: {start_str} -> {end_str}")
         output_path = _resolve_single_run_output(args.output, run_number)
-        figures = create_figures(
-            data, title_suffix=f"Run {run_number} ({start_str} -> {end_str})"
+        if pdf_limit == 0:
+            print("PDF max pages set to 0; skipping time-series export.")
+            return
+        figures, truncated = create_figures(
+            data,
+            title_suffix=f"Run {run_number} ({start_str} -> {end_str})",
+            max_figures=pdf_limit,
         )
         save_figures_to_pdf(figures, output_path)
+        if truncated:
+            print(
+                f"Limited PDF to first {len(figures)} figure(s); "
+                "rerun with --full-pdf or a higher --pdf-max-pages value for the rest."
+            )
     else:
         # Maintain previous behaviour: show figures interactively.
-        figures = create_figures(data)
+        figures, _ = create_figures(data)
         plt.show(block=False)
         # Leave figures open for interactive inspection.
         plt.show()

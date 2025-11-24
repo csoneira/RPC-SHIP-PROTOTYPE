@@ -1,0 +1,24 @@
+% !TEX root = live.main.tex
+
+# LaTeX document for table_compiler.tex
+\documentclass{article}
+
+\usepackage{booktabs}
+
+\begin{document}
+
+% Please add the following required packages to your document preamble:
+% \usepackage{booktabs}
+\begin{table}[]
+\begin{tabular}{@{}lllllll@{}}
+\toprule
+run & run\_start          & run\_end            & hv\_value & StreamerPct & good & good\_unc \\ \midrule
+15  & 2025-11-17 11:34:00 & 2025-11-19 08:31:00 & 8400.0    & 3.1         & 97.4 & 10.0      \\
+16  & 2025-11-19 09:26:00 & 2025-11-21 16:31:00 & 8700.0    & 5.6         & 99.3 & 7.0       \\
+17  & 2025-11-21 17:55:00 &                     & 9000.0    & 9.5         & 98.4 & 6.3       \\ \bottomrule
+\end{tabular}
+\end{table}
+
+
+
+\end{document}

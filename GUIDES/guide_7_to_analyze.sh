@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <ids>] [--no-plot] [--debug|-d] [--full-pdf] [--simple-pdf] [--pdf-max-pages <n>]
+Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <ids>] [--no-plot] [--debug|-d] [--full-pdf] [--simple-pdf] [--pdf-max-pages <n>] [--png-only] [--slide-mode] [--esential-plots|--essential-plots|-ep]
 
 This script analyzes the unpacked HLD files.
 
@@ -16,8 +16,12 @@ Arguments:
   --full-pdf           Export every available figure to the PDF (can be heavy)
   --pdf-max-pages <n>  Hard cap on the number of figure pages exported
   --no-plot            Skip all figure generation (only produce CSV output)
+  --esential-plots, --essential-plots, -ep
+                       Only keep essential position-related plots
   --run, -r <ids>      Analyze specific run id(s). Accepts comma lists or repeated flags.
+  --png-only           Stream plots directly to PNGs (implies plotting/saving; skips PDF export).
   --debug, -d          Enable verbose debug output inside MATLAB
+  --slide-mode         Optimize figure sizing/text for slide-ready plots.
 EOF
     exit 1
 }
@@ -76,7 +80,10 @@ DEBUG_FLAG=false
 CLI_ARGS=()
 PDF_MODE="simple"
 PDF_MAX_PAGES=""
+SLIDE_MODE=false
 declare -a REQUESTED_RUNS=()
+PNG_ONLY_MODE=false
+ESSENTIAL_PLOTS=false
 
 mkdir -p "$DEFAULT_SAVE_DIR"
 
@@ -104,16 +111,31 @@ while [[ $# -gt 0 ]]; do
             ;;
         --simple-pdf)
             PDF_MODE="simple"
+            SAVE_FLAG=true
             shift
             ;;
         --full-pdf)
             PDF_MODE="full"
+            SAVE_FLAG=true
             shift
             ;;
         --pdf-max-pages)
             [[ $# -ge 2 ]] || usage
             PDF_MAX_PAGES="$2"
+            SAVE_FLAG=true
             shift 2
+            ;;
+        --png-only)
+            PNG_ONLY_MODE=true
+            if [[ "$NO_PLOT_FLAG" == "true" ]]; then
+                echo "--png-only cannot be combined with --no-plot." >&2
+                exit 1
+            fi
+            if [[ " ${CLI_ARGS[*]} " != *" --png-only "* ]]; then
+                CLI_ARGS+=("--png-only")
+            fi
+            SAVE_FLAG=true
+            shift
             ;;
         --no-plot)
             NO_PLOT_FLAG=true
@@ -128,6 +150,20 @@ while [[ $# -gt 0 ]]; do
         --debug|-d)
             DEBUG_FLAG=true
             CLI_ARGS+=("--debug")
+            shift
+            ;;
+        --slide-mode)
+            SLIDE_MODE=true
+            if [[ " ${CLI_ARGS[*]} " != *" --slide-mode "* ]]; then
+                CLI_ARGS+=("--slide-mode")
+            fi
+            shift
+            ;;
+        --esential-plots|--essential-plots|-ep)
+            ESSENTIAL_PLOTS=true
+            if [[ " ${CLI_ARGS[*]} " != *" --esential-plots "* ]]; then
+                CLI_ARGS+=("--esential-plots")
+            fi
             shift
             ;;
         --help|-h)
@@ -207,6 +243,17 @@ run_analysis_for_input() {
     CLI_ARGS+=("--debug")
   fi
 
+  if [[ "$SLIDE_MODE" == "true" && " ${CLI_ARGS[*]} " != *" --slide-mode "* ]]; then
+    CLI_ARGS+=("--slide-mode")
+  fi
+
+  if [[ "$ESSENTIAL_PLOTS" == "true" ]]; then
+    MATLAB_PREFIX+=" plot_essentials_only=true;"
+    if [[ " ${CLI_ARGS[*]} " != *" --esential-plots "* ]]; then
+      CLI_ARGS+=("--esential-plots")
+    fi
+  fi
+
   if [[ ${#CLI_ARGS[@]} -gt 0 ]]; then
     cell_elems=()
     for arg in "${CLI_ARGS[@]}"; do
@@ -226,12 +273,16 @@ run_analysis_for_input() {
 
   local MATLAB_CMD
   if command -v matlab >/dev/null 2>&1; then
+    local MATLAB_CMD_PREFIX="${MATLAB_PREFIX}"
+    if [[ "$SLIDE_MODE" == "true" ]]; then
+      MATLAB_CMD_PREFIX+=" slide_mode=true;"
+    fi
     if [[ "$SAVE_FLAG" == "true" ]]; then
       : "${SAVE_DIR:?SAVE_FLAG=true but SAVE_DIR not set}"
       local ESCAPED_DIR="${SAVE_DIR//\'/\'\'}"
-      MATLAB_CMD="${MATLAB_PREFIX} save_plots=true; save_plots_dir='${ESCAPED_DIR}'; ${MATLAB_WRAP}"
+      MATLAB_CMD="${MATLAB_CMD_PREFIX} save_plots=true; save_plots_dir='${ESCAPED_DIR}'; ${MATLAB_WRAP}"
     else
-      MATLAB_CMD="${MATLAB_PREFIX} ${MATLAB_WRAP}"
+      MATLAB_CMD="${MATLAB_CMD_PREFIX} ${MATLAB_WRAP}"
     fi
     matlab -batch "${MATLAB_CMD}"
   else
@@ -255,7 +306,7 @@ if [[ ${#REQUESTED_RUNS[@]} -gt 0 ]]; then
   done
 else
   echo "No run override provided; analyzing every RUN_* directory under $JOINED_ROOT."
-  mapfile -t ALL_RUN_DIRS < <(find "$JOINED_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'RUN_*' | sort)
+  mapfile -t ALL_RUN_DIRS < <(find "$JOINED_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'RUN_*' | sort -t '_' -k2,2n)
   if [[ ${#ALL_RUN_DIRS[@]} -eq 0 ]]; then
     err "No RUN_* directories found in $JOINED_ROOT."
   fi
