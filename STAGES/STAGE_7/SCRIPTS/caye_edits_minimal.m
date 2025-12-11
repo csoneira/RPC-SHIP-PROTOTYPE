@@ -803,6 +803,50 @@ catch
     % % Exit
     % return;
 
+    % If l27/t27 are missing, fill with zeros matching a nearby channel length so later
+    % concatenations do not fail.
+    ref_order_leading = {'l26','l28','l25','l24'};
+    if ~exist('l27','var') || isempty(l27)
+        ref_name = '';
+        ref_vec = [];
+        for k = 1:numel(ref_order_leading)
+            candidate = ref_order_leading{k};
+            if exist(candidate,'var') && ~isempty(eval(candidate))
+                ref_name = candidate;
+                ref_vec = eval(candidate);
+                break;
+            end
+        end
+        if isempty(ref_vec)
+            l27 = zeros(0,1);
+            warning('Variable l27 missing; substituting zero vector (no reference length found).');
+        else
+            l27 = zeros(size(ref_vec));
+            warning('Variable l27 missing; substituting zeros with size matching %s.', ref_name);
+        end
+    end
+
+    ref_order_trailing = {'t26','t28','t25','t24'};
+    if ~exist('t27','var') || isempty(t27)
+        ref_name_t = '';
+        ref_vec_t = [];
+        for k = 1:numel(ref_order_trailing)
+            candidate = ref_order_trailing{k};
+            if exist(candidate,'var') && ~isempty(eval(candidate))
+                ref_name_t = candidate;
+                ref_vec_t = eval(candidate);
+                break;
+            end
+        end
+        if isempty(ref_vec_t)
+            t27 = zeros(size(l27));
+            warning('Variable t27 missing; substituting zero vector matching l27 size (no timing reference found).');
+        else
+            t27 = zeros(size(ref_vec_t));
+            warning('Variable t27 missing; substituting zeros with size matching %s.', ref_name_t);
+        end
+    end
+
     TFl_OG = [l26 l27 l28 l25 l24];
     TFt_OG = [t26 t27 t28 t25 t24];
     TBl_OG = [l3 l2 l1 l4 l5]; %leading times back [ns]; channels [1,5] -> 5 wide back strips
@@ -827,7 +871,7 @@ QB_OG  = TBt_OG - TBl_OG;
 v = cast([Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb],"double");
 w = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt],"double");
 
-swap_narrow_top_bottom_default = ismember(run, [1 2]); % Joana runs had top/bottom swapped
+swap_narrow_top_bottom_default = ismember(run, [1 2 21]); % Joana runs had top/bottom swapped
 reverse_narrow_strip_order_default = swap_narrow_top_bottom_default; % same cabling flipped the strip order
 
 swap_narrow_top_bottom = swap_narrow_top_bottom_default;
@@ -1694,7 +1738,7 @@ charge_limits_pmt_scatter = expand_axis_limits(charge_limits_pmt, SCATTER_LIMIT_
 % ---------------------------------------------------------------------
 
 
-timing_studies = true;
+timing_studies = false;
 if timing_studies && should_plot && should_plot
 
 
