@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <ids>] [--no-plot] [--debug|-d] [--full-pdf] [--simple-pdf] [--pdf-max-pages <n>] [--png-only] [--slide-mode] [--esential-plots|--essential-plots|-ep]
+Usage: $0 [--help|-h] [--save] [--save-dir <path>] [--run|-r <ids>] [--no-plot] [--debug|-d] [--full-pdf] [--simple-pdf] [--pdf-max-pages <n>] [--png-only] [--slide-mode] [--esential-plots|--essential-plots|-ep] [--self-trigger]
 
 This script analyzes the unpacked HLD files.
 
@@ -22,6 +22,7 @@ Arguments:
   --png-only           Stream plots directly to PNGs (implies plotting/saving; skips PDF export).
   --debug, -d          Enable verbose debug output inside MATLAB
   --slide-mode         Optimize figure sizing/text for slide-ready plots.
+  --self-trigger       Run the self-trigger variant (uses caye_edits_minimal_self_trigger.m)
 EOF
     exit 1
 }
@@ -81,6 +82,7 @@ CLI_ARGS=()
 PDF_MODE="simple"
 PDF_MAX_PAGES=""
 SLIDE_MODE=false
+SELF_TRIGGER_MODE=false
 declare -a REQUESTED_RUNS=()
 PNG_ONLY_MODE=false
 ESSENTIAL_PLOTS=false
@@ -166,6 +168,10 @@ while [[ $# -gt 0 ]]; do
             fi
             shift
             ;;
+        --self-trigger)
+            SELF_TRIGGER_MODE=true
+            shift
+            ;;
         --help|-h)
             usage
             ;;
@@ -191,7 +197,12 @@ if [[ -n "$PDF_MAX_PAGES" ]]; then
 fi
 
 
-MATLAB_SCRIPT="feval('run','STAGES/STAGE_7/SCRIPTS/caye_edits_minimal.m');"
+MATLAB_TARGET_SCRIPT="STAGES/STAGE_7/SCRIPTS/caye_edits_minimal.m"
+if [[ "$SELF_TRIGGER_MODE" == "true" ]]; then
+    MATLAB_TARGET_SCRIPT="STAGES/STAGE_7/SCRIPTS/caye_edits_minimal_self_trigger.m"
+fi
+
+MATLAB_SCRIPT="feval('run','${MATLAB_TARGET_SCRIPT}');"
 MATLAB_WRAP="try, ${MATLAB_SCRIPT} catch ME, disp(getReport(ME,'extended')); exit(1); end"
 
 JOINED_ROOT="$REPO_ROOT/STAGES/STAGE_6/DATA/DATA_FILES/ALREADY_JOINED"

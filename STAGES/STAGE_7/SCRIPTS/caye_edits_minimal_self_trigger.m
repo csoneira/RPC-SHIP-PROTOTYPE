@@ -5,15 +5,9 @@
 % run no.1 was acquired with the high voltage on
 % runs no.2 and 3 were acquired with the top high voltage turned off
 
-% System layout:
-% PMT 1 ------------------------ PMT 2
-% --------------- RPC ----------------
-% PMT 3 ------------------------ PMT 4
-
 % NOTE!!!
 % pay attention to the order of the strip connections:
 % wide strips: TFl = [l31 l32 l30 l28 l29]; TFt = [t31 t32 t30 t28 t29];  TBl = [l2 l1 l3 l5 l4]; TBt = [t2 t1 t3 t5 t4];
-% scintillators: Tl_cint = [l11 l12 l9 l10]; Tt_cint = [t11 t12 t9 t10];
 % Note: runs 1-2 (Joana) had the narrow-strip cables swapped (Qt=Ib, Qb=It); later runs are wired normally.
 
 % l: leading edge times
@@ -704,16 +698,6 @@ elseif strcmp(run_field, 'default')
 end
 
 
-% PMTs
-lead_time_pmt_min = getParam('lead_time_pmt_min');
-lead_time_pmt_max = getParam('lead_time_pmt_max');
-trail_time_pmt_min = getParam('trail_time_pmt_min');
-trail_time_pmt_max = getParam('trail_time_pmt_max');
-
-time_pmt_diff_thr = getParam('time_pmt_diff_thr'); % ns
-tTH = getParam('tTH'); % time threshold [ns] to assume it comes from a good event
-percentile_pmt = getParam('percentile_pmt'); % To calculate the range PTM
-
 % WIDE
 lead_time_wide_strip_min = getParam('lead_time_wide_strip_min');
 lead_time_wide_strip_max = getParam('lead_time_wide_strip_max');
@@ -734,6 +718,15 @@ charge_bot_pedestal = getParam('charge_bot_pedestal');
 thick_strip_crosstalk = getParam('thick_strip_crosstalk'); % ADCbins
 top_narrow_strip_crosstalk = getParam('top_narrow_strip_crosstalk'); % ADCbins/event
 bot_narrow_strip_crosstalk = getParam('bot_narrow_strip_crosstalk'); % ADCbins/event
+
+% High charge limits
+thick_strip_high_charge_limit = getParam('thick_strip_high_charge_limit'); % ADCbins
+top_narrow_strip_high_charge_limit = getParam('top_narrow_strip_high_charge_limit'); % ADCbins
+bot_narrow_strip_high_charge_limit = getParam('bot_narrow_strip_high_charge_limit'); % ADCbins
+
+fprintf('Loaded parameters for run %d from configuration.\n', run);
+fprintf('Crosstalk values: thick= %d, top narrow= %d, bot narrow= %d\n', ...
+    thick_strip_crosstalk, top_narrow_strip_crosstalk, bot_narrow_strip_crosstalk);
 
 % Streamers
 Q_thick_streamer_threshold = getParam('Q_thick_streamer_threshold'); % ADCbins
@@ -759,27 +752,6 @@ position_from_narrow_strips = getParam('position_from_narrow_strips');
 % Original Data Structuring
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
-
-% -----------------------------------------------------------------------------
-% Scintillator Timing and Charge Derivations
-% -----------------------------------------------------------------------------
-
-% Build matrices with leading/trailing edge times for each scintillator PMT
-% and derive simple charge proxies and mean times per side.
-try
-    Tl_cint_OG = [l11 l12 l9 l10]; %tempos leadings  [ns] - leading times [ns]
-    Tt_cint_OG = [t11 t12 t9 t10]; %tempos trailings [ns] - trailing times [ns]
-catch
-    warning('Variables 9/10/11/12 not found; THIS EXITS THE CODE.');
-    return;
-end
-
-Qcint_OG = [Tt_cint_OG(:,1) - Tl_cint_OG(:,1) Tt_cint_OG(:,2) - Tl_cint_OG(:,2) Tt_cint_OG(:,3) - Tl_cint_OG(:,3) Tt_cint_OG(:,4) - Tl_cint_OG(:,4)]; 
-
-
-% -----------------------------------------------------------------------------
-% RPC WIDE STRIP Timing and Charge Derivations
-% -----------------------------------------------------------------------------
 
 % Joana - TFl = [l31 l32 l30 l28 l29];
         % TFt = [t31 t32 t30 t28 t29];
@@ -868,8 +840,8 @@ QB_OG  = TBt_OG - TBl_OG;
 % Convert charge arrays from cell traces to double matrices (after cable swap).
 % note: runs 1-2 had swapped cables (Qt=Ib and Qb=It)
 
-v = cast([Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb],"double");
-w = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt],"double");
+w = cast([Ib IIb IIIb IVb Vb VIb VIIb VIIIb IXb Xb XIb XIIb XIIIb XIVb XVb XVIb XVIIb XVIIIb XIXb XXb XXIb XXIIb XXIIIb XXIVb],"double");
+v = cast([It IIt IIIt IVt Vt VIt VIIt VIIIt IXt Xt XIt XIIt XIIIt XIVt XVt XVIt XVIIt XVIIIt XIXt XXt XXIt XXIIt XXIIIt XXIVt],"double");
 
 swap_narrow_top_bottom_default = ismember(run, [1 2 21]); % Joana runs had top/bottom swapped
 reverse_narrow_strip_order_default = swap_narrow_top_bottom_default; % same cabling flipped the strip order
@@ -930,6 +902,26 @@ Q_thin_bot_event_OG = sum(Qb_OG, 2); % total charge in the 5 narrow strips on th
 
 % Ancillary
 
+
+% Create a 6x4 figure showing the histograms per each narrow strip, that is, per each column of Qt_OG and Qb_OG.
+% I want one figure for the top strips and another for the bottom strips. I want the same x axes limits for all
+% histograms in each figure. Save to the debug_png_dir.
+
+if should_plot
+    make_histograms = @(data, label_prefix, fig_title, capture_tag) ...
+        plot_narrow_strip_histograms(data, label_prefix, fig_title, capture_tag);
+
+    make_histograms(Qt_OG, 'Top', sprintf('Top narrow-strip charges (run %s)', run_label), 'narrow_strip_top_hist');
+    make_histograms(Qb_OG, 'Bottom', sprintf('Bottom narrow-strip charges (run %s)', run_label), 'narrow_strip_bottom_hist');
+end
+
+
+
+
+
+
+%%
+
 % Sum 10 to all Qt_OG and Qb_OG to avoid negative values
 Qt_test = Qt_OG + charge_top_pedestal;
 Qb_test = Qb_OG + charge_bot_pedestal;
@@ -937,28 +929,77 @@ Q_thin_top_event_test = sum(Qt_test, 2);
 Q_thin_bot_event_test = sum(Qb_test, 2);
 % Histogram them, thinner bars
 
-% Create with linspace edges from 0 to 50000
-edges = linspace(0, 50000, 150);
+% Choose the right limit in the edges as the max between the 99.9 quantile of both
+q99_top = quantile(Q_thin_top_event_test, 0.999);
+q99_bot = quantile(Q_thin_bot_event_test, 0.999);
+
+edges_top    = linspace(0, q99_top, 150);
+edges_bot    = linspace(0, q99_bot, 150);
+
+max_limit    = max(q99_top, q99_bot);
+edges_common = linspace(0, max_limit, 150);
 
 if should_plot
     fig = figure;
-    histogram(Q_thin_top_event_test, edges, 'Normalization', 'probability', 'DisplayName','Top (pedestal adjusted)');
+    set(fig, 'Color', [0 0 0]);
+
+    % 1) Top only, its own binning
+    ax1 = subplot(3,1,1);
+    histogram(Q_thin_top_event_test, edges_top, ...
+              'Normalization', 'probability', ...
+              'DisplayName', 'Top (pedestal adjusted)');
+    ylabel('Probability');
+    title('Top (Thin)');
+    grid on; box on;
+    set(ax1, 'Color', [0 0 0], ...
+             'XColor', [1 1 1], 'YColor', [1 1 1], ...
+             'GridColor', [0.4 0.4 0.4], ...
+             'MinorGridColor', [0.25 0.25 0.25]);
+
+    % 2) Bottom only, its own binning
+    ax2 = subplot(3,1,2);
+    histogram(Q_thin_bot_event_test, edges_bot, ...
+              'Normalization', 'probability', ...
+              'DisplayName', 'Bottom (pedestal adjusted)', ...
+              'FaceColor', [1 0.5 0.2]);
+    ylabel('Probability');
+    title('Bottom (Thin)');
+    grid on; box on;
+    set(ax2, 'Color', [0 0 0], ...
+             'XColor', [1 1 1], 'YColor', [1 1 1], ...
+             'GridColor', [0.4 0.4 0.4], ...
+             'MinorGridColor', [0.25 0.25 0.25]);
+
+    % 3) Both in the same plot, common x-axis binning
+    ax3 = subplot(3,1,3);
+    histogram(Q_thin_top_event_test, edges_common, ...
+              'Normalization', 'probability', ...
+              'DisplayName', 'Top (pedestal adjusted)');
     hold on;
-    histogram(Q_thin_bot_event_test, edges, 'Normalization', 'probability', 'DisplayName','Bottom (pedestal adjusted)');
+    histogram(Q_thin_bot_event_test, edges_common, ...
+              'Normalization', 'probability', ...
+              'DisplayName', 'Bottom (pedestal adjusted)');
     xlabel('Charge (ADC bins)');
     ylabel('Probability');
-    title('Positive Charges (Thin)');
+    title('Positive Charges (Thin) – Top & Bottom');
     grid on; box on;
+
     lg = legend('show', 'Location', 'northeast');
-    ax = gca;
-    set(fig, 'Color', [0 0 0]);
-    set(ax, 'Color', [0 0 0], 'XColor', [1 1 1], 'YColor', [1 1 1], ...
-        'GridColor', [0.4 0.4 0.4], 'MinorGridColor', [0.25 0.25 0.25]);
+
+    set(ax3, 'Color', [0 0 0], ...
+             'XColor', [1 1 1], 'YColor', [1 1 1], ...
+             'GridColor', [0.4 0.4 0.4], ...
+             'MinorGridColor', [0.25 0.25 0.25]);
+
     if ~isempty(lg) && isgraphics(lg, 'legend')
-        set(lg, 'Color', [0 0 0], 'EdgeColor', [1 1 1], 'TextColor', [1 1 1]);
+        set(lg, 'Color', [0 0 0], ...
+                'EdgeColor', [1 1 1], ...
+                'TextColor', [1 1 1]);
     end
+
     capture_debug_png(fig, 'thin_charge_probability');
 end
+
 
 %%
 
@@ -1077,131 +1118,6 @@ Qb_OG = Qb_OG + charge_bot_pedestal;
 % sgtitle('Time series for timing (wide strips) and charges (top/bottom narrow strips)');
 
 
-%%
-
-% ---------------------------------------------------------------------
-% ---------------------------------------------------------------------
-% Filtered Data Structuring
-% ---------------------------------------------------------------------
-% ---------------------------------------------------------------------
-
-% -----------------------------------------------------------------------------
-% Scintillator Timing and Charge Derivations
-% -----------------------------------------------------------------------------
-
-% Build matrices with leading/trailing edge times for each scintillator PMT
-% and derive simple charge proxies and mean times per side.
-
-Tl_cint = Tl_cint_OG;
-Tt_cint = Tt_cint_OG;
-
-% Count the number of events that not all Tl_cint(:,1:4) are zero
-rawEvents = sum(any(Tl_cint(:,1:4) ~= 0, 2));
-
-total_raw_events = rawEvents;
-
-% If any value in Tl_cint or any value in Tt_cint is outside the expected range, put it to 0
-Tl_cint(Tl_cint < lead_time_pmt_min | Tl_cint > lead_time_pmt_max) = 0;
-Tt_cint(Tt_cint < trail_time_pmt_min | Tt_cint > trail_time_pmt_max) = 0;
-
-Tl_cint(Tt_cint == 0) = 0;
-Tt_cint(Tl_cint == 0) = 0;
-Tl_cint(Tt_cint == 0) = 0;
-Tt_cint(Tl_cint == 0) = 0;
-
-cond_pmt_bot = ( abs(Tl_cint(:,1) - Tl_cint(:,2)) > time_pmt_diff_thr );
-Tl_cint(cond_pmt_bot, 1) = 0;
-Tl_cint(cond_pmt_bot, 2) = 0;
-
-cond_pmt_top = ( abs(Tl_cint(:,3) - Tl_cint(:,4)) > time_pmt_diff_thr );
-Tl_cint(cond_pmt_top, 3) = 0;
-Tl_cint(cond_pmt_top, 4) = 0;
-
-Tl_cint(Tt_cint == 0) = 0;
-Tt_cint(Tl_cint == 0) = 0;
-Tl_cint(Tt_cint == 0) = 0;
-Tt_cint(Tl_cint == 0) = 0;
-
-
-
-% Loop over tTH and plot % of good events
-tTH_values = 1:0.1:7; % example range, adjust as needed
-percent_good_events = zeros(size(tTH_values));
-
-for i = 1:length(tTH_values)
-    tTH_iter = tTH_values(i);
-    restrictionsForPMTs_test = abs(Tl_cint(:,1)-Tl_cint(:,2)) < tTH_iter & ...
-                                abs(Tl_cint(:,1)-Tl_cint(:,3)) < tTH_iter & ...
-                                abs(Tl_cint(:,1)-Tl_cint(:,4)) < tTH_iter & ...
-                                abs(Tl_cint(:,2)-Tl_cint(:,3)) < tTH_iter & ...
-                                abs(Tl_cint(:,2)-Tl_cint(:,4)) < tTH_iter & ...
-                                abs(Tl_cint(:,3)-Tl_cint(:,4)) < tTH_iter;
-    percent_good_events(i) = 100 * length(find(restrictionsForPMTs_test)) / rawEvents;
-end
-
-if should_plot
-    fig = figure;
-    plot(tTH_values, percent_good_events, '-o'); hold on;
-    % vertical line at tTH, orange dashed, thicker
-    xline(tTH, '--', 'tTH chosen', ...
-          'Color', [1 0.5 0], ...
-          'LineWidth', 1.8, ...
-          'LabelVerticalAlignment', 'middle', ...
-          'LabelHorizontalAlignment', 'center');
-    xlabel('tTH [ns]');
-    ylabel('% of good events');
-    title('Good events vs tTH');
-    capture_debug_png(fig, 'tth_selection');
-end
-
-
-% ---------- PMT timing consistency ----------
-% Treat any NaN as false by requiring all 4 times to be finite in the row.
-% All pairwise diffs < tTH  <=> (max - min) < tTH
-
-restrictionsForPMTs_comp = abs(Tl_cint(:,1)-Tl_cint(:,2)) > tTH | ...
-                        abs(Tl_cint(:,1)-Tl_cint(:,3)) > tTH | ...
-                        abs(Tl_cint(:,1)-Tl_cint(:,4)) > tTH | ...
-                        abs(Tl_cint(:,2)-Tl_cint(:,3)) > tTH | ...
-                        abs(Tl_cint(:,2)-Tl_cint(:,4)) > tTH | ...
-                        abs(Tl_cint(:,3)-Tl_cint(:,4)) > tTH;
-
-% Take the complementary mask
-restrictionsForPMTs = ~restrictionsForPMTs_comp;
-
-% Put to zero the Tl_cint and Tt_cint where restrictionsForPMTs is false
-Tl_cint(~restrictionsForPMTs, :) = 0;
-Tt_cint(~restrictionsForPMTs, :) = 0;
-
-% Update the whole row
-Tl_cint(Tt_cint == 0) = 0;
-Tt_cint(Tl_cint == 0) = 0;
-Tl_cint(Tt_cint == 0) = 0;
-Tt_cint(Tl_cint == 0) = 0;
-
-% Count the number of events that not all Tl_cint(:,1:4) are zero after filtering
-filteredEvents = sum(any(Tl_cint(:,1:4) ~= 0, 2));
-percentage_good_events_in_pmts = 100 * filteredEvents / rawEvents;
-log_info('PMT filtering | raw events=%d | kept=%d (%.2f%%)', total_raw_events, filteredEvents, percentage_good_events_in_pmts);
-
-%channels 1 and 2 -> bottom PMTs
-Qcint = [Tt_cint(:,1) - Tl_cint(:,1) Tt_cint(:,2) - Tl_cint(:,2) Tt_cint(:,3) - Tl_cint(:,3) Tt_cint(:,4) - Tl_cint(:,4)]; 
-
-% If Qcint(:,1) == 0, put Qcint(:,2) = 0, if Qcint(:,2) == 0, put Qcint(:,1) = 0
-Qcint(Qcint(:,1) == 0, 2) = 0;  % if col1 is 0 -> set col2 to 0 (same rows)
-Qcint(Qcint(:,2) == 0, 1) = 0;  % if col2 is 0 -> set col1 to 0 (same rows)
-Qcint(Qcint(:,1) == 0, 2) = 0;  % if col1 is 0 -> set col2 to 0 (same rows)
-Qcint(Qcint(:,2) == 0, 1) = 0;  % if col2 is 0 -> set col1 to 0 (same rows)
-
-Qcint(Qcint(:,3) == 0, 4) = 0;  % if col1 is 0 -> set col2 to 0 (same rows)
-Qcint(Qcint(:,4) == 0, 3) = 0;  % if col2 is 0 -> set col1 to 0 (same rows)
-Qcint(Qcint(:,3) == 0, 4) = 0;  % if col1 is 0 -> set col2 to 0 (same rows)
-Qcint(Qcint(:,4) == 0, 3) = 0;  % if col2 is 0 -> set col1 to 0 (same rows)
-
-
-%%
-
-
 % -----------------------------------------------------------------------------
 % RPC WIDE STRIP Timing and Charge Derivations
 % -----------------------------------------------------------------------------
@@ -1266,6 +1182,7 @@ QF(QB == 0) = 0;
 QB(QF == 0) = 0;
 
 rawEvents = size(TFl,1);
+total_raw_events = rawEvents;
 
 
 
@@ -1368,25 +1285,11 @@ Q_thick_event = Q; %redefine Q_thick_event to be the Q from the strip with maxim
 % ---------------------------------------------------------------------
 
 % Create masks------------------------------------------------------------
-validEvents_signal = (Qcint_OG(:,1) ~= 0) & (Qcint_OG(:,2) ~= 0) & (Qcint_OG(:,3) ~= 0) & (Qcint_OG(:,4) ~= 0);
+numEvents = rawEvents;
+validEvents_signal = true(numEvents, 1);
 
 
 % Apply masks ------------------------------------------------------------
-
-% --- PMTs --- N x 4
-Qcint_signal = zeros(size(Qcint_OG), 'like', Qcint_OG);
-Qcint_signal(validEvents_signal, :) = Qcint_OG(validEvents_signal, :);
-
-T_cint_1_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_2_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_3_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_4_signal = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_1_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 1);
-T_cint_2_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 2);
-T_cint_3_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 3);
-T_cint_4_signal(validEvents_signal) = Tl_cint_OG(validEvents_signal, 4);
-T_cint_top_signal = (T_cint_3_signal + T_cint_4_signal) / 2;
-T_cint_bot_signal = (T_cint_1_signal + T_cint_2_signal) / 2;
 
 % --- THICK (event-level) --- N x 1
 X_thick_strip_signal = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
@@ -1415,25 +1318,10 @@ Q_thin_bot_event_signal = sum(Qb_signal, 2);
 % ---------------------------------------------------------------------
 
 % Create masks------------------------------------------------------------
-validEvents_coin = (Qcint(:,1) ~= 0) & (Qcint(:,2) ~= 0) & (Qcint(:,3) ~= 0) & (Qcint(:,4) ~= 0);
+validEvents_coin = true(numEvents, 1);
 
 
 % Apply masks ------------------------------------------------------------
-
-% --- PMTs --- N x 4
-Qcint_coin = zeros(size(Qcint_OG), 'like', Qcint_OG);
-Qcint_coin(validEvents_coin, :) = Qcint_OG(validEvents_coin, :);
-
-T_cint_1_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_2_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_3_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_4_coin = zeros(size(Tl_cint_OG), 'like', Tl_cint_OG);
-T_cint_1_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 1);
-T_cint_2_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 2);
-T_cint_3_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 3);
-T_cint_4_coin(validEvents_coin) = Tl_cint_OG(validEvents_coin, 4);
-T_cint_top_coin = (T_cint_3_coin + T_cint_4_coin) / 2;
-T_cint_bot_coin = (T_cint_1_coin + T_cint_2_coin) / 2;
 
 % --- THICK (event-level) --- N x 1
 X_thick_strip_coin = zeros(size(X_thick_strip_OG), 'like', X_thick_strip_OG);
@@ -1462,27 +1350,16 @@ Q_thin_bot_event_coin = sum(Qb_coin, 2);
 % ---------------------------------------------------------------------
 
 % Create masks---------------------------------------------------------
-validEvents_good = validEvents_coin; % Same as before
 
+
+cond = (Q_thick_strip_coin < (thick_strip_high_charge_limit + 60) ) | ...
+       (Q_thin_top_event_coin < top_narrow_strip_high_charge_limit) | ...
+       (Q_thin_bot_event_coin < bot_narrow_strip_high_charge_limit);
+validEvents_good = cond;
+
+% validEvents_good = validEvents_coin;
 
 % Apply masks ---------------------------------------------------------
-
-% --- PMTs --- N x 4
-Qcint_good = zeros(size(Qcint), 'like', Qcint);
-Qcint_good(validEvents_good, :) = Qcint(validEvents_good, :);
-Qcint_top_good = Qcint_good(:,3) + Qcint_good(:,4);
-Qcint_bot_good = Qcint_good(:,1) + Qcint_good(:,2);
-
-T_cint_1_good = zeros(size(Tl_cint(:,1)), 'like', Tl_cint(:,1));
-T_cint_2_good = zeros(size(Tl_cint(:,2)), 'like', Tl_cint(:,2));
-T_cint_3_good = zeros(size(Tl_cint(:,3)), 'like', Tl_cint(:,3));
-T_cint_4_good = zeros(size(Tl_cint(:,4)), 'like', Tl_cint(:,4));
-T_cint_1_good(validEvents_good) = Tl_cint(validEvents_good, 1);
-T_cint_2_good(validEvents_good) = Tl_cint(validEvents_good, 2);
-T_cint_3_good(validEvents_good) = Tl_cint(validEvents_good, 3);
-T_cint_4_good(validEvents_good) = Tl_cint(validEvents_good, 4);
-T_cint_top_good = (T_cint_3_good + T_cint_4_good) / 2;
-T_cint_bot_good = (T_cint_1_good + T_cint_2_good) / 2;
 
 % --- THICK ---
 X_thick_strip_good = zeros(size(X_thick_strip), 'like', X_thick_strip);
@@ -1521,43 +1398,9 @@ Q_thin_bot_event_good = sum(Qb_good, 2);
 % ------------------------------------------------------------------------
 
 % Create masks------------------------------------------------------------
-log_debug('Calculating PMT charge thresholds for run 0 based on 20th and 80th percentiles.');
-Q_pmt_1 = Qcint_good(:,1);
-Q_pmt_2 = Qcint_good(:,2);
-Q_pmt_3 = Qcint_good(:,3);
-Q_pmt_4 = Qcint_good(:,4);
-
-pmt_1_charge_threshold_min = prctile(Q_pmt_1(Q_pmt_1>0), percentile_pmt); % ADCbins
-pmt_1_charge_threshold_max = prctile(Q_pmt_1(Q_pmt_1>0), 100 - percentile_pmt); % ADCbins
-pmt_2_charge_threshold_min = prctile(Q_pmt_2(Q_pmt_2>0), percentile_pmt); % ADCbins
-pmt_2_charge_threshold_max = prctile(Q_pmt_2(Q_pmt_2>0), 100 - percentile_pmt); % ADCbins
-pmt_3_charge_threshold_min = prctile(Q_pmt_3(Q_pmt_3>0), percentile_pmt); % ADCbins
-pmt_3_charge_threshold_max = prctile(Q_pmt_3(Q_pmt_3>0), 100 - percentile_pmt); % ADCbins
-pmt_4_charge_threshold_min = prctile(Q_pmt_4(Q_pmt_4>0), percentile_pmt); % ADCbins
-pmt_4_charge_threshold_max = prctile(Q_pmt_4(Q_pmt_4>0), 100 - percentile_pmt); % ADCbins
-
-validEvents_range = ...
-    (Qcint(:,1) >= pmt_1_charge_threshold_min) & (Qcint(:,1) <= pmt_1_charge_threshold_max) & ...
-    (Qcint(:,2) >= pmt_2_charge_threshold_min) & (Qcint(:,2) <= pmt_2_charge_threshold_max) & ...
-    (Qcint(:,3) >= pmt_3_charge_threshold_min) & (Qcint(:,3) <= pmt_3_charge_threshold_max) & ...
-    (Qcint(:,4) >= pmt_4_charge_threshold_min) & (Qcint(:,4) <= pmt_4_charge_threshold_max);
+validEvents_range = validEvents_good;
 
 % Apply masks ------------------------------------------------------------
-
-% --- PMTs --- N x 4
-Qcint_range = zeros(size(Qcint_good), 'like', Qcint_good);
-Qcint_range(validEvents_range, :) = Qcint_good(validEvents_range, :);
-
-T_cint_1_range = zeros(size(Tl_cint), 'like', Tl_cint);
-T_cint_2_range = zeros(size(Tl_cint), 'like', Tl_cint);
-T_cint_3_range = zeros(size(Tl_cint), 'like', Tl_cint);
-T_cint_4_range = zeros(size(Tl_cint), 'like', Tl_cint);
-T_cint_1_range(validEvents_range) = Tl_cint(validEvents_range, 1);
-T_cint_2_range(validEvents_range) = Tl_cint(validEvents_range, 2);
-T_cint_3_range(validEvents_range) = Tl_cint(validEvents_range, 3);
-T_cint_4_range(validEvents_range) = Tl_cint(validEvents_range, 4);
-T_cint_top_range = (T_cint_3_range + T_cint_4_range) / 2;
-T_cint_bot_range = (T_cint_1_range + T_cint_2_range) / 2;
 
 % --- THICK STRIPS --- N x 1
 X_thick_strip_range = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
@@ -1587,21 +1430,20 @@ Q_thin_bot_event_range = sum(Qb_range, 2);
 % ------------------------------------------------------------------------
 
 % Create masks------------------------------------------------------------
-validEventsFiltered_PMT = ...
-    (Q_pmt_1 >= pmt_1_charge_threshold_min) & (Q_pmt_1 <= pmt_1_charge_threshold_max) & ...
-    (Q_pmt_2 >= pmt_2_charge_threshold_min) & (Q_pmt_2 <= pmt_2_charge_threshold_max) & ...
-    (Q_pmt_3 >= pmt_3_charge_threshold_min) & (Q_pmt_3 <= pmt_3_charge_threshold_max) & ...
-    (Q_pmt_4 >= pmt_4_charge_threshold_min) & (Q_pmt_4 <= pmt_4_charge_threshold_max);
-validEventsFiltered_thick = (Q_thick_strip_good >= thick_strip_crosstalk);
-validEventsFiltered_thin_top = (Q_thin_top_event_good >= top_narrow_strip_crosstalk);
-validEventsFiltered_thin_bot = (Q_thin_bot_event_good >= bot_narrow_strip_crosstalk);
 
+% Create a combined condition using an and operation
+cond = (Q_thick_strip_good > thick_strip_crosstalk) & ...
+       (Q_thin_top_event_good > top_narrow_strip_crosstalk) & ...
+       (Q_thin_bot_event_good > bot_narrow_strip_crosstalk);
+validEventsFiltered_thick = cond;
+validEventsFiltered_thin_top = cond;
+validEventsFiltered_thin_bot = cond;
+
+% validEventsFiltered_thick = (Q_thick_strip_good >= thick_strip_crosstalk);
+% validEventsFiltered_thin_top = (Q_thin_top_event_good >= top_narrow_strip_crosstalk);
+% validEventsFiltered_thin_bot = (Q_thin_bot_event_good >= bot_narrow_strip_crosstalk);
 
 % Apply masks ------------------------------------------------------------
-% --- PMTs --- N x 4
-Qcint_no_crosstalk = zeros(size(Qcint_good), 'like', Qcint_good);
-Qcint_no_crosstalk(validEventsFiltered_PMT, :) = Qcint_good(validEventsFiltered_PMT, :);
-
 % --- THICK STRIPS --- N x 1
 X_thick_strip_no_crosstalk = zeros(size(X_thick_strip_good), 'like', X_thick_strip_good);
 Y_thick_strip_no_crosstalk = zeros(size(Y_thick_strip_good), 'like', Y_thick_strip_good);
@@ -1670,8 +1512,8 @@ q95_thick_raw  = quantile(Q_thick_strip_good, 0.999);
 
 % Bin edges (match your "like this" snippet for thin; keep fine bins for thick)
 bin_number = 150; % number of bins
-thinTopEdges  = linspace(q005, q95, bin_number); % 100 bins between 0.5% and 95% quantiles
-thinBotEdges  = linspace(q005, q95, bin_number); % 100 bins between 0.5% and 95% quantiles
+thinTopEdges  = linspace(q005_t, q95_t, bin_number); % 100 bins between 0.5% and 95% quantiles
+thinBotEdges  = linspace(q005_b, q95_b, bin_number); % 100 bins between 0.5% and 95% quantiles
 thickEdges    = linspace(q005_thick, q95_thick, bin_number); % 100 bins between 0.5% and 95% quantiles
 
 
@@ -1695,37 +1537,11 @@ Q_thin_top_event_good_hist = Q_thin_top_event_good;
 Q_thin_top_event_good_hist(Q_thin_top_event_good_hist == 0) = []; % remove zeros for histogram
 
 
-% PMT quantiles
-lead_samples = nonzeros(Tl_cint);
-if isempty(lead_samples), lead_samples = nonzeros(Tl_cint_OG); end
-if isempty(lead_samples), lead_samples = Tl_cint(:); end
-if isempty(lead_samples), lead_samples = Tl_cint_OG(:); end
-t005_pmt = quantile(lead_samples, 0.001);
-t95_pmt  = quantile(lead_samples, 0.999);
-
-trail_samples = nonzeros(Tt_cint);
-if isempty(trail_samples), trail_samples = nonzeros(Tt_cint_OG); end
-if isempty(trail_samples), trail_samples = Tt_cint(:); end
-if isempty(trail_samples), trail_samples = Tt_cint_OG(:); end
-t005_pmt_trail = quantile(trail_samples, 0.001);
-t95_pmt_trail  = quantile(trail_samples, 0.999);
-
-q005_pmt = quantile(Qcint_good(Qcint_good > 0), 0.01);
-q95_pmt  = quantile(Qcint_good(Qcint_good > 0), 0.95);
-binning_pmt = linspace(q005_pmt, q95_pmt, bin_number); % 100 bins between 0.5% and 95% quantiles
-
-lead_time_limits_pmt  = [t005_pmt t95_pmt];
-trail_time_limits_pmt = [t005_pmt_trail t95_pmt_trail];
-charge_limits_pmt     = [q005_pmt q95_pmt];
-
 SCATTER_LIMIT_MARGIN = 0.10;
 thin_top_scatter_limits = expand_axis_limits([q005_t q95_t], SCATTER_LIMIT_MARGIN);
 thin_bottom_scatter_limits = expand_axis_limits([q005_b q95_b], SCATTER_LIMIT_MARGIN);
 thin_shared_scatter_limits = expand_axis_limits([q005 q95], SCATTER_LIMIT_MARGIN);
 thick_scatter_limits = expand_axis_limits([q005_thick q95_thick], SCATTER_LIMIT_MARGIN);
-lead_time_limits_pmt_scatter = expand_axis_limits(lead_time_limits_pmt, SCATTER_LIMIT_MARGIN);
-trail_time_limits_pmt_scatter = expand_axis_limits(trail_time_limits_pmt, SCATTER_LIMIT_MARGIN);
-charge_limits_pmt_scatter = expand_axis_limits(charge_limits_pmt, SCATTER_LIMIT_MARGIN);
 
 
 %%
@@ -1738,700 +1554,6 @@ charge_limits_pmt_scatter = expand_axis_limits(charge_limits_pmt, SCATTER_LIMIT_
 % ---------------------------------------------------------------------
 
 
-timing_studies = false;
-if timing_studies && should_plot && should_plot
-
-
-    % Slewing correction on the PMTs
-    diff_top = T_cint_3_good - T_cint_4_good;
-    sum_top = T_cint_3_good + T_cint_4_good;
-
-    diff_bot = T_cint_1_good - T_cint_2_good;
-    sum_bot = T_cint_1_good + T_cint_2_good;
-
-    mask_diff_top = isfinite(diff_top) & (diff_top ~= 0) & (abs(diff_top) < 20);
-    mask_diff_bot = isfinite(diff_bot) & (diff_bot ~= 0) & (abs(diff_bot) < 20);
-
-    q1 = Qcint_good(:,1);
-    q2 = Qcint_good(:,2);
-    q3 = Qcint_good(:,3);
-    q4 = Qcint_good(:,4); 
-
-    % apply mask
-    q1_m = q1(mask_diff_bot);
-    q2_m = q2(mask_diff_bot);
-    q3_m = q3(mask_diff_top);
-    q4_m = q4(mask_diff_top);
-    diff_top_m = diff_top(mask_diff_top);
-    sum_top_m = sum_top(mask_diff_top);
-    diff_bot_m = diff_bot(mask_diff_bot);
-    sum_bot_m = sum_bot(mask_diff_bot);
-
-
-    % Check correlation of the time difference in the same scint with the sum of times.
-    % Should be no correlation ideally
-
-    if should_plot
-        fig = figure;
-        tiledlayout(1,2, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-        nexttile;
-        hold on;
-        scatter(sum_top_m, diff_top_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT3 + PMT4
-        hold off;
-        % Print legend
-        legend({'PMT3 + PMT4'}, 'Location','best');
-        xlabel('Sum of Times PMT3 - PMT4 [ns]');
-        ylabel('Time Difference PMT3 - PMT4 [ns]');
-        title(sprintf('Time Difference vs Sum of Times, Top scint (run %s)', formatted_datetime_tex));
-        grid on; box on;
-
-        nexttile;
-        hold on;
-        scatter(sum_bot_m, diff_bot_m, 20, [0.2 0.8 0.2], '.');        % Sum PMT1 + PMT2
-        hold off;
-        % Print legend
-        legend({'PMT1 + PMT2'}, 'Location','best');
-        xlabel('Sum of Times PMT1 - PMT2 [ns]');
-        ylabel('Time Difference PMT1 - PMT2 [ns]');
-        title(sprintf('Time Difference vs Sum of Times, Bottom scint (run %s)', formatted_datetime_tex));
-        grid on; box on;
-        capture_debug_png(fig, 'timing_sum_vs_difference');
-    end
-    
-
-    % Slewing correction (linear fit), fit
-    % diff_bot_corr_1 = diff_bot - F(q1)
-    % diff_bot_corr_2 = diff_bot - F(q2)
-    % diff_top_corr_3 = diff_top - F(q3)
-    % diff_top_corr_4 = diff_top - F(q4)
-
-
-    % --- Choose polynomial degree once ---
-    deg = 1;   % change to 2, 3, ... for higher-order fits
-
-    % --- Fits with clipping (per pair, consistent masks) ---
-    % PMT1 vs diff_bot_m
-    [pmt1_fit_coeffs, q1_use, d1_use] = polyfit_clipped(q1_m, diff_bot_m, 80, 150, deg);
-
-    % PMT2 vs diff_bot_m
-    [pmt2_fit_coeffs, q2_use, d2_use] = polyfit_clipped(q2_m, diff_bot_m, 80, 150, deg);
-
-    % PMT3 vs diff_top_m
-    [pmt3_fit_coeffs, q3_use, d3_use] = polyfit_clipped(q3_m, diff_top_m, 80, 300, deg);
-
-    % PMT4 vs diff_top_m
-    [pmt4_fit_coeffs, q4_use, d4_use] = polyfit_clipped(q4_m, diff_top_m, 80, 120, deg);
-
-    % --- Apply correction using polyval (works for any degree) ---
-    % Apply correction only where charge is non-zero (and finite)
-    diff_top_corr_3 = diff_top;
-    mask3 = isfinite(q3) & (q3 ~= 0);
-    if any(mask3)
-        diff_top_corr_3(mask3) = diff_top(mask3) - polyval(pmt3_fit_coeffs, q3(mask3));
-    end
-
-    diff_top_corr_4 = diff_top;
-    mask4 = isfinite(q4) & (q4 ~= 0);
-    if any(mask4)
-        diff_top_corr_4(mask4) = diff_top(mask4) - polyval(pmt4_fit_coeffs, q4(mask4));
-    end
-
-    diff_bot_corr_1 = diff_bot;
-    mask1 = isfinite(q1) & (q1 ~= 0);
-    if any(mask1)
-        diff_bot_corr_1(mask1) = diff_bot(mask1) - polyval(pmt1_fit_coeffs, q1(mask1));
-    end
-
-    diff_bot_corr_2 = diff_bot;
-    mask2 = isfinite(q2) & (q2 ~= 0);
-    if any(mask2)
-        diff_bot_corr_2(mask2) = diff_bot(mask2) - polyval(pmt2_fit_coeffs, q2(mask2));
-    end
-
-    % apply masks you already have
-    diff_top_corr_3_m = diff_top_corr_3(mask_diff_top);
-    diff_top_corr_4_m = diff_top_corr_4(mask_diff_top);
-    diff_bot_corr_1_m = diff_bot_corr_1(mask_diff_bot);
-    diff_bot_corr_2_m = diff_bot_corr_2(mask_diff_bot);
-
-    if should_plot
-        % --- Plots (before/after) ---
-        fig = figure;
-        tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-        ylimits = [-4 4];
-
-        % ---- TOP: raw vs q3,q4 with polynomial overlays
-        nexttile; hold on; grid on; box on;
-        scatter(q3_m, diff_top_m, 20, [0.2 0.2 0.8], '.');   % PMT3
-        scatter(q4_m, diff_top_m, 20, [0.8 0.6 0.0], '.');   % PMT4
-        xfit_top_3 = linspace(min(q3_use), max(q3_use), 200);
-        xfit_top_4 = linspace(min(q4_use), max(q4_use), 200);
-        plot(xfit_top_3, polyval(pmt3_fit_coeffs, xfit_top_3), 'b--', 'LineWidth', 2);
-        plot(xfit_top_4, polyval(pmt4_fit_coeffs, xfit_top_4), 'r--', 'LineWidth', 2);
-        ylim(ylimits);
-        legend({'PMT3','PMT4'}, 'Location','best');
-        xlabel('PMT Charge [ADCbins]');
-        ylabel('Time Difference PMT3 - PMT4 [ns]');
-        title(sprintf('Time Diff vs PMT Charge (raw) — deg = %d', deg));
-        hold off;
-
-        % ---- BOTTOM: raw vs q1,q2 with polynomial overlays
-        nexttile; hold on; grid on; box on;
-        scatter(q1_m, diff_bot_m, 20, [0.2 0.2 0.8], '.');   % PMT1
-        scatter(q2_m, diff_bot_m, 20, [0.8 0.6 0.0], '.');   % PMT2
-        xfit_bot_1 = linspace(max(q1_use), min([q1_use; q2_use]), 200);
-        xfit_bot_2 = linspace(max([q1_use; q2_use]), min([q1_use; q2_use]), 200);
-        plot(xfit_bot_1, polyval(pmt1_fit_coeffs, xfit_bot_1), 'b--', 'LineWidth', 2);
-        plot(xfit_bot_2, polyval(pmt2_fit_coeffs, xfit_bot_2), 'r--', 'LineWidth', 2);
-        ylim(ylimits);
-        legend({'PMT1','PMT2'}, 'Location','best');
-        xlabel('PMT Charge [ADCbins]');
-        ylabel('Time Difference PMT1 - PMT2 [ns]');
-        title(sprintf('Time Diff vs PMT Charge (raw) — deg = %d', deg));
-        hold off;
-
-        % ---- TOP: corrected
-        nexttile; hold on; grid on; box on;
-        scatter(q3_m, diff_top_corr_3_m, 20, [0.2 0.2 0.8], '.');   % PMT3
-        scatter(q4_m, diff_top_corr_4_m, 20, [0.8 0.6 0.0], '.');   % PMT4
-        ylim(ylimits);
-        legend({'PMT3','PMT4'}, 'Location','best');
-        xlabel('PMT Charge [ADCbins]');
-        ylabel('Corrected Time Difference (TOP) [ns]');
-        title('After charge correction (TOP)');
-        hold off;
-
-        % ---- BOTTOM: corrected
-        nexttile; hold on; grid on; box on;
-        scatter(q1_m, diff_bot_corr_1_m, 20, [0.2 0.2 0.8], '.');   % PMT1
-        scatter(q2_m, diff_bot_corr_2_m, 20, [0.8 0.6 0.0], '.');   % PMT2
-        ylim(ylimits);
-        legend({'PMT1','PMT2'}, 'Location','best');
-        xlabel('PMT Charge [ADCbins]');
-        ylabel('Corrected Time Difference (BOTTOM) [ns]');
-        title('After charge correction (BOTTOM)');
-        hold off;
-        capture_debug_png(fig, 'pmt_slewing_overview');
-
-
-        % ========================
-        %  HISTOGRAMS: before vs after correction (fixed binning)
-        % =========================
-        fig_hist = figure('Name','Time-difference histograms before/after correction');
-        tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
-
-        % Common binning
-        edges = linspace(-5, 5, 251);  % n bins from -5 to 5
-
-        % ---- TOP detector ----
-        nexttile;
-        hold on; grid on; box on;
-        histogram(diff_top_m, edges, ...
-            'FaceColor', [0.4 0.4 0.9], 'FaceAlpha', 0.5, 'DisplayName','Before correction');
-        histogram(diff_top_corr_3_m, edges, 'FaceColor', [0.9 0.4 0.4], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 3');
-        histogram(diff_top_corr_4_m, edges, 'FaceColor', [1 1 1], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 4');
-        xlabel('Time difference TOP [ns]');
-        ylabel('Counts');
-        legend('Location','best');
-        title('TOP time difference distribution — before vs after correction');
-        xlim([-5 5]);
-
-        % ---- BOTTOM detector ----
-        nexttile;
-        hold on; grid on; box on;
-        histogram(diff_bot_m, edges, ...
-            'FaceColor', [0.4 0.4 0.9], 'FaceAlpha', 0.5, 'DisplayName','Before correction');
-        histogram(diff_bot_corr_1_m, edges, 'FaceColor', [0.9 0.4 0.4], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 1');
-        histogram(diff_bot_corr_2_m, edges, 'FaceColor', [1 1 1], 'FaceAlpha', 0.5, 'DisplayName','After correction, PMT 2');
-        xlabel('Time difference BOTTOM [ns]');
-        ylabel('Counts');
-        legend('Location','best');
-        title('BOTTOM time difference distribution — before vs after correction');
-        xlim([-5 5]);
-
-        sgtitle(sprintf('Time difference improvement after charge correction (run %s)', run_label));
-        capture_debug_png(fig_hist, 'pmt_slewing_histograms');
-    end
-
-
-
-    %%
-
-    % Now, calculated the time difference after correction, if I ask you to compute the time sum instead,
-    % I want you to get a value corrected by the fact that the time difference was corrected.
-
-    % Top PMTs
-    diff_top = T_cint_3_good - T_cint_4_good;
-    % require both PMTs finite and non-zero and diff within range
-    mask_diff_top = isfinite(diff_top) & (diff_top ~= 0) & ...
-                    isfinite(T_cint_3_good) & (T_cint_3_good ~= 0) & ...
-                    isfinite(T_cint_4_good) & (T_cint_4_good ~= 0) & ...
-                    (abs(diff_top) < 20);
-
-    % Initialize corrected arrays as copies of the originals
-    T_cint_3_corr = T_cint_3_good;
-    T_cint_4_corr = T_cint_4_good;
-
-    % Compute per-event deltas and apply only where mask_diff_top is true
-    delta3 = 0.5 * (diff_top - diff_top_corr_3);
-    delta4 = 0.5 * (diff_top - diff_top_corr_4);
-
-    valid_top_idx = mask_diff_top & isfinite(delta3) & isfinite(delta4);
-    T_cint_3_corr(valid_top_idx) = T_cint_3_good(valid_top_idx) - delta3(valid_top_idx);
-    T_cint_4_corr(valid_top_idx) = T_cint_4_good(valid_top_idx) + delta4(valid_top_idx);
-
-    % Build sum only for corrected (non-zero) entries; zero elsewhere
-    sum_top_corr = zeros(size(T_cint_3_good));
-    sum_top_corr(valid_top_idx) = ( T_cint_3_corr(valid_top_idx) + T_cint_4_corr(valid_top_idx) ) / 2;
-
-    % Bottom PMTs
-    diff_bot = T_cint_1_good - T_cint_2_good;
-    % require both PMTs finite and non-zero and diff within range
-    mask_diff_bot = isfinite(diff_bot) & (diff_bot ~= 0) & ...
-                    isfinite(T_cint_1_good) & (T_cint_1_good ~= 0) & ...
-                    isfinite(T_cint_2_good) & (T_cint_2_good ~= 0) & ...
-                    (abs(diff_bot) < 20);
-
-    % Initialize corrected arrays as copies of the originals
-    T_cint_1_corr = T_cint_1_good;
-    T_cint_2_corr = T_cint_2_good;
-
-    % Compute per-event deltas and apply only where mask_diff_bot is true
-    delta1 = 0.5 * (diff_bot - diff_bot_corr_1);
-    delta2 = 0.5 * (diff_bot - diff_bot_corr_2);
-
-    valid_bot_idx = mask_diff_bot & isfinite(delta1) & isfinite(delta2);
-    T_cint_1_corr(valid_bot_idx) = T_cint_1_good(valid_bot_idx) - delta1(valid_bot_idx);
-    T_cint_2_corr(valid_bot_idx) = T_cint_2_good(valid_bot_idx) + delta2(valid_bot_idx);
-
-    % Build sum only for corrected (non-zero) entries; zero elsewhere
-    sum_bot_corr = zeros(size(T_cint_1_good));
-    sum_bot_corr(valid_bot_idx) = ( T_cint_1_corr(valid_bot_idx) + T_cint_2_corr(valid_bot_idx) ) / 2;
-
-    T_cint_bot_corr = sum_bot_corr;
-    T_cint_top_corr = sum_top_corr;
-
-    time_diff_sum = T_cint_bot_good - T_cint_top_good;
-    time_diff_sum_corr = T_cint_bot_corr - T_cint_top_corr;
-
-    if should_plot
-        fig = figure('Name','Time Difference Sum — Before/After with Gaussian fits (scaled properly)');
-        nexttile; hold on; grid on; box on;
-
-        % Data and mask
-        m = mask_diff_bot & mask_diff_top;
-        td_before = time_diff_sum(m);
-        td_after  = time_diff_sum_corr(m);
-
-        % Common binning
-        edges = linspace(-3, 3, 351);
-        binCenters = edges(1:end-1) + diff(edges)/2;
-
-        % --- Histogram counts (manual, not histogram object) ---
-        [counts_b,~] = histcounts(td_before, edges);
-        [counts_a,~] = histcounts(td_after,  edges);
-
-        % --- Fit Gaussian directly to histogram (counts vs bin centers) ---
-        gauss_fun = @(b, x) b(1) * exp(-0.5*((x - b(2))/b(3)).^2);  % b = [amplitude, mean, sigma]
-
-        % Initial guesses
-        b0_b = [max(counts_b), mean(td_before), std(td_before)];
-        b0_a = [max(counts_a), mean(td_after),  std(td_after)];
-
-        % Fit via fminsearch
-        error_func_b = @(b) sum((counts_b - gauss_fun(b, binCenters)).^2);
-        error_func_a = @(b) sum((counts_a - gauss_fun(b, binCenters)).^2);
-
-        opts = optimset('Display', 'off');
-        bfit_b = fminsearch(error_func_b, b0_b, opts);
-        bfit_a = fminsearch(error_func_a, b0_a, opts);
-
-        % --- Evaluate fits for plotting ---
-        xfit = linspace(edges(1), edges(end), 600);
-        yfit_b = gauss_fun(bfit_b, xfit);
-        yfit_a = gauss_fun(bfit_a, xfit);
-
-        % --- Plot histograms (counts) ---
-        bar(binCenters, counts_b, 1, 'FaceColor',[0.4 0.4 0.9], 'FaceAlpha',0.4, 'EdgeColor','none', 'DisplayName','Before correction');
-        bar(binCenters, counts_a, 1, 'FaceColor',[0.9 0.4 0.4], 'FaceAlpha',0.4, 'EdgeColor','none', 'DisplayName','After correction');
-
-        % --- Overlay fits (perfectly scaled) ---
-        plot(xfit, yfit_b, 'b-', 'LineWidth',2, ...
-            'DisplayName', sprintf('Gaussian before: \\mu=%.3f, \\sigma=%.3f', bfit_b(2), bfit_b(3)));
-        plot(xfit, yfit_a, 'r-', 'LineWidth',2, ...
-            'DisplayName', sprintf('Gaussian after: \\mu=%.3f, \\sigma=%.3f', bfit_a(2), bfit_a(3)));
-
-        xlabel('Time Difference Sum (Bottom - Top) [ns]');
-        ylabel('Counts');
-        title(sprintf('Time Difference Sum — Before vs After correction (run %s)', formatted_datetime_tex));
-        xlim([-3 3]);
-        legend('Location','best');
-        capture_debug_png(fig, 'time_diff_sum_gaussian');
-    end
-
-
-    %%
-
-
-    % The proper slewing correction should be performed here: we have
-    % T_cint_bot_corr, T_cint_top_corr and T_thick_strip_good
-
-    time_diff_TOP_BOT = T_cint_bot_corr - T_cint_top_corr;
-
-    time_diff_RPC_TOP = T_thick_strip_good - T_cint_top_corr;
-    time_diff_RPC_BOT = T_thick_strip_good - T_cint_bot_corr;
-
-    charge_RPC = Q_thick_strip_good;
-    charge_TOP = Qcint_top_good;
-    charge_BOT = Qcint_bot_good;
-
-    if should_plot
-        % Plot in 1 row and 3 cols the scatter plots of time differences vs charges
-        fig = figure;
-        tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
-        % (1) TOP - BOT vs PMT charges
-        nexttile;
-        hold on;
-        scatter(charge_BOT, time_diff_TOP_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-        scatter(charge_TOP, time_diff_TOP_BOT, 20, [0.2 0.8 0.2], '.'); % PMT Top
-        hold off;
-        legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
-        xlabel('Scintillator Charges [ADCbins]');
-        ylabel('Time Difference TOP - BOT [ns]');
-        title('TOP - BOT vs PMT Charges');
-        grid on; box on;
-        
-        % (2) RPC - TOP vs PMT Top and RPC
-        nexttile;
-        hold on;
-        scatter(charge_TOP, time_diff_RPC_TOP, 20, [0.2 0.8 0.2], '.'); % PMT Top
-        scatter(charge_RPC, time_diff_RPC_TOP, 20, [0.8 0.2 0.2], '.'); % RPC
-        hold off;
-        legend({'PMT_Top', 'RPC'}, 'Location', 'best');
-        xlabel('Scintillator Charges [ADCbins]');
-        ylabel('Time Difference RPC - TOP [ns]');
-        title('RPC - TOP vs PMT Top and RPC');
-        grid on; box on;
-
-        % (3) RPC - BOT vs PMT Bottom and RPC
-        nexttile;
-        hold on;
-        scatter(charge_BOT, time_diff_RPC_BOT, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-        scatter(charge_RPC, time_diff_RPC_BOT, 20, [0.8 0.2 0.2], '.'); % RPC
-        hold off;
-        legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
-        xlabel('Scintillator Charges [ADCbins]');
-        ylabel('Time Difference RPC - BOT [ns]');
-        title('RPC - BOT vs PMT Bottom and RPC');
-        grid on; box on;
-
-        sgtitle(sprintf('Time Differences vs Charges after Slewing Correction (run %s)', formatted_datetime_tex));
-        adjust_three_panel_row_figure(fig, slide_mode);
-        capture_debug_png(fig, 'slewing_scatter_triptych');
-    end
-
-
-    %%
-
-
-    % ========= Slewing correction for THICK STRIP using RPC charge =========
-    % Inputs already available in your workspace:
-    %   T_thick_strip_good, T_cint_top_corr, T_cint_bot_corr
-    %   Q_thick_strip_good
-    %   (Optionally your masks; we build fresh masks here)
-
-    % Time differences (RPC relative to corrected TOP/BOT)
-    time_diff_RPC_TOP = T_thick_strip_good - T_cint_top_corr;  % RPC - TOP
-    time_diff_RPC_BOT = T_thick_strip_good - T_cint_bot_corr;  % RPC - BOT
-    charge_RPC        = Q_thick_strip_good;
-
-    % Masks: finite diffs & charges; optional diff range to exclude outliers
-    m_rt = isfinite(time_diff_RPC_TOP) & isfinite(charge_RPC) & time_diff_RPC_TOP~=0 & abs(time_diff_RPC_TOP) < 20;
-    m_rb = isfinite(time_diff_RPC_BOT) & isfinite(charge_RPC) & time_diff_RPC_BOT~=0 & abs(time_diff_RPC_BOT) < 20;
-
-    % ---- Choose polynomial degree and fit window in charge (RPC charge) ----
-    deg_rpc  = 1;                 % change to 2, 3, ... if needed
-    lo_rpc   = prctile(charge_RPC(m_rt|m_rb),  1);   % or hardcode e.g. 200
-    hi_rpc   = prctile(charge_RPC(m_rt|m_rb), 99);   % or hardcode e.g. 2000
-
-    % ---- Fit D = f(Qrpc) separately for RPC-TOP and RPC-BOT (robust 2-pass) ----
-    [p_rt, Qrt_use, Drt_use] = polyfit_clipped_new(time_diff_RPC_TOP(m_rt), charge_RPC(m_rt), lo_rpc, hi_rpc, deg_rpc, 'x_on_y'); % fit D vs Q
-    [p_rb, Qrb_use, Drb_use] = polyfit_clipped_new(time_diff_RPC_BOT(m_rb), charge_RPC(m_rb), lo_rpc, hi_rpc, deg_rpc, 'x_on_y');
-
-    % Predicted slewing components
-    D_rt_fit = nan(size(time_diff_RPC_TOP));
-    D_rb_fit = nan(size(time_diff_RPC_BOT));
-    D_rt_fit(m_rt) = polyval(p_rt, charge_RPC(m_rt));
-    D_rb_fit(m_rb) = polyval(p_rb, charge_RPC(m_rb));
-
-    % Correct the differences -> decorrelate from charge
-    D_rt_corr = time_diff_RPC_TOP - D_rt_fit;   % RPC - TOP (charge-independent)
-    D_rb_corr = time_diff_RPC_BOT - D_rb_fit;   % RPC - BOT (charge-independent)
-
-    % Per-event deltas to apply to the RPC timestamp
-    % (We attribute slewing to the RPC; scintillator times were already corrected)
-    delta_rt = time_diff_RPC_TOP - D_rt_corr;   % equals D_rt_fit on m_rt
-    delta_rb = time_diff_RPC_BOT - D_rb_corr;   % equals D_rb_fit on m_rb
-
-    % Combine TOP/BOT information without double-correcting:
-    % If both available, average; if only one, use that one; else 0.
-    w_rt = double(m_rt);
-    w_rb = double(m_rb);
-    wsum = w_rt + w_rb;
-    wsum(wsum==0) = 1;  % avoid div by zero
-    delta_rpc = (w_rt.*delta_rt + w_rb.*delta_rb) ./ wsum;
-    delta_rpc(~(m_rt | m_rb)) = 0;   % no correction where we had no fit support
-
-    % ---- Recover the corrected RPC timestamps ----
-    T_thick_strip_rpc_corr = T_thick_strip_good - delta_rpc;
-
-    % (Optional) Recompute the decorrelated differences to verify
-    time_diff_RPC_TOP_corr = T_thick_strip_rpc_corr - T_cint_top_corr;
-    time_diff_RPC_BOT_corr = T_thick_strip_rpc_corr - T_cint_bot_corr;
-
-    % ========= Quick checks / plots =========
-    if should_plot
-        fig_rpc_fit = figure('Name','RPC slewing vs RPC charge');
-        tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
-
-        % RPC - TOP
-        nexttile; hold on; grid on; box on;
-        scatter(charge_RPC(m_rt), time_diff_RPC_TOP(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
-        qfit = linspace(lo_rpc, hi_rpc, 200);
-        plot(qfit, polyval(p_rt, qfit), 'r--', 'LineWidth', 1.8);
-        xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP [ns]');
-        title(sprintf('RPC-TOP fit (deg=%d)', deg_rpc)); hold off;
-
-        % RPC - BOT
-        nexttile; hold on; grid on; box on;
-        scatter(charge_RPC(m_rb), time_diff_RPC_BOT(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
-        plot(qfit, polyval(p_rb, qfit), 'r--', 'LineWidth', 1.8);
-        xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT [ns]');
-        title(sprintf('RPC-BOT fit (deg=%d)', deg_rpc)); hold off;
-        capture_debug_png(fig_rpc_fit, 'rpc_slewing_vs_charge');
-
-        fig_rpc_corr = figure('Name','After slewing correction (vs RPC charge)');
-        tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
-        nexttile; hold on; grid on; box on;
-        scatter(charge_RPC(m_rt), time_diff_RPC_TOP_corr(m_rt), 6, '.', 'MarkerEdgeAlpha',0.35);
-        xlabel('RPC charge [ADCbins]'); ylabel('RPC - TOP (corr) [ns]');
-        title('RPC-TOP after correction'); yline(0,'k:'); hold off;
-
-        nexttile; hold on; grid on; box on;
-        scatter(charge_RPC(m_rb), time_diff_RPC_BOT_corr(m_rb), 6, '.', 'MarkerEdgeAlpha',0.35);
-        xlabel('RPC charge [ADCbins]'); ylabel('RPC - BOT (corr) [ns]');
-        title('RPC-BOT after correction'); yline(0,'k:'); hold off;
-        capture_debug_png(fig_rpc_corr, 'rpc_slewing_corrected');
-    end
-
-
-    %%
-
-
-    T_thick_strip_slew_corr = T_thick_strip_rpc_corr;
-    T_cint_top_slew_corr = T_cint_top_corr;
-    T_cint_bot_slew_corr = T_cint_bot_corr;
-
-    % Compute time differences and apply a common mask
-    % time_diff_SC1_SC2 = T_cint_bot_good - T_cint_top_good;
-    % time_diff_RPC_SC1 = T_thick_strip_good - T_cint_top_good;
-    % time_diff_RPC_SC2 = T_thick_strip_good - T_cint_bot_good;
-
-    time_diff_SC1_SC2 = T_cint_bot_slew_corr - T_cint_top_slew_corr;
-    time_diff_RPC_SC1 = T_thick_strip_slew_corr - T_cint_top_slew_corr;
-    time_diff_RPC_SC2 = T_thick_strip_slew_corr - T_cint_bot_slew_corr;
-
-    % Common mask: valid and non-zero time differences
-    mask_td = isfinite(time_diff_SC1_SC2) & isfinite(time_diff_RPC_SC1) & isfinite(time_diff_RPC_SC2) & ...
-            (time_diff_SC1_SC2 ~= 0) & (time_diff_RPC_SC1 ~= 0) & (time_diff_RPC_SC2 ~= 0) & ...
-            (abs(time_diff_SC1_SC2) < 50) & (abs(time_diff_RPC_SC1) < 50) & (abs(time_diff_RPC_SC2) < 50) & ...
-            (abs(time_diff_SC1_SC2) > 0.2) & (abs(time_diff_RPC_SC1) > 0.2) & (abs(time_diff_RPC_SC2) > 0.2);
-    
-    % mask_td = true(size(time_diff_SC1_SC2));  % for testing without mask
-    
-    % x-values: total PMT charge (row-wise) and individual PMT charges
-    qbot = Qcint_good(:,1) + Qcint_good(:,2);
-    qtop = Qcint_good(:,3) + Qcint_good(:,4);
-    qrpc = Q_thick_strip_good;
-
-    % Apply the common mask
-    qbot_m = qbot(mask_td);
-    qtop_m = qtop(mask_td);
-    qrpc_m = qrpc(mask_td);
-    td_SC1_SC2_m = time_diff_SC1_SC2(mask_td);
-    td_RPC_SC1_m = time_diff_RPC_SC1(mask_td);
-    td_RPC_SC2_m = time_diff_RPC_SC2(mask_td);
-
-    % Plot the three scatter plots in a single row
-    if should_plot
-        fig = figure;
-        tiledlayout(1,3, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-        % (1) SC2 - SC1 vs PMT charges
-        nexttile;
-        hold on;
-        scatter(qbot_m, td_SC1_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-        scatter(qtop_m, td_SC1_SC2_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
-        hold off;
-        legend({'PMT_Bottom', 'PMT_Top'}, 'Location', 'best');
-        xlabel('Sum of Scintillator Charges [ADCbins]');
-        ylabel('Time Difference SC2 - SC1 [ns]');
-        title('SC2 - SC1 vs PMT Charges');
-        grid on; box on;
-
-        % (2) RPC - SC1 vs PMT Top and RPC
-        nexttile;
-        hold on;
-        scatter(qtop_m, td_RPC_SC1_m, 20, [0.2 0.8 0.2], '.'); % PMT Top
-        scatter(qrpc_m, td_RPC_SC1_m, 20, [0.8 0.2 0.2], '.'); % RPC
-        hold off;
-        legend({'PMT_Top', 'RPC'}, 'Location', 'best');
-        xlabel('Sum of Scintillator Charges [ADCbins]');
-        ylabel('Time Difference RPC - SC1 [ns]');
-        title('RPC - SC1 vs PMT Top and RPC');
-        grid on; box on;
-
-        % (3) RPC - SC2 vs PMT Bottom and RPC
-        nexttile;
-        hold on;
-        scatter(qbot_m, td_RPC_SC2_m, 20, [0.2 0.2 0.8], '.'); % PMT Bottom
-        scatter(qrpc_m, td_RPC_SC2_m, 20, [0.8 0.2 0.2], '.'); % RPC
-        hold off;
-        legend({'PMT_Bottom', 'RPC'}, 'Location', 'best');
-        xlabel('Sum of Scintillator Charges [ADCbins]');
-        ylabel('Time Difference RPC - SC2 [ns]');
-        title('RPC - SC2 vs PMT Bottom and RPC');
-        grid on; box on;
-
-        sgtitle(sprintf('Time Differences vs Charges (run %s)', formatted_datetime_tex));
-        adjust_three_panel_row_figure(fig, slide_mode);
-        capture_debug_png(fig, 'time_diff_vs_charges');
-    end
-
-
-    %%
-
-
-    % Fit a single Gaussian to each of the three time-difference distributions
-    td_sets = { td_RPC_SC1_m, td_RPC_SC2_m, td_SC1_SC2_m };
-    td_labels = {'RPC - SC1', 'RPC - SC2', 'SC2 - SC1'};
-    td_colors = {[1 0 0], [0 0.6 0], [1 0.5 0]};   % red/green/orange
-    nbins = 100;  % histogram bins for fitting
-    opts = optimset('Display','off','TolX',1e-6,'TolFun',1e-6,'MaxIter',2000,'MaxFunEvals',2000);
-
-    fit_results = repmat(struct('amp',NaN,'mu',NaN,'sigma',NaN,'FWHM',NaN), 1, numel(td_sets));
-
-    did_plot_time_fits = false;
-    hist_handles = gobjects(0);
-    hist_labels = {};
-    if should_plot
-        fig_timefits = figure;
-        hold on;
-        did_plot_time_fits = true;
-    end
-
-    for ii = 1:numel(td_sets)
-        td = td_sets{ii};
-        % sanitize
-        td = td(isfinite(td) & ~isnan(td));
-        if isempty(td)
-            warning('Time-diff %s empty, skipping fit.', td_labels{ii});
-            continue;
-        end
-
-        % histogram (probability normalization)
-        lo = prctile(td, 0.1);
-        hi = prctile(td, 99.9);
-        if lo == hi
-            lo = min(td); hi = max(td);
-            if lo == hi
-                lo = lo - 1; hi = hi + 1;
-            end
-        end
-        edges = linspace(lo, hi, nbins+1);
-        p = histcounts(td, edges, 'Normalization', 'probability');
-        centers = edges(1:end-1) + diff(edges)/2;
-
-        % initial guess: amplitude, mean, sigma
-        [~, imax] = max(p);
-        amp0 = p(imax);
-        mu0 = centers(imax);
-        sigma0 = max(std(td), (edges(2)-edges(1))*2);
-
-        gauss = @(par,x) par(1) * exp(-((x - par(2)).^2) ./ (2 * par(3).^2));
-
-        err = @(par) sum((p - gauss(par, centers)).^2);
-
-        par0 = [amp0, mu0, sigma0];
-        parFit = fminsearch(err, par0, opts);
-
-        amp_fit = parFit(1);
-        mu_fit = parFit(2);
-        sigma_fit = abs(parFit(3)); % ensure positive
-        FWHM = 2*sqrt(2*log(2)) * sigma_fit;
-
-        fit_results(ii).amp = amp_fit;
-        fit_results(ii).mu = mu_fit;
-        fit_results(ii).sigma = sigma_fit;
-        fit_results(ii).FWHM = FWHM;
-
-        if should_plot
-            % Plot histogram (stairs) and fitted Gaussian (smooth)
-            h_stairs = stairs(centers, p, 'Color', td_colors{ii}, 'LineWidth', 1.0);
-            hist_handles(end+1) = h_stairs; %#ok<AGROW>
-            hist_labels{end+1} = td_labels{ii}; %#ok<AGROW>
-            xfit = linspace(min(centers), max(centers), 1000);
-            yfit = gauss([amp_fit, mu_fit, sigma_fit], xfit);
-            plot(xfit, yfit, 'Color', td_colors{ii}, 'LineWidth', 2, 'HandleVisibility','off');
-
-            % annotate on plot
-            sigma_ps = round(sigma_fit * 1e3);
-            txt = sprintf('%s: \\sigma=%.0f ps', td_labels{ii}, sigma_ps);
-            % place text progressively to avoid overlap, below peak
-            range = max(centers) - min(centers);
-            tx = min(centers) + 0.05*range;
-            ty = max(p) * (0.75 - 0.2*(ii-1));
-            text(tx, ty, txt, 'Color', td_colors{ii}, 'FontSize', 11, 'Interpreter','tex', 'BackgroundColor',[0 0 0], 'Margin',2, 'EdgeColor','none');
-        end
-    end
-
-    if should_plot && did_plot_time_fits
-        xlabel('Time Difference [ns]');
-        ylabel('Probability');
-        if ~isempty(hist_handles)
-            legend(hist_handles, hist_labels, 'Location','northwest');
-        end
-        title(sprintf('Time Difference Histograms and Gaussian fits (run %s)', formatted_datetime_tex));
-        grid on; box on;
-        capture_debug_png(fig_timefits, 'time_diff_gaussian_fits');
-        hold off;
-    end
-
-    % Print fit summary
-    for ii = 1:3
-        log_debug('%s fit: mu=%.4f ns | sigma=%.4f ns | FWHM=%.4f ns', ...
-            td_labels{ii}, fit_results(ii).mu, fit_results(ii).sigma, fit_results(ii).FWHM);
-    end
-
-
-    % Assume the PMTs time resolutions are identical
-    sigma_RPC_SC1 = fit_results(1).sigma;
-    sigma_RPC_SC2 = fit_results(2).sigma;
-    sigma_SC1_SC2 = fit_results(3).sigma;
-
-    sigma_RPC_SC = (sigma_RPC_SC1 + sigma_RPC_SC2) / 2;
-    sigma_SC = sigma_SC1_SC2 / sqrt(2);
-
-    sigma_RPC = sqrt( (sigma_RPC_SC^2) - (sigma_SC^2) );
-
-    log_info('Time resolution estimates under equal-PMT assumption | RPC=%.0f ps | SC=%.0f ps', sigma_RPC*1000, sigma_SC*1000);
-
-end
-
-
-
 %%
 
 
@@ -2441,105 +1563,6 @@ end
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-% -----------------------------------------------------------------------------
-% Scintillator Timing and Charge Derivations
-% -----------------------------------------------------------------------------
-
-% Plot scatter plots of Tl_cint i vs Tl_cint j for all PMT pairs to verify the
-% coincidence cut. In the same figure the 6 pairs
-
-if should_plot
-    fig = figure('Units','normalized','Position',[0.12 0.15 0.76 0.7]);
-    tl = tiledlayout(2, 2, 'TileSpacing','compact','Padding','compact');
-    for p = 1:4
-        nexttile(tl);
-        plot(Tl_cint_OG(:,p), Tt_cint_OG(:,p), '.'); hold on;
-        plot(Tl_cint(:,p), Tt_cint(:,p), '.');
-        xlabel(sprintf('Tl PMT%d', p));
-        ylabel(sprintf('Tt PMT%d', p));
-        title(sprintf('Lead/trail PMT%d', p));
-        xlim(lead_time_limits_pmt_scatter); ylim(trail_time_limits_pmt_scatter);
-        xline(lead_time_pmt_min, 'r--'); xline(lead_time_pmt_max, 'r--');
-        yline(trail_time_pmt_min, 'r--'); yline(trail_time_pmt_max, 'r--');
-    end
-    sgtitle(sprintf('PMT time lead vs trail (run %s)', formatted_datetime_tex));
-    capture_debug_png(fig, 'pmt_time_lead_trail');
-end
-
-% Now plot the charge correlations for the same PMT pairs
-if should_plot
-    fig = figure;
-    subplot(1,2,1); plot(Qcint_OG(:,1), Qcint_OG(:,2), '.'); hold on; plot(Qcint(:,1), Qcint(:,2), '.');
-    xlabel('Qcint1'); ylabel('Qcint2'); title('Charge PMT1 vs PMT2');
-    xlim(charge_limits_pmt_scatter); ylim(charge_limits_pmt_scatter);
-    subplot(1,2,2); plot(Qcint_OG(:,3), Qcint_OG(:,4), '.'); hold on; plot(Qcint(:,3), Qcint(:,4), '.');
-    xlabel('Qcint3'); ylabel('Qcint4'); title('Charge PMT3 vs PMT4');
-    xlim(charge_limits_pmt_scatter); ylim(charge_limits_pmt_scatter);
-    hLines = findobj(fig, 'Type', 'line');
-    if numel(hLines) >= 2
-        legendHandles = hLines(1:2);
-    else
-        legendHandles = hLines;
-    end
-    lg = legend(legendHandles, {'Corrected','Original'}, 'Location','northwest', 'Box','on');
-    set(lg, 'ItemTokenSize', [35 14], 'FontSize', 13);
-    ax_all = findall(fig, 'Type', 'axes');
-    arrayfun(@(ax) set(ax, 'FontSize', 13), ax_all);
-    arrayfun(@(ax) set(get(ax,'XLabel'), 'FontSize', 13), ax_all);
-    arrayfun(@(ax) set(get(ax,'YLabel'), 'FontSize', 13), ax_all);
-    arrayfun(@(ax) set(get(ax,'Title'),  'FontSize', 14), ax_all);
-    sgtitle(sprintf('PMT charge correlations (run %s)', formatted_datetime_tex));
-    capture_debug_png(fig, 'pmt_charge_correlations');
-end
-
-
-% Finally, plot the Tl_cint i vs Tl_cint j scatter plots for all PMT pairs
-if should_plot
-    fig = figure;
-    subplot(1,2,1); plot(Tl_cint_OG(:,1), Tl_cint_OG(:,2),'.'); hold on; plot(Tl_cint(:,1), Tl_cint(:,2),'.');
-    xlabel('Tl_cint1'); ylabel('Tl_cint2'); title('Time lead PMT1 vs PMT2');
-    xlim(lead_time_limits_pmt_scatter); ylim(lead_time_limits_pmt_scatter);
-    refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
-    subplot(1,2,2); plot(Tl_cint_OG(:,3), Tl_cint_OG(:,4),'.'); hold on; plot(Tl_cint(:,3), Tl_cint(:,4),'.');
-    xlabel('Tl_cint3'); ylabel('Tl_cint4'); title('Time lead PMT3 vs PMT4');
-    xlim(lead_time_limits_pmt_scatter); ylim(lead_time_limits_pmt_scatter);
-    sgtitle(sprintf('PMT time coincidences (run %s)', formatted_datetime_tex));
-    refline(1, time_pmt_diff_thr); refline(1, -time_pmt_diff_thr); % Plot the line y = x +- time_pmt_diff_thr
-    capture_debug_png(fig, 'pmt_time_coincidences');
-end
-
-
-% Histograms of Tl for each strip to see the distribution of the difference
-% Normalized histograms of the time lead differences for each PMT pair to verify the
-if should_plot
-    fig = figure;
-    subplot(1,2,1);
-    % Do not histogram zero values
-    valid_diff_top = Tl_cint_OG(:,1) - Tl_cint_OG(:,2);
-    valid_diff_top(valid_diff_top == 0) = [];
-    histogram(valid_diff_top, 300, 'Normalization', 'probability');
-    hold on;
-    valid_diff = Tl_cint(:,1) - Tl_cint(:,2);
-    valid_diff(valid_diff == 0) = [];
-    histogram(valid_diff, 100, 'Normalization', 'probability');
-    title('PMT 1 and 2 (BOT) time lead differences');
-    xlabel('Time lead PMT 1 - PMT 2 [ns]'); ylabel('Counts');
-    xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
-    subplot(1,2,2);
-    % Do not histogram zero values
-    valid_diff_top = Tl_cint_OG(:,3) - Tl_cint_OG(:,4);
-    valid_diff_top(valid_diff_top == 0) = [];
-    histogram(valid_diff_top, 300, 'Normalization', 'probability');
-    hold on;
-    valid_diff = Tl_cint(:,3) - Tl_cint(:,4);
-    valid_diff(valid_diff == 0) = [];
-    histogram(valid_diff, 100, 'Normalization', 'probability');
-    title('PMT 3 and 4 (BOT) time lead differences');
-    xlabel('Time lead PMT 3 - PMT 4 [ns]'); ylabel('Counts');
-    sgtitle(sprintf('Histograms of time lead differences for PMTs (run %s)', formatted_datetime_tex));
-    xline(time_pmt_diff_thr); xline(-time_pmt_diff_thr);
-    capture_debug_png(fig, 'pmt_time_lead_histograms');
-end
 
 
 
@@ -2583,10 +1606,10 @@ end
 
 if should_plot
 
-    fig = figure('Units','normalized','Position',[0.02 0.05 0.96 0.9]);
+    fig = figure('Units','normalized','Position',[0.02 0.05 0.8 0.6]);
     xlimits_1 = [t_lead_left t_lead_right];
     ylimits_1 = [t_lead_left t_lead_right];
-    right_lim_q_wide = 150; %adjust as needed
+    right_lim_q_wide = 400; %adjust as needed
     xlimits_2 = [-2 right_lim_q_wide];
     ylimits_2 = xlimits_2;
     tl_fb = tiledlayout(2, 5, 'TileSpacing','compact','Padding','compact');
@@ -2611,8 +1634,8 @@ if should_plot
     capture_debug_png(fig, 'thick_strip_front_back');
 end
 
-right_lim_q_wide = 100; %adjust as needed
-fig = figure('Units','normalized','Position',[0.05 0.05 0.9 0.9]);
+right_lim_q_wide = 400; %adjust as needed
+fig = figure('Units','normalized','Position',[0.05 0.02 0.8 0.9]);
 tl = tiledlayout(5, 2, 'TileSpacing','compact','Padding','compact');
 for strip = 1:5
     % Left column: uncalibrated
@@ -2620,8 +1643,8 @@ for strip = 1:5
     % Avoid plotting zero values
     QF_nonzero = QF_good(:,strip); QF_nonzero(QF_nonzero==0) = [];
     QB_nonzero = QB_good(:,strip); QB_nonzero(QB_nonzero==0) = [];
-    histogram(QF_nonzero,-2:1:150); hold on;
-    histogram(QB_nonzero,-2:1:150); xlim([-2 150]);
+    histogram(QF_nonzero,-2:1:right_lim_q_wide); hold on;
+    histogram(QB_nonzero,-2:1:right_lim_q_wide); xlim([-2 right_lim_q_wide]);
     legend(sprintf('QF - strip%d', strip), sprintf('QB - strip%d', strip), 'Location', 'northeast');
     ylabel('# of events');
     xlabel('Q [ns]');
@@ -2772,177 +1795,145 @@ capture_debug_png(fig, 'thick_strip_scatter_matrix');
 if should_plot
 
     fig = figure;
-    subplot(4,6,1); plot(Qt(:,1), Qb(:,1),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip I');
+    subplot(4,6,1); plot(Qt(:,1), Qb(:,1),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sI');
     xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-    subplot(4,6,2); plot(Qt(:,2), Qb(:,2),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip II');
+    subplot(4,6,2); plot(Qt(:,2), Qb(:,2),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sII');
     xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-    subplot(4,6,3); plot(Qt(:,3), Qb(:,3),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip III');
+    subplot(4,6,3); plot(Qt(:,3), Qb(:,3),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sIII');
     xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-    subplot(4,6,4); plot(Qt(:,4), Qb(:,4),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip IV');
+    subplot(4,6,4); plot(Qt(:,4), Qb(:,4),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sIV');
     xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-    subplot(4,6,5); plot(Qt(:,5), Qb(:,5),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip V');
+    subplot(4,6,5); plot(Qt(:,5), Qb(:,5),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sV');
     xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-    subplot(4,6,6); plot(Qt(:,6), Qb(:,6),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip VI');
+    subplot(4,6,6); plot(Qt(:,6), Qb(:,6),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sVI');
     xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,7); plot(Qt(:,7), Qb(:,7),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip VII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,8); plot(Qt(:,8), Qb(:,8),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip VIII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,9); plot(Qt(:,9), Qb(:,9),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip IX');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,10); plot(Qt(:,10), Qb(:,10),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip X');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,11); plot(Qt(:,11), Qb(:,11),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XI');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,12); plot(Qt(:,12), Qb(:,12),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,13); plot(Qt(:,13), Qb(:,13),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XIII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,14); plot(Qt(:,14), Qb(:,14),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XIV');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,15); plot(Qt(:,15), Qb(:,15),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XV');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,16); plot(Qt(:,16), Qb(:,16),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XVI');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,17); plot(Qt(:,17), Qb(:,17),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XVII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,18); plot(Qt(:,18), Qb(:,18),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XVIII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,19); plot(Qt(:,19), Qb(:,19),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XIX');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,20); plot(Qt(:,20), Qb(:,20),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XX');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,21); plot(Qt(:,21), Qb(:,21),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XXI');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,22); plot(Qt(:,22), Qb(:,22),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XXII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,23); plot(Qt(:,23), Qb(:,23),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XXIII');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-subplot(4,6,24); plot(Qt(:,24), Qb(:,24),'.'); xlabel('Qt'); ylabel('Qb'); title('Charge top vs bottom NARROW strip XXIV');
-xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
-sgtitle(sprintf('Narrow strip charge top vs bottom (run %s)', formatted_datetime_tex));
+    subplot(4,6,7); plot(Qt(:,7), Qb(:,7),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sVII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,8); plot(Qt(:,8), Qb(:,8),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sVIII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,9); plot(Qt(:,9), Qb(:,9),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sIX');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,10); plot(Qt(:,10), Qb(:,10),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sX');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,11); plot(Qt(:,11), Qb(:,11),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXI');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,12); plot(Qt(:,12), Qb(:,12),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,13); plot(Qt(:,13), Qb(:,13),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXIII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,14); plot(Qt(:,14), Qb(:,14),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXIV');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,15); plot(Qt(:,15), Qb(:,15),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXV');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,16); plot(Qt(:,16), Qb(:,16),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXVI');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,17); plot(Qt(:,17), Qb(:,17),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXVII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,18); plot(Qt(:,18), Qb(:,18),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXVIII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,19); plot(Qt(:,19), Qb(:,19),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXIX');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,20); plot(Qt(:,20), Qb(:,20),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXX');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,21); plot(Qt(:,21), Qb(:,21),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXXI');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,22); plot(Qt(:,22), Qb(:,22),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXXII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,23); plot(Qt(:,23), Qb(:,23),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXXIII');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    subplot(4,6,24); plot(Qt(:,24), Qb(:,24),'.'); xlabel('Qt'); ylabel('Qb'); title('Q top vs bot sXXIV');
+    xlim(thin_top_scatter_limits); ylim(thin_bottom_scatter_limits);
+    sgtitle(sprintf('Narrow strip charge top vs bottom (run %s)', formatted_datetime_tex));
     capture_debug_png(fig, 'narrow_strip_top_vs_bottom');
 
 
 
-% FIGURE 1 — Thin bottom / Thin top (hist + hist + scatter), with valid overlays
-fig = figure;
-subplot(1,3,1);
-histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events', ...
-    'FaceColor',[0.30 0.75 1.00], 'EdgeColor','none', 'FaceAlpha',0.8); hold on;
-histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only', ...
-    'FaceColor',[1.00 0.55 0.25], 'EdgeColor','none', 'FaceAlpha',0.9);
-ylabel('# events'); xlabel('Q_{bot} [ADC]');
-set(gca, 'YScale', 'log');
-title({'Bottom charge','per event'});
-xlim([q005 q95]); legend('show');
+    % FIGURE 1 — Thin bottom / Thin top (hist + hist + scatter), with valid overlays
+    fig = figure('Units','normalized','Position',[0.1 0.2 0.8 0.55]);
+    subplot(1,3,1);
+    histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+    histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
+    ylabel('# events'); xlabel('Q_{bot} [ADC]');
+    set(gca, 'YScale', 'log');
+    title({'Bottom charge','per event'});
+    xlim([q005_b q95_b]); legend('show');
 
-subplot(1,3,2);
-histogram(Q_thin_top_event_signal_hist, thinTopEdges, 'DisplayName','all events', ...
-    'FaceColor',[0.30 0.75 1.00], 'EdgeColor','none', 'FaceAlpha',0.8); hold on;
-histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only', ...
-    'FaceColor',[1.00 0.55 0.25], 'EdgeColor','none', 'FaceAlpha',0.9);
-ylabel('# events'); xlabel('Q_{top} [ADC]');
-set(gca, 'YScale', 'log');
-title({'Top charge','per event'});
-xlim([q005 q95]); legend('show');
+    subplot(1,3,2);
+    histogram(Q_thin_top_event_signal_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+    histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
+    ylabel('# events'); xlabel('Q_{top} [ADC]');
+    set(gca, 'YScale', 'log');
+    title({'Top charge','per event'});
+    xlim([q005_t q95_t]); legend('show');
 
-subplot(1,3,3);
-plot(Q_thin_bot_event_signal, Q_thin_top_event_signal, '.', 'DisplayName','all events', ...
-    'Color',[0.30 0.75 1.00], 'MarkerSize',7); hold on;
-plot(Q_thin_bot_event_good, Q_thin_top_event_good, '.', 'DisplayName','valid only', ...
-    'Color',[1.00 0.55 0.25], 'MarkerSize',7);
-plot(thin_shared_scatter_limits, thin_shared_scatter_limits, '--','Color',[1 0.8 0.2],'LineWidth',2.2,'DisplayName','y = x');
-xlabel('Q_{bot} [ADC]'); ylabel('Q_{top} [ADC]');
-title('Bottom vs Top charge');
-xlim(thin_bottom_scatter_limits); ylim(thin_top_scatter_limits); legend('show');
-sgtitle(sprintf('Charge of the event (thin only; all vs valid; run %s)', run_label));
-set(fig, 'Color', [0 0 0], 'InvertHardcopy', 'off');
-axes_list = findall(fig, 'Type', 'axes');
-for ax = reshape(axes_list,1,[])
-    set(ax, 'Color', [0 0 0], 'XColor', [1 1 1], 'YColor', [1 1 1], ...
-        'GridColor', [0.4 0.4 0.4], 'MinorGridColor', [0.25 0.25 0.25]);
-end
-style_figure_legends(fig, [1 1 1], [0 0 0]);
-adjust_three_panel_row_figure(fig, slide_mode);
-capture_debug_png(fig, 'thin_bottom_vs_top');
+    subplot(1,3,3);
+    plot(Q_thin_bot_event_signal, Q_thin_top_event_signal, '.', 'DisplayName','all events'); hold on;
+    plot(Q_thin_bot_event_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
+    plot(thin_shared_scatter_limits, thin_shared_scatter_limits, '--','Color',[1 0.8 0.2],'LineWidth',2.2,'DisplayName','y = x');
+    xlabel('Q_{bot} [ADC]'); ylabel('Q_{top} [ADC]');
+    title('Bottom vs Top charge');
+    xlim(thin_bottom_scatter_limits); ylim(thin_top_scatter_limits);
+    % legend('show');
+    sgtitle(sprintf('Charge of the event (thin only; all vs valid; run %s)', run_label));
+    % set(fig, 'Color', [0 0 0], 'InvertHardcopy', 'off');
+    % style_figure_legends(fig, [1 1 1], [0 0 0]);
+    adjust_three_panel_row_figure(fig, slide_mode);
+    capture_debug_png(fig, 'thin_bottom_vs_top');
 
-% FIGURE 2 — Thin bottom vs Thick
-fig = figure;
-subplot(1,3,1);
-histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
-ylabel('# of events'); xlabel('Q (bottom)');
-set(gca, 'YScale', 'log');
-title({'Q narrow bottom', 'per event'});
-xlim([q005 q95]); legend('show');
+    % FIGURE 2 — Thin bottom vs Thick
+    fig = figure('Units','normalized','Position',[0.1 0.2 0.8 0.55]);
+    subplot(1,3,1);
+    histogram(Q_thin_bot_event_signal_hist, thinBotEdges, 'DisplayName','all events'); hold on;
+    histogram(Q_thin_bot_event_good_hist, thinBotEdges, 'DisplayName','valid only');
+    ylabel('# of events'); xlabel('Q (bottom)');
+    set(gca, 'YScale', 'log');
+    title({'Q narrow bottom', 'per event'});
+    xlim([q005_b q95_b]); legend('show');
 
-subplot(1,3,2);
-histogram(Q_thick_strip_signal_hist, thickEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
-ylabel('# of events'); xlabel('Q (thick)');
-title('Q thick spectrum (sum of Q per event)');
-xlim([q005_thick q95_thick]); legend('show');
+    subplot(1,3,2);
+    histogram(Q_thick_strip_signal_hist, thickEdges, 'DisplayName','all events'); hold on;
+    histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
+    ylabel('# of events'); xlabel('Q (thick)');
+    title('Q thick spectrum (sum of Q per event)');
+    xlim([q005_thick q95_thick]); legend('show');
 
-subplot(1,3,3);
-plot(Q_thin_bot_event_signal, Q_thick_strip_signal, '.', 'DisplayName','all events'); hold on;
-plot(Q_thin_bot_event_good, Q_thick_strip_good, '.', 'DisplayName','valid only');
-xlabel('Q (bottom)'); ylabel('Q (thick)');
-title('Q bottom vs Q thick');
-xlim(thin_bottom_scatter_limits); ylim(thick_scatter_limits); legend('show');
-sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid; run %s)', run_label));
-adjust_three_panel_row_figure(fig, slide_mode);
-capture_debug_png(fig, 'thin_bottom_vs_thick');
+    subplot(1,3,3);
+    plot(Q_thin_bot_event_signal, Q_thick_strip_signal, '.', 'DisplayName','all events'); hold on;
+    plot(Q_thin_bot_event_good, Q_thick_strip_good, '.', 'DisplayName','valid only');
+    xlabel('Q (bottom)'); ylabel('Q (thick)');
+    title('Q bottom vs Q thick');
+    xlim(thin_bottom_scatter_limits); ylim(thick_scatter_limits); legend('show');
+    sgtitle(sprintf('Charge of the event (bottom vs thick; all vs valid; run %s)', run_label));
+    adjust_three_panel_row_figure(fig, slide_mode);
+    capture_debug_png(fig, 'thin_bottom_vs_thick');
 
-% FIGURE 3 — Thick vs Thin top
-fig = figure;
-subplot(1,3,1);
-histogram(Q_thick_strip_signal_hist, thickEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
-ylabel('# of events'); xlabel('Q (thick)');
-title('Q thick spectrum (sum of Q per event)');
-xlim([q005_thick q95_thick]); legend('show');
+    % FIGURE 3 — Thick vs Thin top
+    fig = figure('Units','normalized','Position',[0.1 0.2 0.8 0.55]);
+    subplot(1,3,1);
+    histogram(Q_thick_strip_signal_hist, thickEdges, 'DisplayName','all events'); hold on;
+    histogram(Q_thick_strip_good_hist, thickEdges, 'DisplayName','valid only');
+    ylabel('# of events'); xlabel('Q (thick)');
+    title('Q thick spectrum (sum of Q per event)');
+    xlim([q005_thick q95_thick]); legend('show');
 
-subplot(1,3,2);
-histogram(Q_thin_top_event_signal_hist, thinTopEdges, 'DisplayName','all events'); hold on;
-histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
-ylabel('# of events'); xlabel('Q (top)');
-set(gca, 'YScale', 'log');
-title({'Q narrow top', 'per event'});
-xlim([q005 q95]); legend('show');
+    subplot(1,3,2);
+    histogram(Q_thin_top_event_signal_hist, thinTopEdges, 'DisplayName','all events'); hold on;
+    histogram(Q_thin_top_event_good_hist, thinTopEdges, 'DisplayName','valid only');
+    ylabel('# of events'); xlabel('Q (top)');
+    set(gca, 'YScale', 'log');
+    title({'Q narrow top', 'per event'});
+    xlim([q005_t q95_t]); legend('show');
 
-subplot(1,3,3);
-plot(Q_thick_strip_signal, Q_thin_top_event_signal, '.', 'DisplayName','all events'); hold on;
-plot(Q_thick_strip_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
-xlabel('Q (thick)'); ylabel('Q (top)');
-title('Q thick vs Q top');
-xlim(thick_scatter_limits); ylim(thin_shared_scatter_limits); legend('show');
-sgtitle(sprintf('Charge of the event (thick vs top; all vs valid; run %s)', run_label));
-adjust_three_panel_row_figure(fig, slide_mode);
-capture_debug_png(fig, 'thick_vs_thin_top');
+    subplot(1,3,3);
+    plot(Q_thick_strip_signal, Q_thin_top_event_signal, '.', 'DisplayName','all events'); hold on;
+    plot(Q_thick_strip_good, Q_thin_top_event_good, '.', 'DisplayName','valid only');
+    xlabel('Q (thick)'); ylabel('Q (top)');
+    title('Q thick vs Q top');
+    xlim(thick_scatter_limits); ylim(thin_top_scatter_limits); legend('show');
+    sgtitle(sprintf('Charge of the event (thick vs top; all vs valid; run %s)', run_label));
+    adjust_three_panel_row_figure(fig, slide_mode);
+    capture_debug_png(fig, 'thick_vs_thin_top');
 
-
-% PMT 2x2 charge CDFs with binning_pmt and the _signal, _good, _range versions
-fig = figure('Units','normalized','Position',[0.05 0.05 0.9 0.85]);
-tl = tiledlayout(2,2,'TileSpacing','compact','Padding','compact');
-titles = {'Q pmt1','Q pmt2','Q pmt3','Q pmt4'};
-
-for k = 1:4
-    nexttile(tl);
-    hold on;
-    histogram(Qcint_signal(:,k), binning_pmt, 'DisplayName','all events', 'Normalization','pdf');
-    histogram(Qcint_good(:,k),   binning_pmt, 'DisplayName','valid only', 'Normalization','pdf');
-    histogram(Qcint_range(:,k),  binning_pmt, 'DisplayName','in range only', 'Normalization','pdf');
-    xlabel(sprintf('Q (pmt%d)', k));
-    ylabel('Fraction');
-    title(titles{k});
-    xlim(charge_limits_pmt);
-    legend('show', 'Location','southeast');
-    grid on; box on;
-end
-
-sgtitle(sprintf('PMT charge (run %s)', formatted_datetime_tex));
-capture_debug_png(fig, 'pmt_charge_cdfs');
 
 end
 
@@ -3231,6 +2222,13 @@ if position_from_narrow_strips && should_plot
             xlabel(axBot, 'Strip #');
             title(axBot, sprintf('Bottom thin (\\mu=%.2f, \\sigma_{like}=%.2f)', mu_bot(gIdx), sigma_bot(gIdx)), 'Interpreter','tex');
             set(axBot, 'FontSize', 11);
+
+            % I want both plots to have the same y limits, from 0 to the max of both.
+            topYLim = axTop.YLim;
+            botYLim = axBot.YLim;
+            combinedMaxY = max(topYLim(2), botYLim(2));
+            axTop.YLim = [0 combinedMaxY];
+            axBot.YLim = [0 combinedMaxY];
 
             sgtitle(tl, sprintf('Thin strip charge sharing (weighted) — example %d', exIdx), 'FontSize', 13);
             capture_debug_png(fig, sprintf('thin_charge_share_weighted_%02d', exIdx));
@@ -3612,8 +2610,8 @@ if position_from_narrow_strips && should_plot
         yline(ax_wrap_1, k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline(ax_wrap_1, (k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
-    rectangle(ax_wrap_1, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
-              'EdgeColor', 'r', 'LineWidth', 2);
+    % rectangle(ax_wrap_1, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+    %           'EdgeColor', 'r', 'LineWidth', 2);
 
     xlabel(ax_wrap_1, sprintf('THIN X (from %s, original) [1–120]', thin_x_source));
     ylabel(ax_wrap_1, 'THICK Y [1–120]');
@@ -3633,8 +2631,8 @@ if position_from_narrow_strips && should_plot
         yline(ax_wrap_2, k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline(ax_wrap_2, (k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
-    rectangle(ax_wrap_2, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
-              'EdgeColor', 'r', 'LineWidth', 2);
+    % rectangle(ax_wrap_2, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+    %           'EdgeColor', 'r', 'LineWidth', 2);
 
     xlabel(ax_wrap_2, 'THICK X [1–120]');
     ylabel(ax_wrap_2, sprintf('THIN Y (from %s, original) [1–120]', thin_y_source));
@@ -3652,8 +2650,8 @@ if position_from_narrow_strips && should_plot
         yline(ax_wrap_3, k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline(ax_wrap_3, (k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
-    rectangle(ax_wrap_3, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
-              'EdgeColor', 'r', 'LineWidth', 2);
+    % rectangle(ax_wrap_3, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+    %           'EdgeColor', 'r', 'LineWidth', 2);
 
     xlabel(ax_wrap_3, sprintf('THIN X (from %s, final) [1–120]', thin_x_source));
     ylabel(ax_wrap_3, 'THICK Y [1–120]');
@@ -3671,8 +2669,8 @@ if position_from_narrow_strips && should_plot
         yline(ax_wrap_4, k*wrapPeriod+1, '--', 'LineWidth', 1);
         yline(ax_wrap_4, (k*wrapPeriod+wrapPeriod+1), '--', 'LineWidth', 1);
     end
-    rectangle(ax_wrap_4, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
-              'EdgeColor', 'r', 'LineWidth', 2);
+    % rectangle(ax_wrap_4, 'Position', [center_ax(1)-base_ax/2, center_ax(2)-height_ax/2, base_ax, height_ax], ...
+    %           'EdgeColor', 'r', 'LineWidth', 2);
     xlabel(ax_wrap_4, 'THICK X [1–120]');
     ylabel(ax_wrap_4, sprintf('THIN Y (from %s, final) [1–120]', thin_y_source));
     set(ax_wrap_4, 'LabelFontSizeMultiplier', 0.95, 'FontSize', 11);
@@ -3709,8 +2707,8 @@ if position_from_narrow_strips && should_plot
     xlabel(sprintf('X_{final} (from %s) [mm]', thin_x_source));
     ylabel(sprintf('Y_{final} (from %s) [mm]', thin_y_source));
     title(sprintf('Disambiguated thin positions using thick constraints — run %s', run_label));
-    rectangle('Position', [center_mm(1)-base_mm/2, center_mm(2)-height_mm/2, base_mm, height_mm], ...
-              'EdgeColor', 'r', 'LineWidth', 2);
+    % rectangle('Position', [center_mm(1)-base_mm/2, center_mm(2)-height_mm/2, base_mm, height_mm], ...
+    %           'EdgeColor', 'r', 'LineWidth', 2);
     capture_debug_png(fig, 'final_xy_map');
 
 end
@@ -3725,10 +2723,6 @@ end
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
-Q_pmt_1 = Qcint_coin(:,1);
-Q_pmt_2 = Qcint_coin(:,2);
-Q_pmt_3 = Qcint_coin(:,3);
-Q_pmt_4 = Qcint_coin(:,4);
 Q_thick = Q_thick_strip_coin;
 Q_thin_top = Q_thin_top_event_coin;
 Q_thin_bot = Q_thin_bot_event_coin;
@@ -3740,9 +2734,6 @@ num_streamers_thin_top = length(find(Q_thin_top > Q_thin_top_streamer_threshold)
 percentage_streamer_thin_top = 100 * num_streamers_thin_top / rawEvents;
 num_streamers_thin_bot = length(find(Q_thin_bot > Q_thin_bot_streamer_threshold));
 percentage_streamer_thin_bot = 100 * num_streamers_thin_bot / rawEvents;
-
-percentage_streamer_pmt_top = 0; % Not defined
-percentage_streamer_pmt_bot = 0; % Not defined
 
 log_info('Streamer fraction of raw events | Thin top=%.2f%% | Thick=%.2f%% | Thin bottom=%.2f%%', ...
     percentage_streamer_thin_top, percentage_streamer_thick, percentage_streamer_thin_bot);
@@ -3843,9 +2834,11 @@ writetable(charge_histogram_bot, outfile_bot);
 % ---------------------------------------------------------------------
 % ---------------------------------------------------------------------
 
+validEvents_no_crosstalk = validEventsFiltered_thick & validEventsFiltered_thin_top & validEventsFiltered_thin_bot;
+
 variantSpecs = struct( ...
     'label', {'signal', 'coin', 'good', 'range', 'no_crosstalk'}, ...
-    'Qcint', {Qcint_signal, Qcint_coin, Qcint_good, Qcint_range, Qcint_no_crosstalk}, ...
+    'event_mask', {validEvents_signal, validEvents_coin, validEvents_good, validEvents_range, validEvents_no_crosstalk}, ...
     'Q_thick', {Q_thick_strip_signal, Q_thick_strip_coin, Q_thick_strip_good, Q_thick_strip_range, Q_thick_strip_no_crosstalk}, ...
     'Q_thin_top',{Q_thin_top_event_signal, Q_thin_top_event_coin, Q_thin_top_event_good, Q_thin_top_event_range, Q_thin_top_event_no_crosstalk}, ...
     'Q_thin_bot',{Q_thin_bot_event_signal, Q_thin_bot_event_coin, Q_thin_bot_event_good, Q_thin_bot_event_range, Q_thin_bot_event_no_crosstalk} );
@@ -3873,34 +2866,39 @@ eff_thin_bot  = nan(numel(thin_bot_thr_vec), nVar);
 
 for v = 1:nVar
     spec = variantSpecs(v);
-    Qcint_v      = spec.Qcint;
     Q_thick_v    = spec.Q_thick;
     Q_thin_top_v = spec.Q_thin_top;
     Q_thin_bot_v = spec.Q_thin_bot;
-
-    events_with_pmt_list = any(Qcint_v ~= 0, 2);
+    mask = spec.event_mask;
+    if isempty(mask)
+        mask = true(size(Q_thick_v,1),1);
+    end
+    mask = logical(mask(:));
+    if numel(mask) ~= size(Q_thick_v,1)
+        mask = mask(1) * true(size(Q_thick_v,1),1);
+    end
 
     % THIN TOP
     for i = 1:numel(thin_top_thr_vec)
         thr = thin_top_thr_vec(i);
-        hits = sum((Q_thin_top_v > thr) & events_with_pmt_list);
-        total = sum(events_with_pmt_list);
+        hits = sum((Q_thin_top_v > thr) & mask);
+        total = sum(mask);
         eff_thin_top(i,v) = 100 * hits / max(1,total);
     end
 
     % THICK
     for i = 1:numel(thick_thr_vec)
         thr = thick_thr_vec(i);
-        hits = sum((Q_thick_v > thr) & events_with_pmt_list);
-        total = sum(events_with_pmt_list);
+        hits = sum((Q_thick_v > thr) & mask);
+        total = sum(mask);
         eff_thick(i,v) = 100 * hits / max(1,total);
     end
 
     % THIN BOT
     for i = 1:numel(thin_bot_thr_vec)
         thr = thin_bot_thr_vec(i);
-        hits = sum((Q_thin_bot_v > thr) & events_with_pmt_list);
-        total = sum(events_with_pmt_list);
+        hits = sum((Q_thin_bot_v > thr) & mask);
+        total = sum(mask);
         eff_thin_bot(i,v) = 100 * hits / max(1,total);
     end
 end
@@ -4096,71 +3094,52 @@ thick_threshold   = 0;
 log_debug('Efficiency thresholds (ADCbins) | Thick=%g | Thin top=%g | Thin bottom=%g', ...
     thick_threshold, thin_top_threshold, thin_bot_threshold);
 
-% Map PMT channels to top/bottom (adjust if your ordering differs)
-pmt_top_cols = [1 2];
-pmt_bot_cols = [3 4];
-
 % Function that given numerator and denominator gives uncertainty in percentage
 % assume a poisson for the number of counts in both numerator and denominator
 effUnc = @(num,den) 100 * sqrt( (sqrt(num)/den)^2 + (num*sqrt(den)/den^2)^2 );
 
-% Collect per-variant efficiencies, including PMT top/bottom
+% Collect per-variant efficiencies
 accum = struct([]);
 for v = 1:numel(variantSpecs)
     spec = variantSpecs(v);
-    Qcint_v      = spec.Qcint;
     Q_thick_v    = spec.Q_thick;
     Q_thin_top_v = spec.Q_thin_top;
     Q_thin_bot_v = spec.Q_thin_bot;
+    mask = spec.event_mask;
+    if isempty(mask)
+        mask = true(size(Q_thick_v,1),1);
+    end
+    mask = logical(mask(:));
+    if numel(mask) ~= size(Q_thick_v,1)
+        mask = mask(1) * true(size(Q_thick_v,1),1);
+    end
+    events_total = sum(mask);
 
-    % Qcint is N x 4, the rest are N x 1
-    % An event is considered "with PMT" if both top and bottom PMTs have
-
-    % Count number of "good" events: at least one PMT (of 4) fired
-    events_with_pmt_list = any(Qcint_v ~= 0, 2);
-
-    % For the rest (N x 1), count hits only where at least one PMT fired
-    thick_hits     = sum((Q_thick_v    > thick_threshold) & events_with_pmt_list);
-    thin_top_hits  = sum((Q_thin_top_v > thin_top_threshold) & events_with_pmt_list);
-    thin_bot_hits  = sum((Q_thin_bot_v > thin_bot_threshold) & events_with_pmt_list);
-
-    % For PMT top/bot, count events where at least one of the two fired
-    pmt_top_hits   = sum(any(Qcint_v(:, pmt_top_cols) ~= 0, 2));
-    pmt_bot_hits   = sum(any(Qcint_v(:, pmt_bot_cols) ~= 0, 2));
-
-    % Total events with the four PMTs
-    events_with_pmt = sum(events_with_pmt_list);
-
-    if events_with_pmt == 0
+    if events_total == 0
         eff_thick = NaN; eff_thin_top = NaN; eff_thin_bot = NaN;
-        eff_pmt_top = NaN; eff_pmt_bot = NaN;
+        unc_thick = NaN; unc_thin_top = NaN; unc_thin_bot = NaN;
     else
-        eff_thick     = 100 * thick_hits    / events_with_pmt;
-        eff_thin_top  = 100 * thin_top_hits / events_with_pmt;
-        eff_thin_bot  = 100 * thin_bot_hits / events_with_pmt;
-        eff_pmt_top   = 100 * pmt_top_hits  / events_with_pmt;
-        eff_pmt_bot   = 100 * pmt_bot_hits  / events_with_pmt;
+        thick_hits    = sum((Q_thick_v    > thick_threshold)   & mask);
+        thin_top_hits = sum((Q_thin_top_v > thin_top_threshold) & mask);
+        thin_bot_hits = sum((Q_thin_bot_v > thin_bot_threshold) & mask);
+
+        eff_thick    = 100 * thick_hits    / events_total;
+        eff_thin_top = 100 * thin_top_hits / events_total;
+        eff_thin_bot = 100 * thin_bot_hits / events_total;
 
         % Uncertainties
-        unc_thick     = effUnc(thick_hits,    events_with_pmt);
-        unc_thin_top  = effUnc(thin_top_hits, events_with_pmt);
-        unc_thin_bot  = effUnc(thin_bot_hits, events_with_pmt);
-        unc_pmt_top   = effUnc(pmt_top_hits,  events_with_pmt);
-        unc_pmt_bot   = effUnc(pmt_bot_hits,  events_with_pmt);
+        unc_thick    = effUnc(thick_hits,    events_total);
+        unc_thin_top = effUnc(thin_top_hits, events_total);
+        unc_thin_bot = effUnc(thin_bot_hits, events_total);
     end
 
     accum(v).label        = spec.label;
     accum(v).eff_thick    = eff_thick;
     accum(v).eff_thin_top = eff_thin_top;
     accum(v).eff_thin_bot = eff_thin_bot;
-    accum(v).eff_pmt_top  = eff_pmt_top;
-    accum(v).eff_pmt_bot  = eff_pmt_bot;
-
     accum(v).unc_thick    = unc_thick;
     accum(v).unc_thin_top = unc_thin_top;
     accum(v).unc_thin_bot = unc_thin_bot;
-    accum(v).unc_pmt_top  = unc_pmt_top;
-    accum(v).unc_pmt_bot  = unc_pmt_bot;
 end
 
 % Desired variant order for columns
@@ -4171,11 +3150,9 @@ getEff = @(lab, field) accum(strcmp({accum.label}, lab)).(field);
 getUnc = @(lab, field) accum(strcmp({accum.label}, lab)).(strrep(field,'eff_','unc_'));
 
 detectors = { ...
-    'PMT_top',          'eff_pmt_top',   NaN,                           NaN,                    NaN,                     NaN; ...
     'RPC_thin_top',     'eff_thin_top',  percentage_streamer_thin_top,  charge_thin_top_mean,   charge_thin_top_median,  charge_thin_top_max; ...
     'RPC_thick_center', 'eff_thick',     percentage_streamer_thick,     charge_thick_mean,      charge_thick_median,     charge_thick_max; ...
-    'RPC_thin_bottom',  'eff_thin_bot',  percentage_streamer_thin_bot,  charge_thin_bot_mean,   charge_thin_bot_median,  charge_thin_bot_max; ...
-    'PMT_bottom',       'eff_pmt_bot',   NaN,                           NaN,                    NaN,                     NaN ...
+    'RPC_thin_bottom',  'eff_thin_bot',  percentage_streamer_thin_bot,  charge_thin_bot_mean,   charge_thin_bot_median,  charge_thin_bot_max ...
 };
 
 nDet = size(detectors,1);
@@ -4220,13 +3197,8 @@ for i = 1:nDet
 
     timeResRPC = NaN;
     timeResSC  = NaN;
-    switch detName
-        case 'RPC_thick_center'
-            timeResRPC = sigma_RPC_for_table;
-        case 'PMT_top'
-            timeResSC = sigma_SC_for_table;
-        case 'PMT_bottom'
-            timeResSC = sigma_SC_for_table;
+    if strcmp(detName, 'RPC_thick_center')
+        timeResRPC = sigma_RPC_for_table;
     end
 
     detRows{i, 1 + 2*nVar + 5} = timeResRPC; % time_res_RPC
@@ -4347,7 +3319,6 @@ end
 fid = fopen(outCsv, 'w');
 % Update header comment with new column ordering
 fprintf(fid, '# total_raw_events: %d\n', total_raw_events);
-fprintf(fid, '# percentage_good_events_in_pmts: %.4f\n', percentage_good_events_in_pmts);
 fprintf(fid, '# run_number: %d\n', run);
 fprintf(fid, '%s\n', strjoin(varNames, ', '));
 fclose(fid);
@@ -4555,7 +3526,7 @@ function capture_debug_png(figHandle, label)
             pngPath = fullfile(debug_dir, pngFile);
             try
                 drawnow;
-                exportgraphics(figHandle, pngPath, 'Resolution', 144);
+                exportgraphics(figHandle, pngPath, 'Resolution', 500);
             catch
                 try
                     saveas(figHandle, pngPath);
@@ -5425,6 +4396,59 @@ end
 function restore_figure_defaults(defaultVisibility, defaultCreateFcn)
     set(groot, 'DefaultFigureVisible', defaultVisibility);
     set(groot, 'DefaultFigureCreateFcn', defaultCreateFcn);
+end
+
+
+function plot_narrow_strip_histograms(data, label_prefix, fig_title, capture_tag)
+    if nargin < 4 || isempty(capture_tag)
+        capture_tag = 'narrow_strip_hist';
+    end
+    if isempty(data)
+        return;
+    end
+
+    finite_vals = data(isfinite(data));
+    if isempty(finite_vals)
+        return;
+    end
+
+    min_val = quantile(finite_vals, 0.01);
+    max_val = quantile(finite_vals, 0.99);
+    % if ~(isfinite(min_val) && isfinite(max_val))
+    %     return;
+    % end
+    % if min_val == max_val
+    %     pad = max(abs(min_val), 1) * 0.05 + eps;
+    %     min_val = min_val - pad;
+    %     max_val = max_val + pad;
+    % end
+
+    edges = linspace(min_val, max_val, 120);
+    fig = figure('Name', fig_title);
+    tl = tiledlayout(fig, 6, 4, 'TileSpacing', 'compact', 'Padding', 'compact');
+    nCols = size(data, 2);
+    total_tiles = 6 * 4;
+
+    for idx = 1:min(nCols, total_tiles)
+        nexttile(tl);
+        colData = data(:, idx);
+        colData = colData(isfinite(colData));
+        if isempty(colData)
+            colData = 0;
+        end
+        histogram(colData, edges, 'FaceColor', [0.25 0.55 0.9], 'EdgeColor', 'none');
+        xlim([min_val max_val]);
+        grid on; box on;
+        title(sprintf('%s strip %02d', label_prefix, idx));
+        if mod(idx-1, 4) == 0
+            ylabel('Counts');
+        end
+        if idx > total_tiles - 4
+            xlabel('Charge [ADCbins]');
+        end
+    end
+    sgtitle(fig_title);
+    capture_debug_png(fig, capture_tag);
 end
 
 

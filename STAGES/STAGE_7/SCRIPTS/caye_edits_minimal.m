@@ -930,6 +930,22 @@ Q_thin_bot_event_OG = sum(Qb_OG, 2); % total charge in the 5 narrow strips on th
 
 % Ancillary
 
+
+% Ancillary
+
+
+% Create a 6x4 figure showing the histograms per each narrow strip, that is, per each column of Qt_OG and Qb_OG.
+% I want one figure for the top strips and another for the bottom strips. I want the same x axes limits for all
+% histograms in each figure. Save to the debug_png_dir.
+
+if should_plot
+    make_histograms = @(data, label_prefix, fig_title, capture_tag) ...
+        plot_narrow_strip_histograms(data, label_prefix, fig_title, capture_tag);
+
+    make_histograms(Qt_OG, 'Top', sprintf('Top narrow-strip charges (run %s)', run_label), 'narrow_strip_top_hist');
+    make_histograms(Qb_OG, 'Bottom', sprintf('Bottom narrow-strip charges (run %s)', run_label), 'narrow_strip_bottom_hist');
+end
+
 % Sum 10 to all Qt_OG and Qb_OG to avoid negative values
 Qt_test = Qt_OG + charge_top_pedestal;
 Qb_test = Qb_OG + charge_bot_pedestal;
@@ -5511,4 +5527,59 @@ function [p, x_use, y_use] = polyfit_clipped_new(y, x, lo, hi, deg, mode)
 
     x_use = x0(kin); y_use = y0(kin);
     p     = polyfit(x_use, y_use, deg);
+end
+
+
+
+
+function plot_narrow_strip_histograms(data, label_prefix, fig_title, capture_tag)
+    if nargin < 4 || isempty(capture_tag)
+        capture_tag = 'narrow_strip_hist';
+    end
+    if isempty(data)
+        return;
+    end
+
+    finite_vals = data(isfinite(data));
+    if isempty(finite_vals)
+        return;
+    end
+
+    min_val = quantile(finite_vals, 0.01);
+    max_val = quantile(finite_vals, 0.99);
+    % if ~(isfinite(min_val) && isfinite(max_val))
+    %     return;
+    % end
+    % if min_val == max_val
+    %     pad = max(abs(min_val), 1) * 0.05 + eps;
+    %     min_val = min_val - pad;
+    %     max_val = max_val + pad;
+    % end
+
+    edges = linspace(min_val, max_val, 120);
+    fig = figure('Name', fig_title);
+    tl = tiledlayout(fig, 6, 4, 'TileSpacing', 'compact', 'Padding', 'compact');
+    nCols = size(data, 2);
+    total_tiles = 6 * 4;
+
+    for idx = 1:min(nCols, total_tiles)
+        nexttile(tl);
+        colData = data(:, idx);
+        colData = colData(isfinite(colData));
+        if isempty(colData)
+            colData = 0;
+        end
+        histogram(colData, edges, 'FaceColor', [0.25 0.55 0.9], 'EdgeColor', 'none');
+        xlim([min_val max_val]);
+        grid on; box on;
+        title(sprintf('%s strip %02d', label_prefix, idx));
+        if mod(idx-1, 4) == 0
+            ylabel('Counts');
+        end
+        if idx > total_tiles - 4
+            xlabel('Charge [ADCbins]');
+        end
+    end
+    sgtitle(fig_title);
+    capture_debug_png(fig, capture_tag);
 end
