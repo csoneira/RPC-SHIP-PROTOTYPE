@@ -26,6 +26,37 @@ Transitioning to a single multigap timing RPC without the thick-strip plane requ
 ## Analysis workflow
 The steps of the analysis, in parallel.
 
+### TOMAR sampled thin strips
+
+TOMAR MAT files containing `Q1_T` and `Q1_B` are analyzed automatically by
+the normal `TOMAR/run_fast_6x6.m` workflow. The dedicated entry point below
+analyzes only the 48 sampled ADC inputs and defaults to the first
+high-statistics run with the new electronics:
+
+```bash
+octave-cli --quiet TOMAR/run_thin_strips.m
+```
+
+Pass a MAT path as the first argument to analyze another run. The ADC lookup
+and pulse-extraction settings are editable in
+`TOMAR/CONFIGS/thin_strip_adc_lookup.csv` and
+`TOMAR/CONFIGS/thin_strip_parameters.csv`. The analysis includes sampled
+pulse galleries, all-input charge spectra, charge-sharing examples, Joao-style
+24-strip circular positions disambiguated with the thick strips, and 2D maps
+for all events and for slow/fast scintillator coincidences. The generated
+diagnostics also include wrapped circular-Gaussian avalanche fits, thick-strip-
+only reference maps, a four-panel fast/slow position comparison, and a
+before/after thin-strip routing comparison. For configured runs, the newest
+figures and tables stay in that run's output directory and the immediately
+preceding execution is archived in its `LAST` subdirectory. The
+broad scintillator-validity maps do not impose a PMT charge window; the
+separate slow-ToT core is an optional cross-check. Thin-axis orientation and
+cyclic offsets can be changed in `thin_strip_parameters.csv`. The six `T2_F`
+scintillator channels are labeled in
+`TOMAR/CONFIGS/thin_strip_scintillator_map.csv`. Rectangle centers and sizes
+for the combined final-position geometry overlay are editable in
+`TOMAR/CONFIGS/thin_strip_overlay_rectangles.csv`.
+
 ### Setting up the environment
 1. Set up the Python environment, as described in `PYTHON_ENVIRONMENT_SETUP_COMPLETE.md` (or `PYTHON_SETUP.md` for manual steps)
 
@@ -74,4 +105,3 @@ Python environment quick instructions:
 - **Abstract:**
 
   *We report on ongoing work at LIP to streamline the readout of large-area timing RPCs for the SHiP and R3B experiments. Building on João Pedro Saraiva’s double timing multigap RPC, which combines 2.54 mm thin-strip boards, 61 mm timing strips, and signal merging PCBs to achieve 65 ps timing with a fivefold channel reduction, we now target a single-chamber solution that dispenses with the thick-strip plane. Two reference runs with the double-stack—one at nominal ±9 kV and another with a disconnected chamber—expose an unexplained efficiency loss to ~70% when operating in single-plane mode despite preserved timing. We outline our analysis pipeline, from waveform unpacking with trapezoidal filtering to charge-spectrum fits and environmental correlations, and describe the upcoming high-voltage scans to validate the suspected power-supply limitations. The final step is to implement complementary fast/slow filters on the thin-strip readout so that a single timing RPC can provide both precise time-of-flight and sub-millimetre position measurements without resorting to thick strips. This path charts how multiplexed thin-strip technology can instrument large acceptance experiments with reduced cost and complexity while retaining physics performance.*
-

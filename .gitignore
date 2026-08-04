@@ -53,3 +53,6 @@ JUNK/
 # Large data files (exceed GitHub limits)
 *.csv
 *.dat
+!TOMAR/CONFIGS/thin_strip_adc_lookup.csv
+!TOMAR/CONFIGS/thin_strip_parameters.csv
+!TOMAR/CONFIGS/thin_strip_scintillator_map.csv

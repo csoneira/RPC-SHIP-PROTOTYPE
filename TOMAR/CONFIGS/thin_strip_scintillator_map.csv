@@ -1,0 +1,7 @@
+channel,label,group,pmt
+1,fast_down_pmt1,fast_down,1
+2,fast_down_pmt2,fast_down,2
+3,fast_up_pmt1,fast_up,1
+4,fast_up_pmt2,fast_up,2
+5,slow_1,slow_1,1
+6,slow_2,slow_2,1

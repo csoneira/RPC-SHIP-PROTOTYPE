@@ -1,11 +1,12 @@
 % TOMAR fast-electronics 6 x 6 analysis (GNU Octave compatible)
 %
-% This script is intentionally limited to the twelve fast-TDC channels:
+% The core analysis covers the twelve fast-TDC channels:
 %   T1_F, T1_B       leading-edge time [ns], 6 front + 6 back channels
 %   TOT1_F, TOT1_B   time-over-threshold [ns], matching channels
 %   EBtime           absolute event timestamp [days]
 %
-% It does not load or use the slow-electronics ADC arrays (Q1_T/Q1_B).
+% When sampled thin-strip ADC arrays Q1_T/Q1_B are present, the companion
+% thin-strip pulse analysis is run automatically using Alberto's lookup.
 % Editable CSV configuration files live in TOMAR/CONFIGS. Histogram axis
 % limits never alter the data.
 %
@@ -113,6 +114,9 @@ if strcmp(scint_mode, 'alt')
     load_fields = [load_fields, mapped_fields];
 end
 fast = load(mat_file, load_fields{:});
+mat_variables = whos('-file', mat_file);
+mat_variable_names = {mat_variables.name};
+has_thin_strip_data = all(ismember({'Q1_T', 'Q1_B'}, mat_variable_names));
 required_fields = {'T1_F', 'T1_B', 'TOT1_F', 'TOT1_B'};
 for idx = 1:numel(required_fields)
     if ~isfield(fast, required_fields{idx})
@@ -281,6 +285,16 @@ save('-mat7-binary', results_mat, 'front_summary', 'back_summary', 'pair_summary
     'filter_pass', 'q_sum_filtered', 'q_max_filtered', 'q_sum_efficiency', 'q_sum_efficiency_uncertainty', 'q_sum_good_count', 'scintillator_charge_pass', 'scintillator_selected_count', 'q_sum_scintillator_efficiency', 'q_sum_scintillator_efficiency_uncertainty', 'q_sum_scintillator_good_count', 'has_event_time', 'event_time_seconds', 'poisson_window_seconds', 'poisson_rate_hz', 'poisson_counts', ...
     'grouped_waiting_times', 'grouped_waiting_time_count', 'tot_max_ns', 'mat_file');
 log_info('Saved summaries in %s', output_dir);
+
+% Q1_T/Q1_B are large sampled-waveform arrays. Analyze them after the fast
+% result has been saved so they are never retained in the main result MAT.
+thin_strip_summary = struct('available', false);
+if has_thin_strip_data
+    log_info('Q1_T and Q1_B found: starting thin-strip pulse analysis.');
+    thin_strip_summary = analyze_thin_strips(mat_file, output_dir, should_plot, save_plots, run_name);
+else
+    log_info('Q1_T/Q1_B are absent: thin-strip pulse analysis skipped.');
+end
 
 % ---------------------------------------------------------------------
 % Plots
