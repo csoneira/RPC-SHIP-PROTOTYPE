@@ -56,3 +56,7 @@ JUNK/
 !TOMAR/CONFIGS/thin_strip_adc_lookup.csv
 !TOMAR/CONFIGS/thin_strip_parameters.csv
 !TOMAR/CONFIGS/thin_strip_scintillator_map.csv
+
+# Manual/editor backup files
+*.old
+*.new
