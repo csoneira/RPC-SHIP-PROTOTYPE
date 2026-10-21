@@ -58,47 +58,37 @@ for the combined final-position geometry overlay are editable in
 `TOMAR/CONFIGS/thin_strip_overlay_rectangles.csv`.
 
 ### Setting up the environment
-1. Set up the Python environment, as described in `PYTHON_ENVIRONMENT_SETUP_COMPLETE.md` (or `PYTHON_SETUP.md` for manual steps)
+1. Create/update the Python environment from the repository root:
 
    ```bash
-   bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/setup_environment.sh
+   bash GUIDES/guide_1_to_setup_environment.sh
    ```
 
-Python environment quick instructions:
+2. Activate it when needed:
 
-- Automated setup: `bash setup_environment.sh`
-- Environment location: `/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/venv/`
-- Activation: `source venv/bin/activate`
-- Deactivation: `deactivate`
-- One-shot run without activation: `venv/bin/python <script>`
-- Required packages: numpy, pandas, matplotlib, scipy, pyyaml
-- Notes: Python 3.12.3 in use; `runUnpacker.py` uses `python3` shebang
+   ```bash
+   source STAGES/STAGE_1/DATA/DATA_FILES/venv/bin/activate
+   ```
 
 ### The log branch
-1. Bring the log files from the joao computer. This script brings the files and calls `/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/LOG_FILES/SCRIPTS/log_aggregate_and_join.py`.
+Bring and clean detector logs, then retrieve the online logbook using the repository-relative guides:
 
-   ```bash
-   bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/LOG_FILES/SCRIPTS/log_bring_and_clear.sh
-   ```
+```bash
+bash GUIDES/guide_2_bring_logs.sh
+bash GUIDES/guide_3_bring_logbook.sh
+```
 
 ### The data branch
-1. **Data bringing.** The data is brought in hld format from a certain date, though if the files are already present they are not copied back. HLDs are brought to `/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/unpacker/hlds_toUnpack`.
+The normal data workflow is:
 
-   ```bash
-   bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/SCRIPTS/bring_hlds.sh <date_cut YYYY-MM-DD>
-   ```
+```bash
+bash GUIDES/guide_4_to_bring_hlds.sh <date_cut YYYY-MM-DD>
+bash GUIDES/guide_5_to_unpack.sh
+bash GUIDES/guide_6_to_tag_and_join.sh
+bash GUIDES/guide_7_to_analyze.sh
+```
 
-2. **Unpacking.** The data is unpacked using the following script, which calls `python unpacker/unpackAll.py` with the environment. It stores unpacked data in directories named `dabcYYDDDHHMMSS-dabcYYDDDHHMMSS_YYYY-MM-DD_HHhMMmSSs`, where the first timestamp marks the run start, the second the run end, and the suffix records the unpacking time.
-
-   ```bash
-   bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/guide_to_unpack.sh
-   ```
-
-3. **Data analysis.** The unpacked data is analysed using the following script, which runs `matlab -batch "run('DATA_FILES/SCRIPTS/Backbone/caye_edits_minimal.m')"` within the environment. Results are written to `/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/TABLES/analyzed_dabcYYDDDHHMMSS-dabcYYDDDHHMMSS_YYYY-MM-DD_HHhMMmSSs.csv`, where the suffix again encodes the analysis timestamp.
-
-   ```bash
-   bash /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/guide_to_analyze.sh
-   ```
+All guide scripts derive the repository root from their own location, so the checkout does not need to live under a fixed `/home/...` path.
 
 ## Conference submission draft
 - **Proposed title:** *Towards a Single-Chamber Multiplexed Thin-Strip Timing RPC for SHiP and R3B*

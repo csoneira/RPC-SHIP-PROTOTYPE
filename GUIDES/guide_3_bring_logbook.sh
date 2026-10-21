@@ -6,7 +6,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 Usage: $0
 
 Download the current online logbook CSV from the configured Google Sheet and
-store it as file_online_logbook.csv in the JOAO_SETUP workspace.
+store it as file_online_logbook.csv in this repository workspace.
 EOF
   exit 0
 fi

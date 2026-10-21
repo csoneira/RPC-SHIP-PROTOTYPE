@@ -1,7 +1,7 @@
 
-# Bring hlds file from rpcuser@odroid64:/home/rpcuser/hlds/*.hld to 
-# /home/csoneira/WORK/LIP_stuff/JOAO_SETUP/DATA_FILES/DATA/HLD_FILES/NOT_UNPACKED,
-# create a csv in /home/csoneira/WORK/LIP_stuff/JOAO_SETUP that tracks which
+# Bring HLD files from rpcuser@odroid64:/home/rpcuser/hlds/*.hld to
+# STAGES/STAGE_4/DATA/DATA_FILES/HLD_FILES/NOT_UNPACKED in this repository,
+# and create a CSV that tracks which
 # files have been copied already and in which date so there are two columns,
 # name of the file and date of copy. If the file is already there, do not copy it again.
 #

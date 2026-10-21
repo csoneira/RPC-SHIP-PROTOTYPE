@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Setup script for JOAO_SETUP Python environment
+# Setup script for RPC-SHIP-PROTOTYPE Python environment
 # This creates a virtual environment and installs all required packages
 
 set -e  # Exit on error
@@ -14,7 +14,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<EOF
 Usage: $0
 
-Create (if needed) and populate the Python virtual environment used by JOAO_SETUP.
+Create (if needed) and populate the Python virtual environment used by RPC-SHIP-PROTOTYPE.
 The script installs python3-venv if missing, creates the venv under ./venv, and
 installs the dependencies from requirements.txt.
 EOF
@@ -22,7 +22,7 @@ EOF
 fi
 
 echo "=========================================="
-echo "JOAO_SETUP Environment Setup"
+echo "RPC-SHIP-PROTOTYPE Environment Setup"
 echo "=========================================="
 echo ""
 

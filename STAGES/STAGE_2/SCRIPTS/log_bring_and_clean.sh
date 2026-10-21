@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# I want to use this script to retrieve logs from joao:/home/rpcuser/logs and place them under
-# /home/csoneira/WORK_LIP_stuff/JOAO_SETUP/STAGES/STAGE_2/DATA/DATA_FILES/RAW
+# Retrieve logs from joao:/home/rpcuser/logs and place them under
+# STAGES/STAGE_2/DATA/DATA_FILES/RAW in this repository.
 
 set -euo pipefail
 

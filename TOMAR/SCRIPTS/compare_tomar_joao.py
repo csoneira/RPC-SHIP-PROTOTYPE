@@ -22,7 +22,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOMAR_ROOT = REPO_ROOT / "TOMAR"
-JOAO_ROOT = REPO_ROOT / "JOAO_SETUP"
+JOAO_ROOT = REPO_ROOT
 COMPARISON_ROOT = TOMAR_ROOT / "COMPARISON_JOAO"
 OUTPUT_DIR = COMPARISON_ROOT / "OUTPUTS"
 TOMAR_SUMMARY = TOMAR_ROOT / "OUTPUTS_SCAN" / "result_scan_summary.csv"

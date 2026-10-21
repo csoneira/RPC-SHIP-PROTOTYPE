@@ -205,7 +205,7 @@ for run_id in $(printf '%s\n' "${!RUN_FILES[@]}" | sort -n); do
 
   ESC_RUN="${run_dir//\'/\'\'}"
   ESC_OUT="${output_dir//\'/\'\'}"
-  if matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STAGES/STAGE_6/SCRIPTS/join_mat_files.m'); exit;"; then
+  if matlab -batch "runs={'$ESC_RUN'}; output_root='$ESC_OUT'; run('${REPO_ROOT}/STAGES/STAGE_6/SCRIPTS/join_mat_files.m'); exit;"; then
     JOIN_HISTORY["$run_id"]="$NEW_SIGNATURE"
   else
     echo "Joiner encountered an issue for run ${run_id}; moving on."

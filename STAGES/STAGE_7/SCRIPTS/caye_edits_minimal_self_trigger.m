@@ -189,7 +189,7 @@ else
     pdf_page_limit = Inf;
 end
 
-outputs7_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7';
+outputs7_root = fullfile(fileparts(fileparts(fileparts(fileparts(mfilename('fullpath'))))), 'STAGES', 'STAGE_7', 'DATA', 'DATA_FILES', 'OUTPUTS_7');
 save_plots_dir_default = fullfile(outputs7_root, 'PDF');
 if ~exist('save_plots','var')
     save_plots = false;
@@ -274,7 +274,7 @@ end
 
 run_label = num2str(run);
 
-project_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP';
+project_root = fileparts(fileparts(fileparts(fileparts(mfilename('fullpath')))));
 png_root_dirs = {fullfile(outputs7_root, 'RUN_SUMMARY_PNG')};
 
 if test
@@ -326,7 +326,7 @@ DATA_Q    = 'matFiles/charge/';
 % path(path,[HOME SCRIPTS 'util_matPlots/']);
 
 summary_output_dir = fullfile(outputs7_root, 'TABLES');
-path(path,'/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/STORED_NOT_ESSENTIAL/util_matPlots');
+path(path, fullfile(project_root, 'STORED_NOT_ESSENTIAL', 'util_matPlots'));
 mst_saves_root = fullfile(project_root, 'STAGES', 'STAGE_6', 'DATA', 'DATA_FILES', 'JOINED');
 unpacked_root = fullfile(project_root, 'STAGES', 'STAGE_6', 'DATA', 'DATA_FILES', 'JOINED');
 if ~exist(outputs7_root, 'dir'); mkdir(outputs7_root); end

@@ -7,9 +7,9 @@ Inputs:
 - TOMAR scan summaries and charge histograms in `TOMAR/OUTPUTS_SCAN` and
   `TOMAR/OUTPUTS/<run>/`.
 - JOAO thick-RPC run summaries and charge histograms in
-  `JOAO_SETUP/STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/`.
+  `STAGES/STAGE_7/DATA/DATA_FILES/OUTPUTS_7/`.
 - JOAO run/HV metadata in
-  `JOAO_SETUP/STAGES/STAGE_3/DATA/DATA_FILES/file_run_dictionary.csv`.
+  `STAGES/STAGE_3/DATA/DATA_FILES/file_run_dictionary.csv`.
 
 Generated comparison figures and joined CSV tables belong in `OUTPUTS/`.
 

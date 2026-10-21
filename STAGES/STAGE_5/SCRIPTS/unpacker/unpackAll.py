@@ -56,7 +56,7 @@ from readDataFrame    import readDFrame
 t = time.time()
 
 #############
-repo_root = '/home/csoneira/WORK/LIP_stuff/JOAO_SETUP/'
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..')) + os.sep
 stage5_data_root = os.path.join(repo_root, 'STAGES', 'STAGE_5', 'DATA', 'DATA_FILES')
 processing_root = os.path.join(stage5_data_root, 'PROCESSING')
 home   = os.path.join(repo_root, 'STAGES', 'STAGE_5', 'SCRIPTS', 'unpacker') + '/'
